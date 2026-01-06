@@ -16,16 +16,109 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Set up Go
-        uses: actions/setup-go@v5
+      - uses: actions/setup-go@v5
         with:
           go-version: "1.21"
 
-      - name: Run GoReleaser
-        uses: goreleaser/goreleaser-action@v6
+      - name: Build macOS ARM64
+        run: |
+          GOOS=darwin GOARCH=arm64 go build -ldflags "-X github.com/piekstra/newrelic-cli/cmd.version=${{ github.ref_name }}" -o newrelic-cli .
+          tar -czvf newrelic-cli_${{ github.ref_name }}_darwin_arm64.tar.gz newrelic-cli
+          rm newrelic-cli
+
+      - name: Build macOS AMD64
+        run: |
+          GOOS=darwin GOARCH=amd64 go build -ldflags "-X github.com/piekstra/newrelic-cli/cmd.version=${{ github.ref_name }}" -o newrelic-cli .
+          tar -czvf newrelic-cli_${{ github.ref_name }}_darwin_amd64.tar.gz newrelic-cli
+          rm newrelic-cli
+
+      - name: Build Linux ARM64
+        run: |
+          GOOS=linux GOARCH=arm64 go build -ldflags "-X github.com/piekstra/newrelic-cli/cmd.version=${{ github.ref_name }}" -o newrelic-cli .
+          tar -czvf newrelic-cli_${{ github.ref_name }}_linux_arm64.tar.gz newrelic-cli
+          rm newrelic-cli
+
+      - name: Build Linux AMD64
+        run: |
+          GOOS=linux GOARCH=amd64 go build -ldflags "-X github.com/piekstra/newrelic-cli/cmd.version=${{ github.ref_name }}" -o newrelic-cli .
+          tar -czvf newrelic-cli_${{ github.ref_name }}_linux_amd64.tar.gz newrelic-cli
+          rm newrelic-cli
+
+      - name: Generate checksums
+        run: |
+          shasum -a 256 *.tar.gz > checksums.txt
+          cat checksums.txt
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
         with:
-          version: "~> v2"
-          args: release --clean
+          files: |
+            *.tar.gz
+            checksums.txt
+          generate_release_notes: true
+
+      - name: Update Homebrew Tap
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
+          TAP_GITHUB_TOKEN: ${{ secrets.TAP_GITHUB_TOKEN }}
+        run: |
+          VERSION="${{ github.ref_name }}"
+          VERSION_NUM="${VERSION#v}"
+
+          DARWIN_ARM64_SHA=$(shasum -a 256 newrelic-cli_${{ github.ref_name }}_darwin_arm64.tar.gz | cut -d' ' -f1)
+          DARWIN_AMD64_SHA=$(shasum -a 256 newrelic-cli_${{ github.ref_name }}_darwin_amd64.tar.gz | cut -d' ' -f1)
+
+          git clone https://x-access-token:${TAP_GITHUB_TOKEN}@github.com/piekstra/homebrew-tap.git
+          cd homebrew-tap
+
+          mkdir -p Formula
+
+          cat > Formula/newrelic-cli.rb << 'FORMULAEOF'
+          class NewrelicCli < Formula
+            desc "Command-line interface for New Relic"
+            homepage "https://github.com/piekstra/newrelic-cli"
+            license "MIT"
+            version "VERSION_PLACEHOLDER"
+
+            on_macos do
+              on_arm do
+                url "https://github.com/piekstra/newrelic-cli/releases/download/v#{version}/newrelic-cli_v#{version}_darwin_arm64.tar.gz"
+                sha256 "DARWIN_ARM64_PLACEHOLDER"
+              end
+              on_intel do
+                url "https://github.com/piekstra/newrelic-cli/releases/download/v#{version}/newrelic-cli_v#{version}_darwin_amd64.tar.gz"
+                sha256 "DARWIN_AMD64_PLACEHOLDER"
+              end
+            end
+
+            def install
+              bin.install "newrelic-cli"
+            end
+
+            def caveats
+              <<~EOS
+                To configure newrelic-cli, run:
+                  newrelic-cli config set-api-key
+                  newrelic-cli config set-account-id <your-account-id>
+
+                Or set environment variables:
+                  NEWRELIC_API_KEY
+                  NEWRELIC_ACCOUNT_ID
+                  NEWRELIC_REGION (US or EU)
+              EOS
+            end
+
+            test do
+              assert_match "newrelic-cli", shell_output("#{bin}/newrelic-cli --help")
+            end
+          end
+          FORMULAEOF
+
+          sed -i '' "s/VERSION_PLACEHOLDER/${VERSION_NUM}/g" Formula/newrelic-cli.rb
+          sed -i '' "s/DARWIN_ARM64_PLACEHOLDER/${DARWIN_ARM64_SHA}/g" Formula/newrelic-cli.rb
+          sed -i '' "s/DARWIN_AMD64_PLACEHOLDER/${DARWIN_AMD64_SHA}/g" Formula/newrelic-cli.rb
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Update newrelic-cli to ${VERSION_NUM}"
+          git push

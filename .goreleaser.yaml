@@ -1,0 +1,58 @@
+version: 2
+
+project_name: newrelic-cli
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - env:
+      - CGO_ENABLED=0
+    goos:
+      - darwin
+      - linux
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w -X github.com/piekstra/newrelic-cli/cmd.version={{.Version}}
+
+archives:
+  - format: tar.gz
+    name_template: >-
+      {{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}
+
+checksum:
+  name_template: "checksums.txt"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^ci:"
+
+brews:
+  - name: newrelic-cli
+    repository:
+      owner: piekstra
+      name: homebrew-tap
+    directory: Formula
+    homepage: "https://github.com/piekstra/newrelic-cli"
+    description: "Command-line interface for New Relic"
+    license: "MIT"
+    install: |
+      bin.install "newrelic-cli"
+    caveats: |
+      To configure newrelic-cli, run:
+        newrelic-cli config set-api-key
+        newrelic-cli config set-account-id <your-account-id>
+
+      Or set environment variables:
+        NEWRELIC_API_KEY
+        NEWRELIC_ACCOUNT_ID
+        NEWRELIC_REGION (US or EU, defaults to US)
+    test: |
+      assert_match "newrelic-cli", shell_output("#{bin}/newrelic-cli --help")

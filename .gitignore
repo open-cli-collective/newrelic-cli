@@ -1,7 +1,11 @@
 # Binaries
-newrelic-cli
+/newrelic-cli
 *.exe
 dist/
+
+# Test coverage
+coverage.out
+coverage.html
 
 # IDE
 .idea/

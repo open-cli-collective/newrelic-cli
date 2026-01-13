@@ -1,8 +1,10 @@
 package main
 
 import (
+	"errors"
 	"os"
 
+	"github.com/piekstra/newrelic-cli/api"
 	"github.com/piekstra/newrelic-cli/internal/cmd/alerts"
 	"github.com/piekstra/newrelic-cli/internal/cmd/apps"
 	"github.com/piekstra/newrelic-cli/internal/cmd/configcmd"
@@ -15,6 +17,7 @@ import (
 	"github.com/piekstra/newrelic-cli/internal/cmd/root"
 	"github.com/piekstra/newrelic-cli/internal/cmd/synthetics"
 	"github.com/piekstra/newrelic-cli/internal/cmd/users"
+	"github.com/piekstra/newrelic-cli/internal/exitcode"
 )
 
 func main() {
@@ -34,6 +37,14 @@ func main() {
 	)
 
 	if err := root.Execute(); err != nil {
-		os.Exit(1)
+		// Map error types to exit codes for shell scripting
+		var apiErr *api.APIError
+		if errors.As(err, &apiErr) {
+			os.Exit(exitcode.FromHTTPStatus(apiErr.StatusCode))
+		}
+		if errors.Is(err, api.ErrAPIKeyRequired) || errors.Is(err, api.ErrAccountIDRequired) {
+			os.Exit(exitcode.ConfigError)
+		}
+		os.Exit(exitcode.GeneralError)
 	}
 }

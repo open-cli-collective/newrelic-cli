@@ -11,9 +11,6 @@ linters:
     - staticcheck   # Static analysis
     - unused        # Unused code
     - misspell      # Spelling mistakes
-
-linters-settings:
-  errcheck:
-    check-type-assertions: true
-  misspell:
-    locale: US
+  settings:
+    misspell:
+      locale: US

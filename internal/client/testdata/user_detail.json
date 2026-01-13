@@ -1,0 +1,34 @@
+{
+  "data": {
+    "actor": {
+      "organization": {
+        "userManagement": {
+          "authenticationDomains": {
+            "authenticationDomains": [
+              {
+                "id": "domain-1",
+                "name": "Default",
+                "users": {
+                  "users": [
+                    {
+                      "id": "user-123",
+                      "name": "John Doe",
+                      "email": "john@example.com",
+                      "type": {"displayName": "Full platform"},
+                      "groups": {
+                        "groups": [
+                          {"displayName": "Admins"},
+                          {"displayName": "Developers"}
+                        ]
+                      }
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        }
+      }
+    }
+  }
+}

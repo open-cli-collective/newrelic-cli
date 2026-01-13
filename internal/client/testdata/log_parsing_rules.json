@@ -1,0 +1,22 @@
+{
+  "data": {
+    "actor": {
+      "account": {
+        "logConfigurations": {
+          "parsingRules": [
+            {
+              "id": "rule-123",
+              "description": "Parse JSON logs",
+              "enabled": true,
+              "grok": "%{GREEDYDATA:message}",
+              "lucene": "level:error",
+              "nrql": "SELECT * FROM Log",
+              "updatedAt": "2024-01-15T10:00:00Z",
+              "deleted": false
+            }
+          ]
+        }
+      }
+    }
+  }
+}

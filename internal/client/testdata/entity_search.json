@@ -1,0 +1,21 @@
+{
+  "data": {
+    "actor": {
+      "entitySearch": {
+        "results": {
+          "entities": [
+            {
+              "guid": "MXxBUE18QVBQTElDQVRJT058MTIzNDU",
+              "name": "Test Application",
+              "type": "APPLICATION",
+              "entityType": "APM_APPLICATION_ENTITY",
+              "domain": "APM",
+              "accountId": 12345,
+              "tags": [{"key": "env", "values": ["production"]}]
+            }
+          ]
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "data": {
+    "actor": {
+      "account": {
+        "alerts": {
+          "policy": {
+            "id": 111,
+            "name": "High Error Rate",
+            "incidentPreference": "PER_CONDITION_AND_TARGET"
+          }
+        }
+      }
+    }
+  }
+}

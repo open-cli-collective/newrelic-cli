@@ -1,0 +1,26 @@
+{
+  "data": {
+    "actor": {
+      "entity": {
+        "guid": "MXxEQVNIQk9BUkR8REFTSEJPQVJEfDEyMzQ1",
+        "name": "Application Dashboard",
+        "description": "Main application metrics",
+        "permissions": "PUBLIC_READ_WRITE",
+        "pages": [
+          {
+            "guid": "MXxWSVp8cGFnZXwxMjM0NQ",
+            "name": "Overview",
+            "widgets": [
+              {
+                "id": "widget-1",
+                "title": "Throughput",
+                "visualization": {"id": "viz.line"},
+                "rawConfiguration": {"nrqlQueries": [{"query": "SELECT count(*) FROM Transaction"}]}
+              }
+            ]
+          }
+        ]
+      }
+    }
+  }
+}

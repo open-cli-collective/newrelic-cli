@@ -1,0 +1,14 @@
+{
+  "data": {
+    "actor": {
+      "account": {
+        "nrql": {
+          "results": [
+            {"count": 1000, "facet": "WebTransaction"},
+            {"count": 500, "facet": "OtherTransaction"}
+          ]
+        }
+      }
+    }
+  }
+}

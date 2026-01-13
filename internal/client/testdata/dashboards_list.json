@@ -1,0 +1,22 @@
+{
+  "data": {
+    "actor": {
+      "entitySearch": {
+        "results": {
+          "entities": [
+            {
+              "guid": "MXxEQVNIQk9BUkR8REFTSEJPQVJEfDEyMzQ1",
+              "name": "Application Dashboard",
+              "accountId": 12345
+            },
+            {
+              "guid": "MXxEQVNIQk9BUkR8REFTSEJPQVJEfDY3ODkw",
+              "name": "Infrastructure Dashboard",
+              "accountId": 12345
+            }
+          ]
+        }
+      }
+    }
+  }
+}

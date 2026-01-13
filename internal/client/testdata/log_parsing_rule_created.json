@@ -1,0 +1,16 @@
+{
+  "data": {
+    "logConfigurationsCreateParsingRule": {
+      "rule": {
+        "id": "rule-456",
+        "description": "New parsing rule",
+        "enabled": true,
+        "grok": "%{TIMESTAMP_ISO8601:timestamp}",
+        "lucene": null,
+        "nrql": "SELECT * FROM Log WHERE level = 'error'",
+        "updatedAt": "2024-01-15T12:00:00Z"
+      },
+      "errors": []
+    }
+  }
+}

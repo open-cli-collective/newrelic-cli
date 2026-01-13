@@ -1,0 +1,9 @@
+{
+  "deployment": {
+    "id": 1003,
+    "revision": "v1.2.5",
+    "description": "Hotfix",
+    "user": "deploy-bot",
+    "timestamp": "2024-01-15T16:00:00Z"
+  }
+}

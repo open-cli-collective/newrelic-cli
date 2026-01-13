@@ -1,0 +1,19 @@
+{
+  "monitors": [
+    {
+      "id": "mon-123",
+      "name": "Homepage Check",
+      "type": "SIMPLE",
+      "frequency": 5,
+      "status": "ENABLED",
+      "uri": "https://example.com"
+    },
+    {
+      "id": "mon-456",
+      "name": "API Health",
+      "type": "SCRIPT_API",
+      "frequency": 10,
+      "status": "ENABLED"
+    }
+  ]
+}

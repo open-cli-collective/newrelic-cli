@@ -1,0 +1,12 @@
+{
+  "metrics": [
+    {
+      "name": "HttpDispatcher",
+      "values": ["average_response_time", "calls_per_minute", "call_count"]
+    },
+    {
+      "name": "Apdex",
+      "values": ["score", "count", "threshold"]
+    }
+  ]
+}

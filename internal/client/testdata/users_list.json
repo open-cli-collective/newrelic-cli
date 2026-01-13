@@ -1,0 +1,34 @@
+{
+  "data": {
+    "actor": {
+      "organization": {
+        "userManagement": {
+          "authenticationDomains": {
+            "authenticationDomains": [
+              {
+                "id": "domain-1",
+                "name": "Default",
+                "users": {
+                  "users": [
+                    {
+                      "id": "user-123",
+                      "name": "John Doe",
+                      "email": "john@example.com",
+                      "type": {"displayName": "Full platform"}
+                    },
+                    {
+                      "id": "user-456",
+                      "name": "Jane Smith",
+                      "email": "jane@example.com",
+                      "type": {"displayName": "Basic"}
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        }
+      }
+    }
+  }
+}

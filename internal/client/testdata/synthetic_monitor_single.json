@@ -1,0 +1,8 @@
+{
+  "id": "mon-123",
+  "name": "Homepage Check",
+  "type": "SIMPLE",
+  "frequency": 5,
+  "status": "ENABLED",
+  "uri": "https://example.com"
+}

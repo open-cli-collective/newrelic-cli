@@ -1,0 +1,14 @@
+{
+  "policies": [
+    {
+      "id": 111,
+      "name": "High Error Rate",
+      "incident_preference": "PER_CONDITION_AND_TARGET"
+    },
+    {
+      "id": 222,
+      "name": "Latency Alert",
+      "incident_preference": "PER_POLICY"
+    }
+  ]
+}

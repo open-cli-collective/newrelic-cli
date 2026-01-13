@@ -1,0 +1,10 @@
+{
+  "application": {
+    "id": 12345,
+    "name": "Test Application",
+    "language": "go",
+    "health_status": "green",
+    "reporting": true,
+    "last_reported_at": "2024-01-15T10:30:00Z"
+  }
+}

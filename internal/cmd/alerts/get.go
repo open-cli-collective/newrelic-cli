@@ -12,7 +12,10 @@ func newGetPolicyCmd(opts *root.Options) *cobra.Command {
 	return &cobra.Command{
 		Use:   "get <policy-id>",
 		Short: "Get details for a specific alert policy",
-		Args:  cobra.ExactArgs(1),
+		Long:  `Get detailed information about a specific alert policy including its incident preference setting.`,
+		Example: `  newrelic-cli alerts policies get 12345
+  newrelic-cli alerts policies get 12345 -o json`,
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runGetPolicy(opts, args[0])
 		},

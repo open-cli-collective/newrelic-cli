@@ -28,6 +28,12 @@ func newListCmd(opts *root.Options) *cobra.Command {
 	return &cobra.Command{
 		Use:   "list",
 		Short: "List all dashboards",
+		Long: `List all dashboards in your account.
+
+Displays dashboard GUID, name, and account ID. The GUID is a base64-encoded
+entity identifier that can be used with 'dashboards get'.`,
+		Example: `  newrelic-cli dashboards list
+  newrelic-cli dashboards list -o json`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runList(opts)
 		},
@@ -69,7 +75,13 @@ func newGetCmd(opts *root.Options) *cobra.Command {
 	return &cobra.Command{
 		Use:   "get <guid>",
 		Short: "Get details for a specific dashboard",
-		Args:  cobra.ExactArgs(1),
+		Long: `Get detailed information about a dashboard including its pages and widgets.
+
+The GUID is a base64-encoded entity identifier from 'dashboards list' or
+the New Relic UI (visible in the dashboard URL).`,
+		Example: `  newrelic-cli dashboards get "MjcxMjY0MHxWSVp8REFTSEJPQVJEXDI5Mjg="
+  newrelic-cli dashboards get "MjcxMjY0MHxWSVp8REFTSEJPQVJEXDI5Mjg=" -o json`,
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runGet(opts, api.EntityGUID(args[0]))
 		},

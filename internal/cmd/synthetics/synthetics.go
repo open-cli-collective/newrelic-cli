@@ -27,6 +27,17 @@ func newListCmd(opts *root.Options) *cobra.Command {
 	return &cobra.Command{
 		Use:   "list",
 		Short: "List all synthetic monitors",
+		Long: `List all synthetic monitors in your account.
+
+Monitor types:
+  SIMPLE:      Simple browser ping
+  BROWSER:     Scripted browser
+  SCRIPT_API:  API test
+  SCRIPT_BROWSER: Scripted browser with custom scripts
+
+Status values: ENABLED, DISABLED, MUTED`,
+		Example: `  newrelic-cli synthetics list
+  newrelic-cli synthetics list -o json`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runList(opts)
 		},
@@ -70,7 +81,11 @@ func newGetCmd(opts *root.Options) *cobra.Command {
 	return &cobra.Command{
 		Use:   "get <monitor-id>",
 		Short: "Get details for a specific synthetic monitor",
-		Args:  cobra.ExactArgs(1),
+		Long: `Get detailed information about a synthetic monitor including
+its type, status, frequency, and target URI (for applicable types).`,
+		Example: `  newrelic-cli synthetics get abc-123-def-456
+  newrelic-cli synthetics get abc-123-def-456 -o json`,
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runGet(opts, args[0])
 		},

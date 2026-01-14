@@ -35,6 +35,10 @@ func newListRulesCmd(opts *root.Options) *cobra.Command {
 	return &cobra.Command{
 		Use:   "list",
 		Short: "List log parsing rules",
+		Long: `List all log parsing rules in your account.
+
+Displays rule ID, description, enabled status, and last update time.
+Use 'logs rules create' to add new rules or 'logs rules delete' to remove them.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runListRules(opts)
 		},
@@ -88,6 +92,37 @@ func newCreateRuleCmd(opts *root.Options) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "create",
 		Short: "Create a log parsing rule",
+		Long: `Create a log parsing rule using GROK patterns.
+
+GROK patterns extract structured data from unstructured log messages.
+Common GROK patterns:
+  %{IP:client_ip}         - IPv4 or IPv6 address
+  %{NUMBER:duration}      - Numeric value
+  %{WORD:method}          - Single word
+  %{DATA:message}         - Any characters (non-greedy)
+  %{GREEDYDATA:rest}      - Any characters (greedy)
+  %{UUID:request_id}      - UUID format
+  %{TIMESTAMP_ISO8601:ts} - ISO8601 timestamp
+
+The NRQL condition specifies which logs the rule applies to.`,
+		Example: `  # Parse user login events
+  newrelic-cli logs rules create \
+    --description "Parse user login events" \
+    --grok "User %{UUID:user_id} logged in from %{IP:ip_address}" \
+    --nrql "SELECT * FROM Log WHERE message LIKE 'User % logged in%'"
+
+  # Parse HTTP access logs
+  newrelic-cli logs rules create \
+    --description "Parse HTTP access logs" \
+    --grok "%{IP:client} - - %{DATA:timestamp} \"%{WORD:method} %{DATA:path}\" %{NUMBER:status}" \
+    --nrql "SELECT * FROM Log WHERE logtype = 'accesslog'"
+
+  # Parse error logs with Lucene filter
+  newrelic-cli logs rules create \
+    --description "Parse application errors" \
+    --grok "ERROR %{TIMESTAMP_ISO8601:ts} %{DATA:class}: %{GREEDYDATA:message}" \
+    --nrql "SELECT * FROM Log WHERE level = 'error'" \
+    --lucene "message:ERROR"`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runCreateRule(createOpts)
 		},

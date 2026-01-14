@@ -13,6 +13,18 @@ func newListCmd(opts *root.Options) *cobra.Command {
 	return &cobra.Command{
 		Use:   "list",
 		Short: "List all APM applications",
+		Long: `List all APM applications in your account.
+
+Displays application ID, name, language, and health status.
+Health status values: green (healthy), orange (warning), red (critical), gray (not reporting).`,
+		Example: `  # List all applications
+  newrelic-cli apps list
+
+  # Output as JSON for scripting
+  newrelic-cli apps list -o json
+
+  # Plain output for parsing
+  newrelic-cli apps list -o plain | cut -f1  # Get app IDs only`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runList(opts)
 		},

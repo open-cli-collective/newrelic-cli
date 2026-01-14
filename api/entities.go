@@ -54,7 +54,7 @@ func (c *Client) SearchEntities(queryStr string) ([]Entity, error) {
 			continue
 		}
 		ent := Entity{
-			GUID:       safeString(entity["guid"]),
+			GUID:       EntityGUID(safeString(entity["guid"])),
 			Name:       safeString(entity["name"]),
 			Type:       safeString(entity["type"]),
 			EntityType: safeString(entity["entityType"]),

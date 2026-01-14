@@ -21,7 +21,7 @@ func TestListDashboards(t *testing.T) {
 	require.Len(t, dashboards, 2)
 
 	// Verify first dashboard
-	assert.Equal(t, "MXxWSVp8REFTSEJPQVJEfDEyMzQ1", dashboards[0].GUID)
+	assert.Equal(t, EntityGUID("MXxWSVp8REFTSEJPQVJEfDEyMzQ1"), dashboards[0].GUID)
 	assert.Equal(t, "Production Overview", dashboards[0].Name)
 	assert.Equal(t, 12345, dashboards[0].AccountID)
 
@@ -93,12 +93,12 @@ func TestGetDashboard(t *testing.T) {
 	server.SetResponse(http.StatusOK, LoadTestFixture(t, "dashboard_detail.json"))
 
 	client := NewTestClient(server)
-	dashboard, err := client.GetDashboard("MXxWSVp8REFTSEJPQVJEfDEyMzQ1")
+	dashboard, err := client.GetDashboard(EntityGUID("MXxWSVp8REFTSEJPQVJEfDEyMzQ1"))
 
 	require.NoError(t, err)
 	require.NotNil(t, dashboard)
 
-	assert.Equal(t, "MXxWSVp8REFTSEJPQVJEfDEyMzQ1", dashboard.GUID)
+	assert.Equal(t, EntityGUID("MXxWSVp8REFTSEJPQVJEfDEyMzQ1"), dashboard.GUID)
 	assert.Equal(t, "Production Overview", dashboard.Name)
 	assert.Equal(t, "Main production metrics dashboard", dashboard.Description)
 	assert.Equal(t, "PUBLIC_READ_WRITE", dashboard.Permissions)
@@ -121,7 +121,7 @@ func TestGetDashboard_WithWidgets(t *testing.T) {
 	server.SetResponse(http.StatusOK, LoadTestFixture(t, "dashboard_detail.json"))
 
 	client := NewTestClient(server)
-	dashboard, err := client.GetDashboard("MXxWSVp8REFTSEJPQVJEfDEyMzQ1")
+	dashboard, err := client.GetDashboard(EntityGUID("MXxWSVp8REFTSEJPQVJEfDEyMzQ1"))
 
 	require.NoError(t, err)
 
@@ -146,7 +146,7 @@ func TestGetDashboard_NotFound(t *testing.T) {
 	server.SetResponse(http.StatusOK, response)
 
 	client := NewTestClient(server)
-	_, err := client.GetDashboard("nonexistent")
+	_, err := client.GetDashboard(EntityGUID("nonexistent"))
 
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "dashboard not found")
@@ -159,7 +159,7 @@ func TestGetDashboard_GraphQLError(t *testing.T) {
 	server.SetResponse(http.StatusOK, LoadTestFixture(t, "graphql_error.json"))
 
 	client := NewTestClient(server)
-	_, err := client.GetDashboard("invalid-guid")
+	_, err := client.GetDashboard(EntityGUID("invalid-guid"))
 
 	require.Error(t, err)
 }

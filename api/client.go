@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"strconv"
 	"time"
 
 	"github.com/piekstra/newrelic-cli/internal/config"
@@ -22,8 +21,8 @@ const (
 
 // Client is the New Relic API client
 type Client struct {
-	APIKey        string
-	AccountID     string
+	APIKey        APIKey
+	AccountID     AccountID
 	Region        string
 	BaseURL       string
 	NerdGraphURL  string
@@ -64,8 +63,8 @@ func NewWithConfig(cfg ClientConfig) *Client {
 	}
 
 	c := &Client{
-		APIKey:    cfg.APIKey,
-		AccountID: cfg.AccountID,
+		APIKey:    APIKey(cfg.APIKey),
+		AccountID: AccountID(cfg.AccountID),
 		Region:    cfg.Region,
 		HTTPClient: &http.Client{
 			Timeout: cfg.Timeout,
@@ -102,7 +101,7 @@ func (c *Client) doRequest(method, url string, body interface{}) ([]byte, error)
 		return nil, &ResponseError{Message: "failed to create request", Err: err}
 	}
 
-	req.Header.Set("Api-Key", c.APIKey)
+	req.Header.Set("Api-Key", c.APIKey.String())
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := c.HTTPClient.Do(req)
@@ -152,7 +151,7 @@ func (c *Client) NerdGraphQuery(query string, variables map[string]interface{}) 
 
 // RequireAccountID validates that account ID is configured
 func (c *Client) RequireAccountID() error {
-	if c.AccountID == "" {
+	if c.AccountID.IsEmpty() {
 		return ErrAccountIDRequired
 	}
 	return nil
@@ -163,11 +162,10 @@ func (c *Client) GetAccountIDInt() (int, error) {
 	if err := c.RequireAccountID(); err != nil {
 		return 0, err
 	}
-	id, err := strconv.Atoi(c.AccountID)
-	if err != nil {
+	if err := c.AccountID.Validate(); err != nil {
 		return 0, fmt.Errorf("invalid account ID: %s", c.AccountID)
 	}
-	return id, nil
+	return c.AccountID.Int(), nil
 }
 
 // safeString safely converts an interface{} to string

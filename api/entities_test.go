@@ -21,7 +21,7 @@ func TestSearchEntities(t *testing.T) {
 	require.Len(t, entities, 2)
 
 	// Verify first entity (APM application)
-	assert.Equal(t, "MXxBUE18QVBQTElDQVRJT058MTIzNDU2Nzg=", entities[0].GUID)
+	assert.Equal(t, EntityGUID("MXxBUE18QVBQTElDQVRJT058MTIzNDU2Nzg="), entities[0].GUID)
 	assert.Equal(t, "My Application", entities[0].Name)
 	assert.Equal(t, "APPLICATION", entities[0].Type)
 	assert.Equal(t, "APM_APPLICATION_ENTITY", entities[0].EntityType)

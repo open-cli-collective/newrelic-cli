@@ -111,6 +111,22 @@ newrelic-cli config delete-account-id
 | `--help` | `-h` | | Show help for any command |
 | `--version` | | | Show version information |
 
+### Command Aliases
+
+Most commands have shorter aliases for convenience:
+
+| Command | Aliases |
+|---------|---------|
+| `applications` | `apps`, `app` |
+| `alerts` | `alert` |
+| `dashboards` | `dashboard`, `dash` |
+| `deployments` | `deployment`, `deploy` |
+| `entities` | `entity`, `ent` |
+| `logs` | `log` |
+| `synthetics` | `synthetic`, `syn` |
+| `nerdgraph` | `ng`, `graphql` |
+| `users` | `user` |
+
 ---
 
 ### apps
@@ -236,12 +252,34 @@ Manage deployment markers.
 
 #### deployments list
 
-List deployments for an application.
+List deployments for an application with optional time filtering.
 
 ```bash
-newrelic-cli deployments list <app-id>
+# By app ID
 newrelic-cli deployments list 12345678
+
+# By application name
+newrelic-cli deployments list --name "My Application"
+
+# By entity GUID
+newrelic-cli deployments list --guid "MjcxMjY0MHxBUE18..."
+
+# With time filtering
+newrelic-cli deployments list 12345678 --since "7 days ago" --until "yesterday"
+
+# Limit results
+newrelic-cli deployments list 12345678 --limit 10
 ```
+
+| Flag | Short | Description |
+|------|-------|-------------|
+| `--name` | `-n` | Application name to look up |
+| `--guid` | `-g` | Entity GUID to look up |
+| `--since` | | Show deployments after this time |
+| `--until` | | Show deployments before this time |
+| `--limit` | `-l` | Limit number of results |
+
+**Time formats:** Supports relative times (`7 days ago`, `2 hours ago`), keywords (`now`, `yesterday`), and standard formats (`2025-01-14`, RFC3339).
 
 **Table Output:**
 ```
@@ -252,30 +290,66 @@ ID          REVISION        DESCRIPTION             USER            TIMESTAMP
 
 #### deployments create
 
-Create a deployment marker.
+Create a deployment marker for an application.
 
 ```bash
-newrelic-cli deployments create <app-id> --revision <rev> [flags]
-```
-
-| Flag | Short | Required | Description |
-|------|-------|----------|-------------|
-| `--revision` | `-r` | Yes | Deployment revision/version |
-| `--description` | `-d` | No | Deployment description |
-| `--user` | `-u` | No | User who deployed |
-| `--changelog` | `-c` | No | Changelog information |
-
-**Examples:**
-```bash
-# Minimal
+# By app ID
 newrelic-cli deployments create 12345678 --revision v1.2.3
 
-# Full
+# By application name
+newrelic-cli deployments create --name "My Application" --revision v1.2.3
+
+# By entity GUID
+newrelic-cli deployments create --guid "MjcxMjY0MHxBUE18..." --revision v1.2.3
+
+# Full example
 newrelic-cli deployments create 12345678 \
   --revision v1.2.3 \
   --description "Bug fixes and performance improvements" \
   --user "alice" \
   --changelog "Fixed memory leak, improved cache hit rate"
+```
+
+| Flag | Short | Required | Description |
+|------|-------|----------|-------------|
+| `--name` | `-n` | No* | Application name to look up |
+| `--guid` | `-g` | No* | Entity GUID to look up |
+| `--revision` | `-r` | Yes | Deployment revision/version |
+| `--description` | `-d` | No | Deployment description |
+| `--user` | `-u` | No | User who deployed |
+| `--changelog` | `-c` | No | Changelog information |
+
+*One of app ID (positional), `--name`, or `--guid` is required.
+
+#### deployments search
+
+Search deployments across all applications using NRQL WHERE clause syntax.
+
+```bash
+# Search by user
+newrelic-cli deployments search "user = 'jane.doe@example.com'"
+
+# Search by revision pattern
+newrelic-cli deployments search "revision LIKE 'v2%'"
+
+# Search with time range
+newrelic-cli deployments search "description LIKE '%hotfix%'" --since "30 days ago"
+
+# Limit results
+newrelic-cli deployments search "changelog IS NOT NULL" --limit 50
+```
+
+| Flag | Short | Description |
+|------|-------|-------------|
+| `--since` | | Search from this time |
+| `--until` | | Search until this time |
+| `--limit` | `-l` | Maximum results (default: 100) |
+
+**Table Output:**
+```
+TIMESTAMP                   APP NAME            REVISION    DESCRIPTION         USER
+2024-01-15T10:30:00Z        production-api      v2.1.0      Hotfix              jane.doe
+2024-01-14T15:00:00Z        staging-api         v2.0.9      Bug fixes           bob
 ```
 
 ---
@@ -365,12 +439,19 @@ newrelic-cli logs rules create \
 
 #### logs rules delete
 
-Delete a log parsing rule.
+Delete a log parsing rule. Requires confirmation unless `--force` is specified.
 
 ```bash
-newrelic-cli logs rules delete <rule-id>
+# With confirmation prompt
 newrelic-cli logs rules delete abc-123-def-456
+
+# Skip confirmation
+newrelic-cli logs rules delete abc-123-def-456 --force
 ```
+
+| Flag | Short | Description |
+|------|-------|-------------|
+| `--force` | `-f` | Skip confirmation prompt |
 
 ---
 
@@ -556,19 +637,35 @@ Storage: macOS Keychain (secure)
 
 #### config delete-api-key
 
-Delete the stored API key.
+Delete the stored API key. Requires confirmation unless `--force` is specified.
 
 ```bash
+# With confirmation prompt
 newrelic-cli config delete-api-key
+
+# Skip confirmation
+newrelic-cli config delete-api-key --force
 ```
+
+| Flag | Short | Description |
+|------|-------|-------------|
+| `--force` | `-f` | Skip confirmation prompt |
 
 #### config delete-account-id
 
-Delete the stored account ID.
+Delete the stored account ID. Requires confirmation unless `--force` is specified.
 
 ```bash
+# With confirmation prompt
 newrelic-cli config delete-account-id
+
+# Skip confirmation
+newrelic-cli config delete-account-id --force
 ```
+
+| Flag | Short | Description |
+|------|-------|-------------|
+| `--force` | `-f` | Skip confirmation prompt |
 
 ---
 
@@ -736,41 +833,238 @@ func main() {
 | `ListUsers()` | List users |
 | `GetUser(id)` | Get user details |
 
----
+### Entity GUIDs
 
-## Development
+**Important**: New Relic Entity GUIDs are **NOT** standard UUIDs. They are base64-encoded, pipe-delimited strings with a specific structure:
 
-### Build
-
-```bash
-make build
+```
+base64(version|domain|type|id)
 ```
 
-### Test
+| Encoded GUID | Decoded |
+|--------------|---------|
+| `MXxBUE18QVBQTElDQVRJT058MTIzNDU2Nzg=` | `1\|APM\|APPLICATION\|12345678` |
+| `MXxWSVp8REFTSEJPQVJEfDEyMzQ1` | `1\|VIZ\|DASHBOARD\|12345` |
 
-```bash
-make test
+The `EntityGUID` type provides methods for working with these identifiers:
+
+```go
+guid := api.EntityGUID("MXxBUE18QVBQTElDQVRJT058MTIzNDU2Nzg=")
+
+// Parse components
+version, domain, entityType, entityID, err := guid.Parse()
+
+// Get specific components
+domain, err := guid.Domain()      // "APM"
+entityType, err := guid.EntityType() // "APPLICATION"
+entityID, err := guid.EntityID()  // "12345678"
+
+// For APM applications, extract the app ID
+appID, err := guid.AppID()        // "12345678"
+
+// Validate format
+if err := guid.Validate(); err != nil {
+    log.Printf("Invalid GUID: %v", err)
+}
+
+// Check if a string looks like a GUID
+if api.IsValidEntityGUID(identifier) {
+    // Likely a GUID, not a name or numeric ID
+}
 ```
 
-### Lint
+Methods using Entity GUIDs:
+- `GetDashboard(guid)` - Takes an EntityGUID
+- `SearchEntities(query)` - Returns entities with GUIDs
 
-```bash
-make lint
+Methods using numeric IDs:
+- `GetApplication(id)` - Takes an integer ID
+- `GetAlertPolicy(id)` - Takes an integer ID
+- `GetUser(id)` - Takes a string ID
+
+### APIKey Type
+
+The `APIKey` type provides type-safe handling of New Relic User API keys:
+
+```go
+// Create and validate an API key
+key, warning, err := api.NewAPIKey("NRAK-ABCDEFGHIJ1234567890")
+if err != nil {
+    log.Fatal(err)
+}
+if warning != "" {
+    log.Printf("Warning: %s", warning)  // Non-NRAK prefix warning
+}
+
+// Validate an existing key
+warning, err = key.Validate()
+
+// Check prefix
+if key.HasNRAKPrefix() {
+    // Standard User API key
+}
 ```
 
-### Install Locally
+Valid User API keys start with `NRAK-` and are typically 40+ characters. Keys without the `NRAK-` prefix will validate successfully but return a warning.
 
-```bash
-make install
+### AccountID Type
+
+The `AccountID` type provides type-safe handling of New Relic account identifiers:
+
+```go
+// Create and validate an account ID
+accountID, err := api.NewAccountID("12345678")
+if err != nil {
+    log.Fatal(err)  // Empty, non-numeric, or non-positive
+}
+
+// Get as integer (no error check needed - already validated)
+id := accountID.Int()
+
+// Check if empty
+if accountID.IsEmpty() {
+    log.Fatal("Account ID required")
+}
+
+// Validate an existing AccountID
+if err := accountID.Validate(); err != nil {
+    log.Fatal(err)
+}
 ```
 
-### All Checks
+Account IDs must be positive integers. The `Int()` method provides pre-validated integer conversion without requiring error handling.
 
-```bash
-make verify
+### Error Handling
+
+The API package provides structured error types and helper functions:
+
+**Error Types:**
+
+```go
+// APIError - HTTP API errors
+var apiErr *api.APIError
+if errors.As(err, &apiErr) {
+    fmt.Printf("HTTP %d: %s\n", apiErr.StatusCode, apiErr.Message)
+}
+
+// GraphQLError - NerdGraph query errors
+var gqlErr *api.GraphQLError
+if errors.As(err, &gqlErr) {
+    fmt.Printf("GraphQL error: %s\n", gqlErr.Message)
+}
+
+// ResponseError - Response parsing errors
+var respErr *api.ResponseError
+if errors.As(err, &respErr) {
+    fmt.Printf("Parse error: %s\n", respErr.Message)
+}
 ```
 
----
+**Sentinel Errors:**
+
+```go
+api.ErrNotFound          // Resource not found (404)
+api.ErrUnauthorized      // Invalid or missing API key (401)
+api.ErrAPIKeyRequired    // API key not configured
+api.ErrAccountIDRequired // Account ID not configured
+```
+
+**Helper Functions:**
+
+```go
+// Check for specific error conditions
+if api.IsNotFound(err) {
+    fmt.Println("Resource does not exist")
+}
+
+if api.IsUnauthorized(err) {
+    fmt.Println("Check your API key")
+}
+```
+
+**Example:**
+
+```go
+app, err := client.GetApplication(12345678)
+if err != nil {
+    if api.IsNotFound(err) {
+        log.Println("Application not found")
+        return
+    }
+    if api.IsUnauthorized(err) {
+        log.Fatal("Invalid API key - run 'newrelic-cli config set-api-key'")
+    }
+    log.Fatalf("API error: %v", err)
+}
+```
+
+### Utility Functions
+
+#### App ID Resolution
+
+Resolve application identifiers from multiple formats (numeric ID, Entity GUID, or application name):
+
+```go
+// Accepts: numeric ID, Entity GUID, or application name
+appID, err := client.ResolveAppID("my-application")
+if err != nil {
+    log.Fatal(err)
+}
+
+// Now use appID with deployment or metrics APIs
+deployments, err := client.ListDeployments(appID)
+```
+
+#### Flexible Time Parsing
+
+Parse time strings in various formats for filtering:
+
+```go
+// Relative times
+t, _ := api.ParseFlexibleTime("7 days ago")
+t, _ := api.ParseFlexibleTime("2 hours ago")
+t, _ := api.ParseFlexibleTime("1 week ago")
+
+// Keywords
+t, _ := api.ParseFlexibleTime("now")
+t, _ := api.ParseFlexibleTime("today")
+t, _ := api.ParseFlexibleTime("yesterday")
+
+// ISO8601/RFC3339
+t, _ := api.ParseFlexibleTime("2025-01-14T10:00:00Z")
+
+// Date-only (parses as start of day)
+t, _ := api.ParseFlexibleTime("2025-01-14")
+t, _ := api.ParseFlexibleTime("01/14/2025")
+```
+
+#### Deployment Filtering
+
+Filter deployments by time range:
+
+```go
+since, _ := api.ParseFlexibleTime("7 days ago")
+until, _ := api.ParseFlexibleTime("now")
+filtered := api.FilterDeploymentsByTime(deployments, since, until)
+```
+
+#### GUID Validation
+
+Check if a string looks like an Entity GUID (useful for disambiguation):
+
+```go
+if api.IsValidEntityGUID(input) {
+    // Likely a base64-encoded entity GUID
+    guid := api.EntityGUID(input)
+    appID, _ := guid.AppID()
+} else if isNumeric(input) {
+    // Numeric app ID
+    appID = input
+} else {
+    // Probably an application name
+    appID, _ = client.ResolveAppID(input)
+}
+```
 
 ## License
 

@@ -1,42 +1,8 @@
 package api
 
 import (
-	"encoding/base64"
 	"fmt"
-	"strings"
 )
-
-// ParseGUID extracts components from a New Relic entity GUID.
-// GUIDs are base64-encoded strings with format: {accountId}|{domain}|{type}|{entityId}
-// For APM applications, the entityId is the numeric app ID.
-func ParseGUID(guid string) (accountID, domain, entityType, entityID string, err error) {
-	decoded, err := base64.StdEncoding.DecodeString(guid)
-	if err != nil {
-		return "", "", "", "", fmt.Errorf("invalid GUID format: %w", err)
-	}
-
-	parts := strings.Split(string(decoded), "|")
-	if len(parts) != 4 {
-		return "", "", "", "", fmt.Errorf("invalid GUID format: expected 4 parts, got %d", len(parts))
-	}
-
-	return parts[0], parts[1], parts[2], parts[3], nil
-}
-
-// ExtractAppIDFromGUID extracts the numeric application ID from an entity GUID.
-// Returns an error if the GUID is not for an APM application.
-func ExtractAppIDFromGUID(guid string) (string, error) {
-	_, domain, entityType, entityID, err := ParseGUID(guid)
-	if err != nil {
-		return "", err
-	}
-
-	if domain != "APM" || entityType != "APPLICATION" {
-		return "", fmt.Errorf("GUID is not for an APM application (domain=%s, type=%s)", domain, entityType)
-	}
-
-	return entityID, nil
-}
 
 // ResolveAppID resolves an application identifier to a numeric app ID.
 // It accepts:
@@ -50,8 +16,9 @@ func (c *Client) ResolveAppID(identifier string) (string, error) {
 	}
 
 	// Check if it looks like a base64-encoded GUID
-	if looksLikeGUID(identifier) {
-		appID, err := ExtractAppIDFromGUID(identifier)
+	if IsValidEntityGUID(identifier) {
+		guid := EntityGUID(identifier)
+		appID, err := guid.AppID()
 		if err == nil {
 			return appID, nil
 		}
@@ -81,7 +48,7 @@ func (c *Client) resolveAppName(name string) (string, error) {
 
 	// Extract app ID from the entity GUID
 	entity := entities[0]
-	appID, err := ExtractAppIDFromGUID(entity.GUID)
+	appID, err := entity.GUID.AppID()
 	if err != nil {
 		return "", fmt.Errorf("failed to extract app ID from entity: %w", err)
 	}
@@ -96,24 +63,6 @@ func isNumeric(s string) bool {
 	}
 	for _, c := range s {
 		if c < '0' || c > '9' {
-			return false
-		}
-	}
-	return true
-}
-
-// base64Chars contains all valid base64 characters
-const base64Chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/="
-
-// looksLikeGUID checks if a string could be a base64-encoded GUID
-func looksLikeGUID(s string) bool {
-	// GUIDs are typically 40+ characters and contain only base64 characters
-	if len(s) < 40 {
-		return false
-	}
-
-	for _, c := range s {
-		if !strings.ContainsRune(base64Chars, c) {
 			return false
 		}
 	}

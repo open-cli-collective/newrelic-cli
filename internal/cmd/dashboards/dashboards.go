@@ -56,7 +56,7 @@ func runList(opts *root.Options) error {
 	rows := make([][]string, len(dashboards))
 	for i, d := range dashboards {
 		rows[i] = []string{
-			view.Truncate(d.GUID, 40),
+			view.Truncate(d.GUID.String(), 40),
 			view.Truncate(d.Name, 40),
 			fmt.Sprintf("%d", d.AccountID),
 		}
@@ -71,12 +71,12 @@ func newGetCmd(opts *root.Options) *cobra.Command {
 		Short: "Get details for a specific dashboard",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runGet(opts, args[0])
+			return runGet(opts, api.EntityGUID(args[0]))
 		},
 	}
 }
 
-func runGet(opts *root.Options, guid string) error {
+func runGet(opts *root.Options, guid api.EntityGUID) error {
 	client, err := api.New()
 	if err != nil {
 		return err
@@ -94,11 +94,11 @@ func runGet(opts *root.Options, guid string) error {
 		return v.JSON(dashboard)
 	case "plain":
 		rows := [][]string{
-			{dashboard.GUID, dashboard.Name, dashboard.Permissions},
+			{dashboard.GUID.String(), dashboard.Name, dashboard.Permissions},
 		}
 		return v.Plain(rows)
 	default:
-		v.Print("GUID:        %s\n", dashboard.GUID)
+		v.Print("GUID:        %s\n", dashboard.GUID.String())
 		v.Print("Name:        %s\n", dashboard.Name)
 		v.Print("Description: %s\n", dashboard.Description)
 		v.Print("Permissions: %s\n", dashboard.Permissions)

@@ -849,42 +849,6 @@ if err != nil {
 }
 ```
 
----
-
-## Development
-
-### Build
-
-```bash
-make build
-```
-
-### Test
-
-```bash
-make test
-```
-
-### Lint
-
-```bash
-make lint
-```
-
-### Install Locally
-
-```bash
-make install
-```
-
-### All Checks
-
-```bash
-make verify
-```
-
----
-
 ## License
 
 MIT License - see [LICENSE](LICENSE) for details.

@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/base64"
 	"fmt"
+	"strconv"
 	"strings"
 )
 
@@ -135,6 +136,65 @@ func (k APIKey) Validate() (warning string, err error) {
 // HasNRAKPrefix returns true if the API key starts with "NRAK-".
 func (k APIKey) HasNRAKPrefix() bool {
 	return strings.HasPrefix(string(k), "NRAK-")
+}
+
+// AccountID is a New Relic account identifier.
+// Internally stored as a string but always represents a positive integer.
+type AccountID string
+
+// NewAccountID creates an AccountID after validation.
+// Returns an error if the value is not a valid positive integer.
+func NewAccountID(s string) (AccountID, error) {
+	if s == "" {
+		return "", fmt.Errorf("account ID cannot be empty")
+	}
+
+	num, err := strconv.Atoi(s)
+	if err != nil {
+		return "", fmt.Errorf("invalid account ID %q: must be numeric", s)
+	}
+
+	if num <= 0 {
+		return "", fmt.Errorf("invalid account ID %q: must be a positive number", s)
+	}
+
+	return AccountID(s), nil
+}
+
+// String returns the account ID as a string.
+func (a AccountID) String() string {
+	return string(a)
+}
+
+// Int returns the account ID as an integer.
+// This assumes the AccountID was created via NewAccountID and is valid.
+// For unchecked AccountID values, use Validate() first.
+func (a AccountID) Int() int {
+	num, _ := strconv.Atoi(string(a))
+	return num
+}
+
+// Validate checks if the account ID is a valid positive integer.
+func (a AccountID) Validate() error {
+	if a == "" {
+		return fmt.Errorf("account ID cannot be empty")
+	}
+
+	num, err := strconv.Atoi(string(a))
+	if err != nil {
+		return fmt.Errorf("invalid account ID %q: must be numeric", string(a))
+	}
+
+	if num <= 0 {
+		return fmt.Errorf("invalid account ID %q: must be a positive number", string(a))
+	}
+
+	return nil
+}
+
+// IsEmpty returns true if the account ID is empty.
+func (a AccountID) IsEmpty() bool {
+	return a == ""
 }
 
 // Application represents a New Relic APM application

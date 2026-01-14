@@ -810,6 +810,33 @@ if key.HasNRAKPrefix() {
 
 Valid User API keys start with `NRAK-` and are typically 40+ characters. Keys without the `NRAK-` prefix will validate successfully but return a warning.
 
+### AccountID Type
+
+The `AccountID` type provides type-safe handling of New Relic account identifiers:
+
+```go
+// Create and validate an account ID
+accountID, err := api.NewAccountID("12345678")
+if err != nil {
+    log.Fatal(err)  // Empty, non-numeric, or non-positive
+}
+
+// Get as integer (no error check needed - already validated)
+id := accountID.Int()
+
+// Check if empty
+if accountID.IsEmpty() {
+    log.Fatal("Account ID required")
+}
+
+// Validate an existing AccountID
+if err := accountID.Validate(); err != nil {
+    log.Fatal(err)
+}
+```
+
+Account IDs must be positive integers. The `Int()` method provides pre-validated integer conversion without requiring error handling.
+
 ### Error Handling
 
 The API package provides structured error types and helper functions:

@@ -279,3 +279,107 @@ func TestAPIKey_String(t *testing.T) {
 	key := APIKey("NRAK-ABCDEFGHIJ1234567890")
 	assert.Equal(t, "NRAK-ABCDEFGHIJ1234567890", key.String())
 }
+
+// AccountID tests
+
+func TestNewAccountID(t *testing.T) {
+	t.Run("valid numeric account ID", func(t *testing.T) {
+		id, err := NewAccountID("12345678")
+
+		assert.NoError(t, err)
+		assert.Equal(t, AccountID("12345678"), id)
+	})
+
+	t.Run("single digit", func(t *testing.T) {
+		id, err := NewAccountID("1")
+
+		assert.NoError(t, err)
+		assert.Equal(t, AccountID("1"), id)
+	})
+
+	t.Run("large number", func(t *testing.T) {
+		id, err := NewAccountID("9999999999")
+
+		assert.NoError(t, err)
+		assert.Equal(t, AccountID("9999999999"), id)
+	})
+
+	t.Run("empty returns error", func(t *testing.T) {
+		_, err := NewAccountID("")
+
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "empty")
+	})
+
+	t.Run("non-numeric returns error", func(t *testing.T) {
+		_, err := NewAccountID("abc123")
+
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "numeric")
+	})
+
+	t.Run("zero returns error", func(t *testing.T) {
+		_, err := NewAccountID("0")
+
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "positive")
+	})
+
+	t.Run("negative returns error", func(t *testing.T) {
+		_, err := NewAccountID("-123")
+
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "positive")
+	})
+}
+
+func TestAccountID_Int(t *testing.T) {
+	t.Run("valid account ID", func(t *testing.T) {
+		id := AccountID("12345678")
+		assert.Equal(t, 12345678, id.Int())
+	})
+
+	t.Run("single digit", func(t *testing.T) {
+		id := AccountID("5")
+		assert.Equal(t, 5, id.Int())
+	})
+}
+
+func TestAccountID_Validate(t *testing.T) {
+	t.Run("valid account ID", func(t *testing.T) {
+		id := AccountID("12345678")
+		assert.NoError(t, id.Validate())
+	})
+
+	t.Run("empty returns error", func(t *testing.T) {
+		id := AccountID("")
+		assert.Error(t, id.Validate())
+	})
+
+	t.Run("non-numeric returns error", func(t *testing.T) {
+		id := AccountID("abc")
+		assert.Error(t, id.Validate())
+	})
+
+	t.Run("zero returns error", func(t *testing.T) {
+		id := AccountID("0")
+		assert.Error(t, id.Validate())
+	})
+}
+
+func TestAccountID_IsEmpty(t *testing.T) {
+	t.Run("empty", func(t *testing.T) {
+		id := AccountID("")
+		assert.True(t, id.IsEmpty())
+	})
+
+	t.Run("not empty", func(t *testing.T) {
+		id := AccountID("12345")
+		assert.False(t, id.IsEmpty())
+	})
+}
+
+func TestAccountID_String(t *testing.T) {
+	id := AccountID("12345678")
+	assert.Equal(t, "12345678", id.String())
+}

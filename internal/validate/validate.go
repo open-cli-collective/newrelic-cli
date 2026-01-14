@@ -2,7 +2,6 @@ package validate
 
 import (
 	"fmt"
-	"strconv"
 	"strings"
 
 	"github.com/piekstra/newrelic-cli/api"
@@ -19,20 +18,8 @@ func Region(region string) error {
 
 // AccountID validates account ID is numeric and positive
 func AccountID(id string) error {
-	if id == "" {
-		return fmt.Errorf("account ID cannot be empty")
-	}
-
-	num, err := strconv.Atoi(id)
-	if err != nil {
-		return fmt.Errorf("invalid account ID %q: must be numeric", id)
-	}
-
-	if num <= 0 {
-		return fmt.Errorf("invalid account ID %q: must be a positive number", id)
-	}
-
-	return nil
+	_, err := api.NewAccountID(id)
+	return err
 }
 
 // APIKey validates API key format

@@ -163,6 +163,30 @@ client := api.NewWithConfig(api.ClientConfig{
 })
 ```
 
+### Domain Types
+
+The API package uses dedicated types for New Relic identifiers to provide type safety and self-documenting code:
+
+| Type | Purpose | Key Methods |
+|------|---------|-------------|
+| `EntityGUID` | Entity identifiers (base64 encoded) | `Parse()`, `AppID()`, `Validate()` |
+| `APIKey` | User API keys (NRAK- prefix) | `Validate()`, `HasNRAKPrefix()` |
+| `AccountID` | Account identifiers (numeric) | `Int()`, `Validate()`, `IsEmpty()` |
+
+Use constructors (`NewAPIKey`, `NewAccountID`) for validation at boundaries (user input, config loading). Type fields in structs are already validated.
+
+```go
+// At boundaries - validate on creation
+key, warning, err := api.NewAPIKey(userInput)
+accountID, err := api.NewAccountID(configValue)
+
+// In structs - types provide documentation and safety
+type Client struct {
+    APIKey    APIKey     // Not just "string"
+    AccountID AccountID  // Not just "string"
+}
+```
+
 ## Testing Philosophy
 
 - Unit tests in `*_test.go` files alongside source

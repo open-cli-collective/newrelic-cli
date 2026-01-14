@@ -7,6 +7,7 @@ import (
 	"github.com/piekstra/newrelic-cli/api"
 	"github.com/piekstra/newrelic-cli/internal/cmd/alerts"
 	"github.com/piekstra/newrelic-cli/internal/cmd/apps"
+	"github.com/piekstra/newrelic-cli/internal/cmd/completion"
 	"github.com/piekstra/newrelic-cli/internal/cmd/configcmd"
 	"github.com/piekstra/newrelic-cli/internal/cmd/dashboards"
 	"github.com/piekstra/newrelic-cli/internal/cmd/deployments"
@@ -25,6 +26,7 @@ func main() {
 	root.RegisterCommands(
 		alerts.Register,
 		apps.Register,
+		completion.Register,
 		configcmd.Register,
 		dashboards.Register,
 		deployments.Register,

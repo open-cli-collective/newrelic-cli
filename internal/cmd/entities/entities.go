@@ -5,7 +5,6 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/piekstra/newrelic-cli/api"
 	"github.com/piekstra/newrelic-cli/internal/cmd/root"
 	"github.com/piekstra/newrelic-cli/internal/view"
 )
@@ -27,12 +26,35 @@ func newSearchCmd(opts *root.Options) *cobra.Command {
 	return &cobra.Command{
 		Use:   "search <query>",
 		Short: "Search for entities",
-		Long: `Search for entities using NRQL-style queries.
+		Long: `Search for entities using NRQL-style query syntax.
 
-Examples:
+Query syntax supports:
+  - Equality:         type = 'APPLICATION'
+  - Pattern matching: name LIKE 'prod%'
+  - Logical operators: AND, OR
+  - Domains:          domain = 'APM', 'INFRA', 'BROWSER', 'SYNTH', 'VIZ'
+  - Types:            type = 'APPLICATION', 'HOST', 'DASHBOARD', etc.
+
+Common domains and types:
+  APM:      APPLICATION
+  INFRA:    HOST, AWSLAMBDAFUNCTION
+  BROWSER:  BROWSER_APPLICATION
+  SYNTH:    MONITOR
+  VIZ:      DASHBOARD`,
+		Example: `  # Find all APM applications
   newrelic-cli entities search "type = 'APPLICATION'"
+
+  # Find by name pattern
   newrelic-cli entities search "name LIKE 'production%'"
-  newrelic-cli entities search "domain = 'APM'"`,
+
+  # Find by domain
+  newrelic-cli entities search "domain = 'APM'"
+
+  # Combined conditions
+  newrelic-cli entities search "domain = 'APM' AND name LIKE 'api%'"
+
+  # Find dashboards
+  newrelic-cli entities search "type = 'DASHBOARD'"`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runSearch(opts, args[0])
@@ -41,7 +63,7 @@ Examples:
 }
 
 func runSearch(opts *root.Options, query string) error {
-	client, err := api.New()
+	client, err := opts.APIClient()
 	if err != nil {
 		return err
 	}

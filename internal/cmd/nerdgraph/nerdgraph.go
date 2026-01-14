@@ -3,7 +3,6 @@ package nerdgraph
 import (
 	"github.com/spf13/cobra"
 
-	"github.com/piekstra/newrelic-cli/api"
 	"github.com/piekstra/newrelic-cli/internal/cmd/root"
 )
 
@@ -26,8 +25,53 @@ func newQueryCmd(opts *root.Options) *cobra.Command {
 		Short: "Execute a GraphQL query",
 		Long: `Execute a GraphQL query against the NerdGraph API.
 
-Example:
-  newrelic-cli nerdgraph query '{ actor { user { email } } }'`,
+NerdGraph is New Relic's GraphQL API, providing access to all New Relic
+data and functionality. Use the NerdGraph API explorer to discover
+available queries and mutations:
+  https://api.newrelic.com/graphiql
+
+Output is always JSON format.`,
+		Example: `  # Get current user info
+  newrelic-cli nerdgraph query '{ actor { user { email name } } }'
+
+  # List accounts
+  newrelic-cli nerdgraph query '{ actor { accounts { id name } } }'
+
+  # Get entity by GUID
+  newrelic-cli nerdgraph query '{
+    actor {
+      entity(guid: "YOUR_ENTITY_GUID") {
+        name
+        entityType
+        domain
+      }
+    }
+  }'
+
+  # Run NRQL query via GraphQL
+  newrelic-cli nerdgraph query '{
+    actor {
+      account(id: 12345678) {
+        nrql(query: "SELECT count(*) FROM Transaction SINCE 1 hour ago") {
+          results
+        }
+      }
+    }
+  }'
+
+  # Search entities
+  newrelic-cli nerdgraph query '{
+    actor {
+      entitySearch(query: "domain = '\''APM'\'' AND type = '\''APPLICATION'\''") {
+        results {
+          entities {
+            guid
+            name
+          }
+        }
+      }
+    }
+  }'`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runQuery(opts, args[0])
@@ -36,7 +80,7 @@ Example:
 }
 
 func runQuery(opts *root.Options, query string) error {
-	client, err := api.New()
+	client, err := opts.APIClient()
 	if err != nil {
 		return err
 	}

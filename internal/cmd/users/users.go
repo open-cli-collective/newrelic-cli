@@ -5,7 +5,6 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/piekstra/newrelic-cli/api"
 	"github.com/piekstra/newrelic-cli/internal/cmd/root"
 	"github.com/piekstra/newrelic-cli/internal/view"
 )
@@ -28,6 +27,14 @@ func newListCmd(opts *root.Options) *cobra.Command {
 	return &cobra.Command{
 		Use:   "list",
 		Short: "List all users",
+		Long: `List all users in your account.
+
+User types:
+  FULL_USER_TIER:  Full platform user
+  CORE_USER_TIER:  Core user
+  BASIC_USER_TIER: Basic user`,
+		Example: `  newrelic-cli users list
+  newrelic-cli users list -o json`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runList(opts)
 		},
@@ -35,7 +42,7 @@ func newListCmd(opts *root.Options) *cobra.Command {
 }
 
 func runList(opts *root.Options) error {
-	client, err := api.New()
+	client, err := opts.APIClient()
 	if err != nil {
 		return err
 	}
@@ -71,7 +78,11 @@ func newGetCmd(opts *root.Options) *cobra.Command {
 	return &cobra.Command{
 		Use:   "get <user-id>",
 		Short: "Get details for a specific user",
-		Args:  cobra.ExactArgs(1),
+		Long: `Get detailed information about a user including their authentication
+domain and group memberships.`,
+		Example: `  newrelic-cli users get 12345
+  newrelic-cli users get 12345 -o json`,
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runGet(opts, args[0])
 		},
@@ -79,7 +90,7 @@ func newGetCmd(opts *root.Options) *cobra.Command {
 }
 
 func runGet(opts *root.Options, userID string) error {
-	client, err := api.New()
+	client, err := opts.APIClient()
 	if err != nil {
 		return err
 	}

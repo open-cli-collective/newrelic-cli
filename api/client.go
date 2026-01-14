@@ -28,6 +28,8 @@ type Client struct {
 	NerdGraphURL  string
 	SyntheticsURL string
 	HTTPClient    *http.Client
+	Verbose       bool
+	Stderr        io.Writer
 }
 
 // ClientConfig holds configuration for creating a new client
@@ -36,6 +38,8 @@ type ClientConfig struct {
 	AccountID string
 	Region    string
 	Timeout   time.Duration
+	Verbose   bool
+	Stderr    io.Writer
 }
 
 // New creates a new New Relic client using credentials from config/environment
@@ -69,6 +73,8 @@ func NewWithConfig(cfg ClientConfig) *Client {
 		HTTPClient: &http.Client{
 			Timeout: cfg.Timeout,
 		},
+		Verbose: cfg.Verbose,
+		Stderr:  cfg.Stderr,
 	}
 
 	// Set URLs based on region
@@ -87,6 +93,12 @@ func NewWithConfig(cfg ClientConfig) *Client {
 
 // doRequest performs an HTTP request with authentication
 func (c *Client) doRequest(method, url string, body interface{}) ([]byte, error) {
+	start := time.Now()
+
+	if c.Verbose && c.Stderr != nil {
+		fmt.Fprintf(c.Stderr, "[DEBUG] %s %s\n", method, url)
+	}
+
 	var reqBody io.Reader
 	if body != nil {
 		jsonBody, err := json.Marshal(body)
@@ -106,9 +118,16 @@ func (c *Client) doRequest(method, url string, body interface{}) ([]byte, error)
 
 	resp, err := c.HTTPClient.Do(req)
 	if err != nil {
+		if c.Verbose && c.Stderr != nil {
+			fmt.Fprintf(c.Stderr, "[DEBUG] Request failed: %v (%s)\n", err, time.Since(start))
+		}
 		return nil, &ResponseError{Message: "request failed", Err: err}
 	}
 	defer resp.Body.Close()
+
+	if c.Verbose && c.Stderr != nil {
+		fmt.Fprintf(c.Stderr, "[DEBUG] %d %s (%s)\n", resp.StatusCode, resp.Status, time.Since(start))
+	}
 
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {

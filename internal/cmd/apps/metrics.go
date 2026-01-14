@@ -5,7 +5,6 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/piekstra/newrelic-cli/api"
 	"github.com/piekstra/newrelic-cli/internal/cmd/root"
 )
 
@@ -13,7 +12,14 @@ func newMetricsCmd(opts *root.Options) *cobra.Command {
 	return &cobra.Command{
 		Use:   "metrics <app-id>",
 		Short: "List available metrics for an application",
-		Args:  cobra.ExactArgs(1),
+		Long: `List all available metric names for an APM application.
+
+Metric names follow the format: Category/Name (e.g., Apdex, HttpDispatcher,
+WebTransaction/Function/handler). Use these names with the Metric API or
+in NRQL queries with FROM Metric.`,
+		Example: `  newrelic-cli apps metrics 12345678
+  newrelic-cli apps metrics 12345678 -o json`,
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runMetrics(opts, args[0])
 		},
@@ -21,7 +27,7 @@ func newMetricsCmd(opts *root.Options) *cobra.Command {
 }
 
 func runMetrics(opts *root.Options, appID string) error {
-	client, err := api.New()
+	client, err := opts.APIClient()
 	if err != nil {
 		return err
 	}

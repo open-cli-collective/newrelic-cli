@@ -5,7 +5,6 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/piekstra/newrelic-cli/api"
 	"github.com/piekstra/newrelic-cli/internal/cmd/root"
 	"github.com/piekstra/newrelic-cli/internal/view"
 )
@@ -14,6 +13,14 @@ func newListPoliciesCmd(opts *root.Options) *cobra.Command {
 	return &cobra.Command{
 		Use:   "list",
 		Short: "List all alert policies",
+		Long: `List all alert policies in your account.
+
+Incident preference values:
+  PER_POLICY:             One incident per policy
+  PER_CONDITION:          One incident per condition
+  PER_CONDITION_AND_TARGET: One incident per condition and target`,
+		Example: `  newrelic-cli alerts policies list
+  newrelic-cli alerts policies list -o json`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runListPolicies(opts)
 		},
@@ -21,7 +28,7 @@ func newListPoliciesCmd(opts *root.Options) *cobra.Command {
 }
 
 func runListPolicies(opts *root.Options) error {
-	client, err := api.New()
+	client, err := opts.APIClient()
 	if err != nil {
 		return err
 	}

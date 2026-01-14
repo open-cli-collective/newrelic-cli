@@ -3,7 +3,6 @@ package nrql
 import (
 	"github.com/spf13/cobra"
 
-	"github.com/piekstra/newrelic-cli/api"
 	"github.com/piekstra/newrelic-cli/internal/cmd/root"
 )
 
@@ -36,7 +35,7 @@ Examples:
 }
 
 func runQuery(opts *root.Options, nrql string) error {
-	client, err := api.New()
+	client, err := opts.APIClient()
 	if err != nil {
 		return err
 	}

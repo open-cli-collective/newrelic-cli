@@ -736,6 +736,98 @@ func main() {
 | `ListUsers()` | List users |
 | `GetUser(id)` | Get user details |
 
+### Entity GUIDs
+
+**Important**: New Relic Entity GUIDs are **NOT** standard UUIDs. They are base64-encoded, pipe-delimited strings with a specific structure:
+
+```
+base64(version|domain|type|id)
+```
+
+| Encoded GUID | Decoded |
+|--------------|---------|
+| `MXxBUE18QVBQTElDQVRJT058MTIzNDU2Nzg=` | `1\|APM\|APPLICATION\|12345678` |
+| `MXxWSVp8REFTSEJPQVJEfDEyMzQ1` | `1\|VIZ\|DASHBOARD\|12345` |
+
+Structure:
+- **Version**: Always `1`
+- **Domain**: Resource domain (APM, VIZ, INFRA, etc.)
+- **Type**: Entity type (APPLICATION, DASHBOARD, HOST, etc.)
+- **ID**: Account-scoped numeric identifier
+
+Methods using Entity GUIDs:
+- `GetDashboard(guid)` - Takes an Entity GUID
+- `SearchEntities(query)` - Returns entities with GUIDs
+
+Methods using numeric IDs:
+- `GetApplication(id)` - Takes an integer ID
+- `GetAlertPolicy(id)` - Takes an integer ID
+- `GetUser(id)` - Takes a string ID (but numeric format)
+
+### Error Handling
+
+The API package provides structured error types and helper functions:
+
+**Error Types:**
+
+```go
+// APIError - HTTP API errors
+var apiErr *api.APIError
+if errors.As(err, &apiErr) {
+    fmt.Printf("HTTP %d: %s\n", apiErr.StatusCode, apiErr.Message)
+}
+
+// GraphQLError - NerdGraph query errors
+var gqlErr *api.GraphQLError
+if errors.As(err, &gqlErr) {
+    fmt.Printf("GraphQL error: %s\n", gqlErr.Message)
+}
+
+// ResponseError - Response parsing errors
+var respErr *api.ResponseError
+if errors.As(err, &respErr) {
+    fmt.Printf("Parse error: %s\n", respErr.Message)
+}
+```
+
+**Sentinel Errors:**
+
+```go
+api.ErrNotFound          // Resource not found (404)
+api.ErrUnauthorized      // Invalid or missing API key (401)
+api.ErrAPIKeyRequired    // API key not configured
+api.ErrAccountIDRequired // Account ID not configured
+```
+
+**Helper Functions:**
+
+```go
+// Check for specific error conditions
+if api.IsNotFound(err) {
+    fmt.Println("Resource does not exist")
+}
+
+if api.IsUnauthorized(err) {
+    fmt.Println("Check your API key")
+}
+```
+
+**Example:**
+
+```go
+app, err := client.GetApplication(12345678)
+if err != nil {
+    if api.IsNotFound(err) {
+        log.Println("Application not found")
+        return
+    }
+    if api.IsUnauthorized(err) {
+        log.Fatal("Invalid API key - run 'newrelic-cli config set-api-key'")
+    }
+    log.Fatalf("API error: %v", err)
+}
+```
+
 ---
 
 ## Development

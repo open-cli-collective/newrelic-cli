@@ -5,7 +5,6 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/piekstra/newrelic-cli/api"
 	"github.com/piekstra/newrelic-cli/internal/cmd/root"
 	"github.com/piekstra/newrelic-cli/internal/view"
 )
@@ -41,7 +40,7 @@ Examples:
 }
 
 func runSearch(opts *root.Options, query string) error {
-	client, err := api.New()
+	client, err := opts.APIClient()
 	if err != nil {
 		return err
 	}

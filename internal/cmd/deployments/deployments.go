@@ -93,7 +93,7 @@ func runList(opts *listOptions, args []string) error {
 		return fmt.Errorf("application must be specified via positional argument, --name, or --guid")
 	}
 
-	client, err := api.New()
+	client, err := opts.APIClient()
 	if err != nil {
 		return err
 	}
@@ -209,7 +209,7 @@ func runCreate(opts *createOptions, args []string) error {
 		return fmt.Errorf("application must be specified via positional argument, --name, or --guid")
 	}
 
-	client, err := api.New()
+	client, err := opts.APIClient()
 	if err != nil {
 		return err
 	}
@@ -287,7 +287,7 @@ Examples:
 }
 
 func runSearch(opts *searchOptions, whereClause string) error {
-	client, err := api.New()
+	client, err := opts.APIClient()
 	if err != nil {
 		return err
 	}

@@ -6,6 +6,8 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/piekstra/newrelic-cli/api"
+	"github.com/piekstra/newrelic-cli/internal/config"
 	"github.com/piekstra/newrelic-cli/internal/version"
 	"github.com/piekstra/newrelic-cli/internal/view"
 )
@@ -17,6 +19,7 @@ type RegisterFunc func(rootCmd *cobra.Command, opts *Options)
 type Options struct {
 	Output  string
 	NoColor bool
+	Verbose bool
 	Stdin   io.Reader
 	Stdout  io.Writer
 	Stderr  io.Writer
@@ -38,6 +41,25 @@ func (o *Options) View() *view.View {
 	v.Format = view.Format(o.Output)
 	v.NoColor = o.NoColor
 	return v
+}
+
+// APIClient creates a New Relic API client with options applied
+func (o *Options) APIClient() (*api.Client, error) {
+	apiKey, err := config.GetAPIKey()
+	if err != nil {
+		return nil, err
+	}
+
+	accountID, _ := config.GetAccountID() // Optional
+	region := config.GetRegion()
+
+	return api.NewWithConfig(api.ClientConfig{
+		APIKey:    apiKey,
+		AccountID: accountID,
+		Region:    region,
+		Verbose:   o.Verbose,
+		Stderr:    o.Stderr,
+	}), nil
 }
 
 var rootCmd = &cobra.Command{
@@ -73,6 +95,8 @@ func init() {
 		"Output format: table, json, or plain")
 	rootCmd.PersistentFlags().BoolVar(&globalOpts.NoColor, "no-color", false,
 		"Disable colored output")
+	rootCmd.PersistentFlags().BoolVarP(&globalOpts.Verbose, "verbose", "v", false,
+		"Enable verbose output (shows API requests)")
 
 	// Keep backward compatibility with --json flag
 	rootCmd.PersistentFlags().Bool("json", false, "Output in JSON format (deprecated: use -o json)")

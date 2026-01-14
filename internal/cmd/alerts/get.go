@@ -5,7 +5,6 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/piekstra/newrelic-cli/api"
 	"github.com/piekstra/newrelic-cli/internal/cmd/root"
 )
 
@@ -21,7 +20,7 @@ func newGetPolicyCmd(opts *root.Options) *cobra.Command {
 }
 
 func runGetPolicy(opts *root.Options, policyID string) error {
-	client, err := api.New()
+	client, err := opts.APIClient()
 	if err != nil {
 		return err
 	}

@@ -5,7 +5,6 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/piekstra/newrelic-cli/api"
 	"github.com/piekstra/newrelic-cli/internal/cmd/root"
 	"github.com/piekstra/newrelic-cli/internal/confirm"
 	"github.com/piekstra/newrelic-cli/internal/view"
@@ -43,7 +42,7 @@ func newListRulesCmd(opts *root.Options) *cobra.Command {
 }
 
 func runListRules(opts *root.Options) error {
-	client, err := api.New()
+	client, err := opts.APIClient()
 	if err != nil {
 		return err
 	}
@@ -107,7 +106,7 @@ func newCreateRuleCmd(opts *root.Options) *cobra.Command {
 }
 
 func runCreateRule(opts *createRuleOptions) error {
-	client, err := api.New()
+	client, err := opts.APIClient()
 	if err != nil {
 		return err
 	}
@@ -172,7 +171,7 @@ func runDeleteRule(opts *deleteRuleOptions, ruleID string) error {
 		}
 	}
 
-	client, err := api.New()
+	client, err := opts.APIClient()
 	if err != nil {
 		return err
 	}

@@ -1,21 +1,48 @@
-# Binaries
-/newrelic-cli
+# Binaries for programs and plugins
 *.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test binary, built with `go test -c`
+*.test
+
+# Code coverage profiles and other test artifacts
+*.out
+coverage.*
+*.coverprofile
+profile.cov
+
+# Go workspace file
+go.work
+go.work.sum
+
+# env file
+.env
+
+# Build outputs
+/newrelic-cli
+bin/
 dist/
 
-# Test coverage
-coverage.out
-coverage.html
+# Debug files
+*.dSYM/
+__debug_bin*
 
-# IDE
-.idea/
-.vscode/
+# Temporary files
+*.tmp
+*.bak
 *.swp
-*.swo
+*~
 
-# OS
+# OS files
 .DS_Store
 Thumbs.db
 
-# Go
+# Editor/IDE
+.idea/
+.vscode/
+
+# Dependency directories
 vendor/

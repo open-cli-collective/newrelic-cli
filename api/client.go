@@ -22,7 +22,7 @@ const (
 
 // Client is the New Relic API client
 type Client struct {
-	APIKey        string
+	APIKey        APIKey
 	AccountID     string
 	Region        string
 	BaseURL       string
@@ -64,7 +64,7 @@ func NewWithConfig(cfg ClientConfig) *Client {
 	}
 
 	c := &Client{
-		APIKey:    cfg.APIKey,
+		APIKey:    APIKey(cfg.APIKey),
 		AccountID: cfg.AccountID,
 		Region:    cfg.Region,
 		HTTPClient: &http.Client{
@@ -102,7 +102,7 @@ func (c *Client) doRequest(method, url string, body interface{}) ([]byte, error)
 		return nil, &ResponseError{Message: "failed to create request", Err: err}
 	}
 
-	req.Header.Set("Api-Key", c.APIKey)
+	req.Header.Set("Api-Key", c.APIKey.String())
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := c.HTTPClient.Do(req)

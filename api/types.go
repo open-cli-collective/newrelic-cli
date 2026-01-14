@@ -90,6 +90,53 @@ func IsValidEntityGUID(s string) bool {
 	return true
 }
 
+// APIKey is a New Relic User API key.
+// Valid keys start with "NRAK-" and are typically 40+ characters.
+type APIKey string
+
+// NewAPIKey creates an APIKey after validation.
+// Returns the key, a warning (if the key doesn't have NRAK- prefix), and any error.
+func NewAPIKey(s string) (APIKey, string, error) {
+	if s == "" {
+		return "", "", fmt.Errorf("API key cannot be empty")
+	}
+	if len(s) < 16 {
+		return "", "", fmt.Errorf("API key too short: minimum 16 characters")
+	}
+
+	var warning string
+	if !strings.HasPrefix(s, "NRAK-") {
+		warning = "API key does not start with 'NRAK-' (expected for User API keys)"
+	}
+
+	return APIKey(s), warning, nil
+}
+
+// String returns the API key as a string.
+func (k APIKey) String() string {
+	return string(k)
+}
+
+// Validate checks if the API key has a valid format.
+// Returns a warning (if the key doesn't have NRAK- prefix) and any error.
+func (k APIKey) Validate() (warning string, err error) {
+	if k == "" {
+		return "", fmt.Errorf("API key cannot be empty")
+	}
+	if len(k) < 16 {
+		return "", fmt.Errorf("API key too short: minimum 16 characters")
+	}
+	if !k.HasNRAKPrefix() {
+		return "API key does not start with 'NRAK-' (expected for User API keys)", nil
+	}
+	return "", nil
+}
+
+// HasNRAKPrefix returns true if the API key starts with "NRAK-".
+func (k APIKey) HasNRAKPrefix() bool {
+	return strings.HasPrefix(string(k), "NRAK-")
+}
+
 // Application represents a New Relic APM application
 type Application struct {
 	ID             int    `json:"id"`

@@ -18,7 +18,7 @@ func TestNewWithConfig(t *testing.T) {
 		}
 		client := NewWithConfig(cfg)
 
-		assert.Equal(t, "test-key", client.APIKey)
+		assert.Equal(t, APIKey("test-key"), client.APIKey)
 		assert.Equal(t, "12345", client.AccountID)
 		assert.Equal(t, "US", client.Region)
 		assert.Equal(t, "https://api.newrelic.com/v2", client.BaseURL)

@@ -186,3 +186,96 @@ func TestIsValidEntityGUID(t *testing.T) {
 		assert.False(t, IsValidEntityGUID("abcdefghijklmnopqrstuvwxyz!@#$%^&*()1234567890123"))
 	})
 }
+
+// APIKey tests
+
+func TestNewAPIKey(t *testing.T) {
+	t.Run("valid NRAK key", func(t *testing.T) {
+		key, warning, err := NewAPIKey("NRAK-ABCDEFGHIJ1234567890")
+
+		assert.NoError(t, err)
+		assert.Empty(t, warning)
+		assert.Equal(t, APIKey("NRAK-ABCDEFGHIJ1234567890"), key)
+	})
+
+	t.Run("valid key without NRAK prefix returns warning", func(t *testing.T) {
+		key, warning, err := NewAPIKey("ABCDEFGHIJ1234567890WXYZ")
+
+		assert.NoError(t, err)
+		assert.NotEmpty(t, warning)
+		assert.Contains(t, warning, "NRAK-")
+		assert.Equal(t, APIKey("ABCDEFGHIJ1234567890WXYZ"), key)
+	})
+
+	t.Run("empty key returns error", func(t *testing.T) {
+		_, _, err := NewAPIKey("")
+
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "empty")
+	})
+
+	t.Run("too short key returns error", func(t *testing.T) {
+		_, _, err := NewAPIKey("NRAK-short")
+
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "short")
+	})
+}
+
+func TestAPIKey_Validate(t *testing.T) {
+	t.Run("valid NRAK key", func(t *testing.T) {
+		key := APIKey("NRAK-ABCDEFGHIJ1234567890")
+
+		warning, err := key.Validate()
+
+		assert.NoError(t, err)
+		assert.Empty(t, warning)
+	})
+
+	t.Run("valid key without NRAK prefix returns warning", func(t *testing.T) {
+		key := APIKey("ABCDEFGHIJ1234567890WXYZ")
+
+		warning, err := key.Validate()
+
+		assert.NoError(t, err)
+		assert.NotEmpty(t, warning)
+	})
+
+	t.Run("empty key returns error", func(t *testing.T) {
+		key := APIKey("")
+
+		_, err := key.Validate()
+
+		assert.Error(t, err)
+	})
+
+	t.Run("too short key returns error", func(t *testing.T) {
+		key := APIKey("short")
+
+		_, err := key.Validate()
+
+		assert.Error(t, err)
+	})
+}
+
+func TestAPIKey_HasNRAKPrefix(t *testing.T) {
+	t.Run("has NRAK prefix", func(t *testing.T) {
+		key := APIKey("NRAK-ABCDEFGHIJ1234567890")
+		assert.True(t, key.HasNRAKPrefix())
+	})
+
+	t.Run("no NRAK prefix", func(t *testing.T) {
+		key := APIKey("ABCDEFGHIJ1234567890WXYZ")
+		assert.False(t, key.HasNRAKPrefix())
+	})
+
+	t.Run("lowercase nrak prefix", func(t *testing.T) {
+		key := APIKey("nrak-ABCDEFGHIJ1234567890")
+		assert.False(t, key.HasNRAKPrefix()) // case-sensitive
+	})
+}
+
+func TestAPIKey_String(t *testing.T) {
+	key := APIKey("NRAK-ABCDEFGHIJ1234567890")
+	assert.Equal(t, "NRAK-ABCDEFGHIJ1234567890", key.String())
+}

@@ -785,6 +785,31 @@ Methods using numeric IDs:
 - `GetAlertPolicy(id)` - Takes an integer ID
 - `GetUser(id)` - Takes a string ID
 
+### APIKey Type
+
+The `APIKey` type provides type-safe handling of New Relic User API keys:
+
+```go
+// Create and validate an API key
+key, warning, err := api.NewAPIKey("NRAK-ABCDEFGHIJ1234567890")
+if err != nil {
+    log.Fatal(err)
+}
+if warning != "" {
+    log.Printf("Warning: %s", warning)  // Non-NRAK prefix warning
+}
+
+// Validate an existing key
+warning, err = key.Validate()
+
+// Check prefix
+if key.HasNRAKPrefix() {
+    // Standard User API key
+}
+```
+
+Valid User API keys start with `NRAK-` and are typically 40+ characters. Keys without the `NRAK-` prefix will validate successfully but return a warning.
+
 ### Error Handling
 
 The API package provides structured error types and helper functions:

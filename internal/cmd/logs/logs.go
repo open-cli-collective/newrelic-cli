@@ -5,6 +5,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/piekstra/newrelic-cli/api"
 	"github.com/piekstra/newrelic-cli/internal/cmd/root"
 	"github.com/piekstra/newrelic-cli/internal/confirm"
 	"github.com/piekstra/newrelic-cli/internal/view"
@@ -25,6 +26,7 @@ func Register(rootCmd *cobra.Command, opts *root.Options) {
 
 	rulesCmd.AddCommand(newListRulesCmd(opts))
 	rulesCmd.AddCommand(newCreateRuleCmd(opts))
+	rulesCmd.AddCommand(newUpdateRuleCmd(opts))
 	rulesCmd.AddCommand(newDeleteRuleCmd(opts))
 
 	logsCmd.AddCommand(rulesCmd)
@@ -162,6 +164,110 @@ func runCreateRule(opts *createRuleOptions) error {
 		})
 	default:
 		v.Success("Log parsing rule created successfully")
+		v.Print("ID:          %s\n", rule.ID)
+		v.Print("Description: %s\n", rule.Description)
+		v.Print("Enabled:     %t\n", rule.Enabled)
+		return nil
+	}
+}
+
+type updateRuleOptions struct {
+	*root.Options
+	description string
+	grok        string
+	nrql        string
+	lucene      string
+	enabled     bool
+	disabled    bool
+}
+
+func newUpdateRuleCmd(opts *root.Options) *cobra.Command {
+	updateOpts := &updateRuleOptions{Options: opts}
+
+	cmd := &cobra.Command{
+		Use:   "update <rule-id>",
+		Short: "Update a log parsing rule",
+		Long: `Update an existing log parsing rule.
+
+Only the specified fields will be modified - unspecified fields retain their current values.
+Use --enabled to enable or --disabled to disable the rule.`,
+		Example: `  # Update the description
+  newrelic-cli logs rules update rule-123 --description "Updated description"
+
+  # Update the GROK pattern
+  newrelic-cli logs rules update rule-123 --grok "%{IP:client} %{WORD:method}"
+
+  # Disable a rule
+  newrelic-cli logs rules update rule-123 --disabled
+
+  # Update multiple fields
+  newrelic-cli logs rules update rule-123 \
+    --description "Parse HTTP logs" \
+    --grok "%{COMBINEDAPACHELOG}" \
+    --enabled`,
+		Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runUpdateRule(updateOpts, args[0], cmd)
+		},
+	}
+
+	cmd.Flags().StringVarP(&updateOpts.description, "description", "d", "", "Rule description")
+	cmd.Flags().StringVarP(&updateOpts.grok, "grok", "g", "", "GROK pattern")
+	cmd.Flags().StringVarP(&updateOpts.nrql, "nrql", "n", "", "NRQL matching condition")
+	cmd.Flags().StringVarP(&updateOpts.lucene, "lucene", "l", "", "Lucene filter")
+	cmd.Flags().BoolVarP(&updateOpts.enabled, "enabled", "e", false, "Enable the rule")
+	cmd.Flags().BoolVar(&updateOpts.disabled, "disabled", false, "Disable the rule")
+	cmd.MarkFlagsMutuallyExclusive("enabled", "disabled")
+
+	return cmd
+}
+
+func runUpdateRule(opts *updateRuleOptions, ruleID string, cmd *cobra.Command) error {
+	client, err := opts.APIClient()
+	if err != nil {
+		return err
+	}
+
+	// Build the update struct with only changed flags
+	update := api.LogParsingRuleUpdate{}
+
+	if cmd.Flags().Changed("description") {
+		update.Description = &opts.description
+	}
+	if cmd.Flags().Changed("grok") {
+		update.Grok = &opts.grok
+	}
+	if cmd.Flags().Changed("nrql") {
+		update.NRQL = &opts.nrql
+	}
+	if cmd.Flags().Changed("lucene") {
+		update.Lucene = &opts.lucene
+	}
+	if cmd.Flags().Changed("enabled") {
+		enabled := true
+		update.Enabled = &enabled
+	}
+	if cmd.Flags().Changed("disabled") {
+		enabled := false
+		update.Enabled = &enabled
+	}
+
+	rule, err := client.UpdateLogParsingRule(ruleID, update)
+	if err != nil {
+		return err
+	}
+
+	v := opts.View()
+
+	switch v.Format {
+	case "json":
+		return v.JSON(rule)
+	case "plain":
+		return v.Plain([][]string{
+			{rule.ID, rule.Description, fmt.Sprintf("%t", rule.Enabled)},
+		})
+	default:
+		v.Success("Log parsing rule updated successfully")
 		v.Print("ID:          %s\n", rule.ID)
 		v.Print("Description: %s\n", rule.Description)
 		v.Print("Enabled:     %t\n", rule.Enabled)

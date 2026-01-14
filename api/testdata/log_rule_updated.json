@@ -1,0 +1,16 @@
+{
+  "data": {
+    "logConfigurationsUpdateParsingRule": {
+      "rule": {
+        "id": "rule-001",
+        "description": "Updated description",
+        "enabled": false,
+        "grok": "%{IP:client_ip} %{WORD:method}",
+        "lucene": "host:updated",
+        "nrql": "SELECT * FROM Log WHERE updated = true",
+        "updatedAt": "2024-01-17T12:00:00Z"
+      },
+      "errors": []
+    }
+  }
+}

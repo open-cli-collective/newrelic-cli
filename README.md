@@ -98,6 +98,29 @@ newrelic-cli config delete-account-id
 2. Stored credentials (CLI config)
 3. Default values (lowest priority)
 
+### Shell Completion
+
+Generate shell completions for tab completion support:
+
+```bash
+# Bash (Linux)
+newrelic-cli completion bash > /etc/bash_completion.d/newrelic-cli
+
+# Bash (macOS with Homebrew)
+newrelic-cli completion bash > $(brew --prefix)/etc/bash_completion.d/newrelic-cli
+
+# Zsh
+newrelic-cli completion zsh > "${fpath[1]}/_newrelic-cli"
+
+# Fish
+newrelic-cli completion fish > ~/.config/fish/completions/newrelic-cli.fish
+
+# PowerShell
+newrelic-cli completion powershell >> $PROFILE
+```
+
+Run `newrelic-cli completion --help` for detailed setup instructions.
+
 ---
 
 ## Command Reference

@@ -1,5 +1,95 @@
 package api
 
+import (
+	"encoding/base64"
+	"fmt"
+	"strings"
+)
+
+// EntityGUID is a New Relic entity identifier.
+// Unlike standard UUIDs, Entity GUIDs are base64-encoded strings
+// with the format: version|domain|type|id
+//
+// Example: MXxBUE18QVBQTElDQVRJT058MTIzNDU2Nzg= decodes to 1|APM|APPLICATION|12345678
+type EntityGUID string
+
+// String returns the GUID as a string
+func (g EntityGUID) String() string {
+	return string(g)
+}
+
+// Parse decodes the GUID and returns its components.
+// Returns version, domain, entityType, entityID, and any error.
+func (g EntityGUID) Parse() (version, domain, entityType, entityID string, err error) {
+	decoded, err := base64.StdEncoding.DecodeString(string(g))
+	if err != nil {
+		return "", "", "", "", fmt.Errorf("invalid GUID format: %w", err)
+	}
+
+	parts := strings.Split(string(decoded), "|")
+	if len(parts) != 4 {
+		return "", "", "", "", fmt.Errorf("invalid GUID format: expected 4 parts, got %d", len(parts))
+	}
+
+	return parts[0], parts[1], parts[2], parts[3], nil
+}
+
+// Validate checks if the GUID has valid base64 encoding and structure.
+func (g EntityGUID) Validate() error {
+	_, _, _, _, err := g.Parse()
+	return err
+}
+
+// Domain returns the entity domain (APM, VIZ, INFRA, etc.)
+func (g EntityGUID) Domain() (string, error) {
+	_, domain, _, _, err := g.Parse()
+	return domain, err
+}
+
+// EntityType returns the entity type (APPLICATION, DASHBOARD, HOST, etc.)
+func (g EntityGUID) EntityType() (string, error) {
+	_, _, entityType, _, err := g.Parse()
+	return entityType, err
+}
+
+// EntityID returns the entity's numeric identifier.
+func (g EntityGUID) EntityID() (string, error) {
+	_, _, _, entityID, err := g.Parse()
+	return entityID, err
+}
+
+// AppID extracts the numeric application ID from an APM application GUID.
+// Returns an error if the GUID is not for an APM application.
+func (g EntityGUID) AppID() (string, error) {
+	_, domain, entityType, entityID, err := g.Parse()
+	if err != nil {
+		return "", err
+	}
+
+	if domain != "APM" || entityType != "APPLICATION" {
+		return "", fmt.Errorf("GUID is not for an APM application (domain=%s, type=%s)", domain, entityType)
+	}
+
+	return entityID, nil
+}
+
+// IsValidEntityGUID checks if a string could be a valid base64-encoded entity GUID.
+// This is a quick heuristic check, not a full validation.
+func IsValidEntityGUID(s string) bool {
+	// GUIDs are typically 40+ characters and contain only base64 characters
+	if len(s) < 40 {
+		return false
+	}
+
+	const base64Chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/="
+	for _, c := range s {
+		if !strings.ContainsRune(base64Chars, c) {
+			return false
+		}
+	}
+	return true
+}
+
 // Application represents a New Relic APM application
 type Application struct {
 	ID             int    `json:"id"`
@@ -45,15 +135,15 @@ type AlertPoliciesResponse struct {
 
 // Dashboard represents a New Relic dashboard
 type Dashboard struct {
-	GUID        string `json:"guid"`
-	Name        string `json:"name"`
-	AccountID   int    `json:"accountId"`
-	Description string `json:"description,omitempty"`
+	GUID        EntityGUID `json:"guid"`
+	Name        string     `json:"name"`
+	AccountID   int        `json:"accountId"`
+	Description string     `json:"description,omitempty"`
 }
 
 // DashboardPage represents a page within a dashboard
 type DashboardPage struct {
-	GUID    string            `json:"guid"`
+	GUID    EntityGUID        `json:"guid"`
 	Name    string            `json:"name"`
 	Widgets []DashboardWidget `json:"widgets"`
 }
@@ -68,7 +158,7 @@ type DashboardWidget struct {
 
 // DashboardDetail represents detailed dashboard information
 type DashboardDetail struct {
-	GUID        string          `json:"guid"`
+	GUID        EntityGUID      `json:"guid"`
 	Name        string          `json:"name"`
 	Description string          `json:"description"`
 	Permissions string          `json:"permissions"`
@@ -87,7 +177,7 @@ type User struct {
 
 // Entity represents a New Relic entity
 type Entity struct {
-	GUID       string            `json:"guid"`
+	GUID       EntityGUID        `json:"guid"`
 	Name       string            `json:"name"`
 	Type       string            `json:"type"`
 	EntityType string            `json:"entityType"`

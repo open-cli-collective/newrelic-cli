@@ -62,7 +62,7 @@ func runSearch(opts *root.Options, query string) error {
 	rows := make([][]string, len(entities))
 	for i, e := range entities {
 		rows[i] = []string{
-			view.Truncate(e.GUID, 40),
+			view.Truncate(e.GUID.String(), 40),
 			view.Truncate(e.Name, 30),
 			e.Type,
 			e.Domain,

@@ -60,7 +60,7 @@ func (c *Client) ListDashboards() ([]Dashboard, error) {
 			continue
 		}
 		dashboards = append(dashboards, Dashboard{
-			GUID:      safeString(entity["guid"]),
+			GUID:      EntityGUID(safeString(entity["guid"])),
 			Name:      safeString(entity["name"]),
 			AccountID: safeInt(entity["accountId"]),
 		})
@@ -70,7 +70,7 @@ func (c *Client) ListDashboards() ([]Dashboard, error) {
 }
 
 // GetDashboard returns detailed information for a specific dashboard
-func (c *Client) GetDashboard(guid string) (*DashboardDetail, error) {
+func (c *Client) GetDashboard(guid EntityGUID) (*DashboardDetail, error) {
 	query := `
 	query($guid: EntityGuid!) {
 		actor {
@@ -96,7 +96,7 @@ func (c *Client) GetDashboard(guid string) (*DashboardDetail, error) {
 	}`
 
 	variables := map[string]interface{}{
-		"guid": guid,
+		"guid": guid.String(),
 	}
 
 	result, err := c.NerdGraphQuery(query, variables)
@@ -114,7 +114,7 @@ func (c *Client) GetDashboard(guid string) (*DashboardDetail, error) {
 	}
 
 	dashboard := &DashboardDetail{
-		GUID:        safeString(entity["guid"]),
+		GUID:        EntityGUID(safeString(entity["guid"])),
 		Name:        safeString(entity["name"]),
 		Description: safeString(entity["description"]),
 		Permissions: safeString(entity["permissions"]),
@@ -128,7 +128,7 @@ func (c *Client) GetDashboard(guid string) (*DashboardDetail, error) {
 				continue
 			}
 			dp := DashboardPage{
-				GUID: safeString(page["guid"]),
+				GUID: EntityGUID(safeString(page["guid"])),
 				Name: safeString(page["name"]),
 			}
 

@@ -460,6 +460,37 @@ newrelic-cli logs rules create \
   --enabled true
 ```
 
+#### logs rules update
+
+Update an existing log parsing rule. Only specified fields are modified.
+
+```bash
+newrelic-cli logs rules update <rule-id> [flags]
+```
+
+| Flag | Short | Description |
+|------|-------|-------------|
+| `--description` | `-d` | Rule description |
+| `--grok` | `-g` | GROK pattern |
+| `--nrql` | `-n` | NRQL matching condition |
+| `--lucene` | `-l` | Lucene filter expression |
+| `--enabled` | `-e` | Enable the rule |
+| `--disabled` | | Disable the rule |
+
+**Examples:**
+```bash
+# Update description only
+newrelic-cli logs rules update abc-123 --description "Updated description"
+
+# Disable a rule
+newrelic-cli logs rules update abc-123 --disabled
+
+# Update multiple fields
+newrelic-cli logs rules update abc-123 \
+  --grok "%{IP:client} %{WORD:method}" \
+  --enabled
+```
+
 #### logs rules delete
 
 Delete a log parsing rule. Requires confirmation unless `--force` is specified.
@@ -849,6 +880,8 @@ func main() {
 | `ListLogParsingRules()` | List log parsing rules |
 | `CreateLogParsingRule(...)` | Create parsing rule |
 | `DeleteLogParsingRule(id)` | Delete parsing rule |
+| `GetLogParsingRule(id)` | Get parsing rule by ID |
+| `UpdateLogParsingRule(id, update)` | Update parsing rule |
 | `QueryNRQL(query)` | Execute NRQL query |
 | `NerdGraphQuery(query, vars)` | Execute GraphQL query |
 | `ListSyntheticMonitors()` | List synthetic monitors |

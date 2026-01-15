@@ -115,6 +115,10 @@ newrelic-cli config show
 | List rules (JSON) | `newrelic-cli logs rules list -o json` | Valid JSON array | [ ] |
 | Create rule | See command below | Success message with ID | [ ] |
 | Verify created | `newrelic-cli logs rules list` | Shows test rule | [ ] |
+| Update rule description | `newrelic-cli logs rules update <rule-id> --description "newrelic-cli-test-updated"` | Success message | [ ] |
+| Update rule (disable) | `newrelic-cli logs rules update <rule-id> --disabled` | Success message | [ ] |
+| Update rule (JSON) | `newrelic-cli logs rules update <rule-id> --description "test" -o json` | Valid JSON object | [ ] |
+| Verify update persisted | `newrelic-cli logs rules list` | Shows updated description | [ ] |
 | Delete rule | `newrelic-cli logs rules delete <rule-id>` | Success message | [ ] |
 | Verify deleted | `newrelic-cli logs rules list` | Test rule removed | [ ] |
 
@@ -260,14 +264,14 @@ For each command that supports output formats, verify:
 | dashboards | 4 | | |
 | deployments | 5 | | |
 | entities | 4 | | |
-| logs rules | 6 | | |
+| logs rules | 10 | | |
 | nerdgraph | 3 | | |
 | nrql | 4 | | |
 | synthetics | 4 | | |
 | users | 4 | | |
 | config | 5 | | |
 | Edge cases | ~15 | | |
-| **TOTAL** | ~65 | | |
+| **TOTAL** | ~69 | | |
 
 ---
 

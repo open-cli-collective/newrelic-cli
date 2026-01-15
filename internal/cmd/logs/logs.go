@@ -106,7 +106,53 @@ Common GROK patterns:
   %{UUID:request_id}      - UUID format
   %{TIMESTAMP_ISO8601:ts} - ISO8601 timestamp
 
-The NRQL condition specifies which logs the rule applies to.`,
+The NRQL condition specifies which logs the rule applies to.
+
+PATTERN MATCHING BEHAVIOR:
+  Grok patterns must match from the start of the message. If your log has a
+  variable prefix before the data you want to extract, use %{GREEDYDATA} or
+  %{DATA} to consume it first.
+
+  # This won't work if message has a prefix:
+  --grok "%{UUID:id} - processed"
+
+  # This will work:
+  --grok "%{GREEDYDATA}%{UUID:id} - processed"
+
+GREEDY VS NON-GREEDY:
+  %{DATA}       - Non-greedy (matches as little as possible)
+  %{GREEDYDATA} - Greedy (matches as much as possible)
+
+  Use anchors like %{SPACE} or literal characters to avoid ambiguous matches:
+  --grok "%{GREEDYDATA}%{SPACE}%{DATA:name}::%{UUID:id}"
+
+CUSTOM CAPTURE GROUPS:
+  Inline regex capture groups work when standard patterns don't fit:
+  --grok "%{GREEDYDATA}(?<custom_id>[A-Z]{3}-[0-9]{4})"
+
+HANDLING OPTIONAL PREFIXES:
+  For logs from multiple sources with different prefix formats:
+  --grok "(?:^|%{GREEDYDATA}\s)%{DATA:service}::%{UUID:id}"
+
+MULTILINE MESSAGES:
+  Logs with newlines (e.g., .NET console logging) need the prefix consumed:
+  --grok "%{GREEDYDATA}%{SPACE}%{DATA:fi}::%{UUID:id} - %{GREEDYDATA:msg}"
+
+TESTING PATTERNS:
+  Test patterns with NRQL before creating rules:
+
+  # Test with capture() for regex:
+  FROM Log SELECT capture(message, r'.*(?P<id>[a-f0-9-]{36}).*')
+  WHERE message LIKE '%your-filter%' LIMIT 5
+
+  # Test with aparse() for grok:
+  FROM Log SELECT aparse(message, '%{GREEDYDATA}%{UUID:id}')
+  WHERE message LIKE '%your-filter%' LIMIT 5
+
+IMPORTANT:
+  - Parsing rules only apply to newly ingested logs
+  - Existing logs will NOT be retroactively parsed
+  - If parsed returns null in NRQL tests, your pattern doesn't match`,
 		Example: `  # Parse user login events
   newrelic-cli logs rules create \
     --description "Parse user login events" \
@@ -124,7 +170,19 @@ The NRQL condition specifies which logs the rule applies to.`,
     --description "Parse application errors" \
     --grok "ERROR %{TIMESTAMP_ISO8601:ts} %{DATA:class}: %{GREEDYDATA:message}" \
     --nrql "SELECT * FROM Log WHERE level = 'error'" \
-    --lucene "message:ERROR"`,
+    --lucene "message:ERROR"
+
+  # Handle optional prefix (logs from multiple sources)
+  newrelic-cli logs rules create \
+    --description "Parse with optional prefix" \
+    --grok "(?:^|%{GREEDYDATA}\s)%{DATA:service}::%{UUID:id} - %{GREEDYDATA:msg}" \
+    --nrql "SELECT * FROM Log WHERE message LIKE '%::%'"
+
+  # Custom regex capture for non-standard formats
+  newrelic-cli logs rules create \
+    --description "Parse custom ID format" \
+    --grok "%{GREEDYDATA}(?<custom_id>[A-Z]{3}-[0-9]{4})" \
+    --nrql "SELECT * FROM Log WHERE message LIKE '%-%'"`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runCreateRule(createOpts)
 		},
@@ -190,7 +248,53 @@ func newUpdateRuleCmd(opts *root.Options) *cobra.Command {
 		Long: `Update an existing log parsing rule.
 
 Only the specified fields will be modified - unspecified fields retain their current values.
-Use --enabled to enable or --disabled to disable the rule.`,
+Use --enabled to enable or --disabled to disable the rule.
+
+PATTERN MATCHING BEHAVIOR:
+  Grok patterns must match from the start of the message. If your log has a
+  variable prefix before the data you want to extract, use %{GREEDYDATA} or
+  %{DATA} to consume it first.
+
+  # This won't work if message has a prefix:
+  --grok "%{UUID:id} - processed"
+
+  # This will work:
+  --grok "%{GREEDYDATA}%{UUID:id} - processed"
+
+GREEDY VS NON-GREEDY:
+  %{DATA}       - Non-greedy (matches as little as possible)
+  %{GREEDYDATA} - Greedy (matches as much as possible)
+
+  Use anchors like %{SPACE} or literal characters to avoid ambiguous matches:
+  --grok "%{GREEDYDATA}%{SPACE}%{DATA:name}::%{UUID:id}"
+
+CUSTOM CAPTURE GROUPS:
+  Inline regex capture groups work when standard patterns don't fit:
+  --grok "%{GREEDYDATA}(?<custom_id>[A-Z]{3}-[0-9]{4})"
+
+HANDLING OPTIONAL PREFIXES:
+  For logs from multiple sources with different prefix formats:
+  --grok "(?:^|%{GREEDYDATA}\s)%{DATA:service}::%{UUID:id}"
+
+MULTILINE MESSAGES:
+  Logs with newlines (e.g., .NET console logging) need the prefix consumed:
+  --grok "%{GREEDYDATA}%{SPACE}%{DATA:fi}::%{UUID:id} - %{GREEDYDATA:msg}"
+
+TESTING PATTERNS:
+  Test patterns with NRQL before updating rules:
+
+  # Test with capture() for regex:
+  FROM Log SELECT capture(message, r'.*(?P<id>[a-f0-9-]{36}).*')
+  WHERE message LIKE '%your-filter%' LIMIT 5
+
+  # Test with aparse() for grok:
+  FROM Log SELECT aparse(message, '%{GREEDYDATA}%{UUID:id}')
+  WHERE message LIKE '%your-filter%' LIMIT 5
+
+IMPORTANT:
+  - Parsing rules only apply to newly ingested logs
+  - Existing logs will NOT be retroactively parsed
+  - If parsed returns null in NRQL tests, your pattern doesn't match`,
 		Example: `  # Update the description
   newrelic-cli logs rules update rule-123 --description "Updated description"
 
@@ -204,7 +308,15 @@ Use --enabled to enable or --disabled to disable the rule.`,
   newrelic-cli logs rules update rule-123 \
     --description "Parse HTTP logs" \
     --grok "%{COMBINEDAPACHELOG}" \
-    --enabled`,
+    --enabled
+
+  # Update to handle optional prefix
+  newrelic-cli logs rules update rule-123 \
+    --grok "(?:^|%{GREEDYDATA}\s)%{DATA:service}::%{UUID:id} - %{GREEDYDATA:msg}"
+
+  # Update with custom regex capture
+  newrelic-cli logs rules update rule-123 \
+    --grok "%{GREEDYDATA}(?<custom_id>[A-Z]{3}-[0-9]{4})"`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runUpdateRule(updateOpts, args[0], cmd)

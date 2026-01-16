@@ -28,7 +28,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # TAP_GITHUB_TOKEN (a PAT) is required to push to the piekstra/homebrew-tap
+      # TAP_GITHUB_TOKEN (a PAT) is required to push to the open-cli-collective/homebrew-tap
       # repository. The default GITHUB_TOKEN only has access to this repository.
       - name: Update Homebrew Tap
         env:
@@ -40,7 +40,7 @@ jobs:
           DARWIN_ARM64_SHA=$(grep "_darwin_arm64.tar.gz" dist/checksums.txt | cut -d' ' -f1)
           DARWIN_AMD64_SHA=$(grep "_darwin_amd64.tar.gz" dist/checksums.txt | cut -d' ' -f1)
 
-          git clone https://x-access-token:${TAP_GITHUB_TOKEN}@github.com/piekstra/homebrew-tap.git
+          git clone https://x-access-token:${TAP_GITHUB_TOKEN}@github.com/open-cli-collective/homebrew-tap.git
           cd homebrew-tap
 
           mkdir -p Formula
@@ -48,17 +48,17 @@ jobs:
           cat > Formula/newrelic-cli.rb << 'FORMULAEOF'
           class NewrelicCli < Formula
             desc "Command-line interface for New Relic"
-            homepage "https://github.com/piekstra/newrelic-cli"
+            homepage "https://github.com/open-cli-collective/newrelic-cli"
             license "MIT"
             version "VERSION_PLACEHOLDER"
 
             on_macos do
               on_arm do
-                url "https://github.com/piekstra/newrelic-cli/releases/download/v#{version}/newrelic-cli_v#{version}_darwin_arm64.tar.gz"
+                url "https://github.com/open-cli-collective/newrelic-cli/releases/download/v#{version}/newrelic-cli_v#{version}_darwin_arm64.tar.gz"
                 sha256 "DARWIN_ARM64_PLACEHOLDER"
               end
               on_intel do
-                url "https://github.com/piekstra/newrelic-cli/releases/download/v#{version}/newrelic-cli_v#{version}_darwin_amd64.tar.gz"
+                url "https://github.com/open-cli-collective/newrelic-cli/releases/download/v#{version}/newrelic-cli_v#{version}_darwin_amd64.tar.gz"
                 sha256 "DARWIN_AMD64_PLACEHOLDER"
               end
             end

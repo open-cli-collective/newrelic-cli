@@ -48,5 +48,5 @@ changelog:
 
 release:
   github:
-    owner: piekstra
+    owner: open-cli-collective
     name: newrelic-cli

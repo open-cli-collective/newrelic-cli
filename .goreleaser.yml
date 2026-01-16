@@ -2,17 +2,27 @@ version: 2
 
 project_name: newrelic-cli
 
+before:
+  hooks:
+    - go mod tidy
+    - go test ./...
+
 builds:
-  - main: ./cmd/newrelic-cli
+  - id: newrelic-cli
+    main: ./cmd/newrelic-cli
     binary: newrelic-cli
     env:
       - CGO_ENABLED=0
     goos:
       - darwin
       - linux
+      - windows
     goarch:
       - amd64
       - arm64
+    ignore:
+      - goos: windows
+        goarch: arm64
     ldflags:
       - -s -w
       - -X github.com/piekstra/newrelic-cli/internal/version.Version={{.Version}}
@@ -20,8 +30,17 @@ builds:
       - -X github.com/piekstra/newrelic-cli/internal/version.BuildDate={{.Date}}
 
 archives:
-  - format: tar.gz
+  - id: default
+    formats:
+      - tar.gz
+    format_overrides:
+      - goos: windows
+        formats:
+          - zip
     name_template: "{{ .ProjectName }}_v{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - LICENSE
+      - README.md
 
 checksum:
   name_template: checksums.txt
@@ -30,23 +49,24 @@ checksum:
 changelog:
   use: github
   sort: asc
-  groups:
-    - title: Features
-      regexp: "^.*feat.*:.*$"
-      order: 0
-    - title: Bug Fixes
-      regexp: "^.*fix.*:.*$"
-      order: 1
-    - title: Other
-      order: 999
   filters:
     exclude:
       - "^docs:"
       - "^test:"
       - "^ci:"
       - "^chore:"
+      - "^Merge pull request"
+  groups:
+    - title: 'Features'
+      regexp: '^feat:'
+      order: 0
+    - title: 'Bug Fixes'
+      regexp: '^fix:'
+      order: 1
+    - title: 'Other'
+      order: 999
 
 release:
   github:
-    owner: piekstra
+    owner: open-cli-collective
     name: newrelic-cli

@@ -22,19 +22,19 @@ A command-line interface for interacting with New Relic APIs.
 ### Homebrew (macOS/Linux)
 
 ```bash
-brew tap piekstra/tap
-brew install newrelic-cli
+brew tap open-cli-collective/tap
+brew install --cask newrelic-cli
 ```
 
 ### Go Install
 
 ```bash
-go install github.com/piekstra/newrelic-cli/cmd/newrelic-cli@latest
+go install github.com/open-cli-collective/newrelic-cli/cmd/newrelic-cli@latest
 ```
 
 ### Binary Downloads
 
-Download pre-built binaries from the [Releases](https://github.com/piekstra/newrelic-cli/releases) page.
+Download pre-built binaries from the [Releases](https://github.com/open-cli-collective/newrelic-cli/releases) page.
 
 ## Quick Start
 
@@ -820,7 +820,7 @@ import (
     "fmt"
     "log"
 
-    "github.com/piekstra/newrelic-cli/api"
+    "github.com/open-cli-collective/newrelic-cli/api"
 )
 
 func main() {

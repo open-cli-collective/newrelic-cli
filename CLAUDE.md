@@ -70,7 +70,7 @@ newrelic-cli/
 │   ├── version/version.go      # Build-time version injection via ldflags
 │   └── view/view.go            # Output formatting (table, JSON, plain)
 ├── Makefile                    # Build, test, lint targets
-└── go.mod                      # Module: github.com/piekstra/newrelic-cli
+└── go.mod                      # Module: github.com/open-cli-collective/newrelic-cli
 ```
 
 ## Key Patterns

@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://schemas.microsoft.com/packaging/2015/06/nuspec.xsd">
+  <metadata>
+    <id>newrelic-cli</id>
+    <version>0.0.0</version>
+    <title>New Relic CLI</title>
+    <authors>open-cli-collective</authors>
+    <owners>open-cli-collective</owners>
+    <licenseUrl>https://github.com/open-cli-collective/newrelic-cli/blob/main/LICENSE</licenseUrl>
+    <projectUrl>https://github.com/open-cli-collective/newrelic-cli#readme</projectUrl>
+    <projectSourceUrl>https://github.com/open-cli-collective/newrelic-cli</projectSourceUrl>
+    <packageSourceUrl>https://github.com/open-cli-collective/newrelic-cli/tree/main/packaging/chocolatey</packageSourceUrl>
+    <bugTrackerUrl>https://github.com/open-cli-collective/newrelic-cli/issues</bugTrackerUrl>
+    <copyright>Copyright (c) 2026 open-cli-collective</copyright>
+    <requireLicenseAcceptance>false</requireLicenseAcceptance>
+    <description>A command-line interface for interacting with New Relic APIs.
+
+Features:
+- APM Applications: List applications, view details, and retrieve available metrics
+- Alert Policies: List and inspect alert policy configurations
+- Dashboards: List and view dashboard details
+- Deployments: Track deployment markers for applications
+- Entities: Search across all New Relic entity types
+- Log Parsing Rules: Create, list, update, and delete log parsing rules
+- NerdGraph: Execute arbitrary GraphQL queries
+- NRQL: Run NRQL queries directly from the command line
+- Synthetic Monitors: List and inspect synthetic monitoring configurations
+- Users: List and view user details
+- Multiple Output Formats: Table, JSON, and plain (scriptable) output
+
+Binary: newrelic-cli.exe</description>
+    <summary>Command-line interface for New Relic APIs</summary>
+    <releaseNotes>https://github.com/open-cli-collective/newrelic-cli/releases</releaseNotes>
+    <tags>newrelic cli monitoring apm observability devops sre</tags>
+  </metadata>
+  <files>
+    <file src="tools\**" target="tools" />
+  </files>
+</package>

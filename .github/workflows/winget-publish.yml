@@ -35,7 +35,7 @@ jobs:
         id: check-manifest
         shell: pwsh
         run: |
-          $response = Invoke-WebRequest -Uri "https://api.github.com/repos/microsoft/winget-pkgs/contents/manifests/o/OpenCliCollective/newrelic-cli" -Method Head -SkipHttpErrorCheck
+          $response = Invoke-WebRequest -Uri "https://api.github.com/repos/microsoft/winget-pkgs/contents/manifests/o/OpenCLICollective/newrelic-cli" -Method Head -SkipHttpErrorCheck
           if ($response.StatusCode -eq 200) {
             Write-Host "Manifest exists - will use wingetcreate update"
             echo "exists=true" >> $env:GITHUB_OUTPUT
@@ -70,7 +70,7 @@ jobs:
           $arm64 = "https://github.com/open-cli-collective/newrelic-cli/releases/download/v${version}/newrelic-cli_v${version}_windows_arm64.zip"
 
           Write-Host "Updating existing manifest to version $version"
-          ./wingetcreate.exe update OpenCliCollective.newrelic-cli --version $version --urls $x64 $arm64 --submit --token ${{ secrets.WINGET_GITHUB_TOKEN }}
+          ./wingetcreate.exe update OpenCLICollective.newrelic-cli --version $version --urls $x64 $arm64 --submit --token ${{ secrets.WINGET_GITHUB_TOKEN }}
 
       - name: Create manifest (new package)
         if: steps.check-manifest.outputs.exists == 'false'
@@ -81,23 +81,23 @@ jobs:
           New-Item -ItemType Directory -Path $manifestDir -Force | Out-Null
 
           # Update version manifest
-          $versionManifest = Get-Content "packaging/winget/OpenCliCollective.newrelic-cli.yaml" -Raw
+          $versionManifest = Get-Content "packaging/winget/OpenCLICollective.newrelic-cli.yaml" -Raw
           $versionManifest = $versionManifest -replace "0\.0\.0", $version
-          Set-Content "$manifestDir/OpenCliCollective.newrelic-cli.yaml" $versionManifest
+          Set-Content "$manifestDir/OpenCLICollective.newrelic-cli.yaml" $versionManifest
 
           # Update locale manifest
-          $localeManifest = Get-Content "packaging/winget/OpenCliCollective.newrelic-cli.locale.en-US.yaml" -Raw
+          $localeManifest = Get-Content "packaging/winget/OpenCLICollective.newrelic-cli.locale.en-US.yaml" -Raw
           $localeManifest = $localeManifest -replace "0\.0\.0", $version
-          Set-Content "$manifestDir/OpenCliCollective.newrelic-cli.locale.en-US.yaml" $localeManifest
+          Set-Content "$manifestDir/OpenCLICollective.newrelic-cli.locale.en-US.yaml" $localeManifest
 
           # Update installer manifest with version and real checksums
-          $installerManifest = Get-Content "packaging/winget/OpenCliCollective.newrelic-cli.installer.yaml" -Raw
+          $installerManifest = Get-Content "packaging/winget/OpenCLICollective.newrelic-cli.installer.yaml" -Raw
           $installerManifest = $installerManifest -replace "0\.0\.0", $version
           # Use .NET regex for sequential replacement (PowerShell -replace doesn't support count)
           $regex = [regex]"0{64}"
           $installerManifest = $regex.Replace($installerManifest, $env:X64_HASH, 1)
           $installerManifest = $regex.Replace($installerManifest, $env:ARM64_HASH, 1)
-          Set-Content "$manifestDir/OpenCliCollective.newrelic-cli.installer.yaml" $installerManifest
+          Set-Content "$manifestDir/OpenCLICollective.newrelic-cli.installer.yaml" $installerManifest
 
           Write-Host "Generated manifests:"
           Get-ChildItem $manifestDir | ForEach-Object { Write-Host "  $_" }

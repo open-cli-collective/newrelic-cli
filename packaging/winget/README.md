@@ -8,9 +8,9 @@ Winget requires three separate manifest files:
 
 ```
 winget/
-├── OpenCliCollective.newrelic-cli.yaml              # Version manifest
-├── OpenCliCollective.newrelic-cli.installer.yaml    # Installer manifest
-├── OpenCliCollective.newrelic-cli.locale.en-US.yaml # Locale manifest
+├── OpenCLICollective.newrelic-cli.yaml              # Version manifest
+├── OpenCLICollective.newrelic-cli.installer.yaml    # Installer manifest
+├── OpenCLICollective.newrelic-cli.locale.en-US.yaml # Locale manifest
 └── README.md                                        # This file
 ```
 
@@ -43,7 +43,7 @@ $content = $regex.Replace($content, $env:ARM64_HASH, 1) # Replace second match
 
 The package identifier follows Winget naming conventions:
 - Format: `Publisher.PackageName`
-- Our identifier: `OpenCliCollective.newrelic-cli`
+- Our identifier: `OpenCLICollective.newrelic-cli`
 
 ## Local Validation
 
@@ -59,22 +59,22 @@ $testHash2 = "0000000000000000000000000000000000000000000000000000000000000002"
 New-Item -ItemType Directory -Path $testDir -Force | Out-Null
 
 # Process version manifest
-$content = Get-Content "OpenCliCollective.newrelic-cli.yaml" -Raw
+$content = Get-Content "OpenCLICollective.newrelic-cli.yaml" -Raw
 $content = $content -replace "0\.0\.0", $testVersion
-Set-Content "$testDir/OpenCliCollective.newrelic-cli.yaml" $content
+Set-Content "$testDir/OpenCLICollective.newrelic-cli.yaml" $content
 
 # Process locale manifest
-$content = Get-Content "OpenCliCollective.newrelic-cli.locale.en-US.yaml" -Raw
+$content = Get-Content "OpenCLICollective.newrelic-cli.locale.en-US.yaml" -Raw
 $content = $content -replace "0\.0\.0", $testVersion
-Set-Content "$testDir/OpenCliCollective.newrelic-cli.locale.en-US.yaml" $content
+Set-Content "$testDir/OpenCLICollective.newrelic-cli.locale.en-US.yaml" $content
 
 # Process installer manifest
-$content = Get-Content "OpenCliCollective.newrelic-cli.installer.yaml" -Raw
+$content = Get-Content "OpenCLICollective.newrelic-cli.installer.yaml" -Raw
 $content = $content -replace "0\.0\.0", $testVersion
 $regex = [regex]"0{64}"
 $content = $regex.Replace($content, $testHash1, 1)
 $content = $regex.Replace($content, $testHash2, 1)
-Set-Content "$testDir/OpenCliCollective.newrelic-cli.installer.yaml" $content
+Set-Content "$testDir/OpenCLICollective.newrelic-cli.installer.yaml" $content
 
 # Validate
 winget validate --manifest $testDir/
@@ -88,7 +88,7 @@ Unlike Chocolatey (direct push), Winget submissions are **pull requests** to mic
 2. `wingetcreate submit` creates a PR to microsoft/winget-pkgs
 3. Microsoft's automated validation runs
 4. On success: Auto-merged within minutes
-5. Users can install with: `winget install OpenCliCollective.newrelic-cli`
+5. Users can install with: `winget install OpenCLICollective.newrelic-cli`
 
 ## References
 

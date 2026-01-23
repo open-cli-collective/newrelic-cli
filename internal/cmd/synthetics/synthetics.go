@@ -30,8 +30,15 @@ func Register(rootCmd *cobra.Command, opts *root.Options) {
 	rootCmd.AddCommand(syntheticsCmd)
 }
 
+type listOptions struct {
+	*root.Options
+	limit int
+}
+
 func newListCmd(opts *root.Options) *cobra.Command {
-	return &cobra.Command{
+	listOpts := &listOptions{Options: opts}
+
+	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List all synthetic monitors",
 		Long: `List all synthetic monitors in your account.
@@ -44,14 +51,19 @@ Monitor types:
 
 Status values: ENABLED, DISABLED, MUTED`,
 		Example: `  newrelic-cli synthetics list
-  newrelic-cli synthetics list -o json`,
+  newrelic-cli synthetics list -o json
+  newrelic-cli synthetics list --limit 10`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runList(opts)
+			return runList(listOpts)
 		},
 	}
+
+	cmd.Flags().IntVarP(&listOpts.limit, "limit", "l", 0, "Limit number of results (0 = no limit)")
+
+	return cmd
 }
 
-func runList(opts *root.Options) error {
+func runList(opts *listOptions) error {
 	client, err := opts.APIClient()
 	if err != nil {
 		return err
@@ -60,6 +72,11 @@ func runList(opts *root.Options) error {
 	monitors, err := client.ListSyntheticMonitors()
 	if err != nil {
 		return err
+	}
+
+	// Apply limit
+	if opts.limit > 0 && len(monitors) > opts.limit {
+		monitors = monitors[:opts.limit]
 	}
 
 	v := opts.View()

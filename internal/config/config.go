@@ -157,6 +157,36 @@ func FixPermissions() error {
 	return os.Chmod(configPath, 0600)
 }
 
+// ClearAll removes all stored credentials (API key, account ID, region)
+// Returns errors encountered during deletion (continues deleting even if some fail)
+func ClearAll() []error {
+	var errors []error
+
+	// Delete API key
+	if err := DeleteAPIKey(); err != nil {
+		// Only add error if the key was actually stored
+		if _, getErr := getCredential(APIKeyKey); getErr == nil {
+			errors = append(errors, fmt.Errorf("failed to delete API key: %w", err))
+		}
+	}
+
+	// Delete account ID
+	if err := DeleteAccountID(); err != nil {
+		if _, getErr := getCredential(AccountIDKey); getErr == nil {
+			errors = append(errors, fmt.Errorf("failed to delete account ID: %w", err))
+		}
+	}
+
+	// Delete region (only if it was stored)
+	if region, _ := getCredential(RegionKey); region != "" {
+		if err := deleteCredential(RegionKey); err != nil {
+			errors = append(errors, fmt.Errorf("failed to delete region: %w", err))
+		}
+	}
+
+	return errors
+}
+
 // --- Platform-specific implementations ---
 
 func getCredential(key string) (string, error) {

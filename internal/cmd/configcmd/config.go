@@ -27,6 +27,8 @@ func Register(rootCmd *cobra.Command, opts *root.Options) {
 	configCmd.AddCommand(newDeleteAccountIDCmd(opts))
 	configCmd.AddCommand(newSetRegionCmd(opts))
 	configCmd.AddCommand(newShowCmd(opts))
+	configCmd.AddCommand(newTestCmd(opts))
+	configCmd.AddCommand(newClearCmd(opts))
 	configCmd.AddCommand(newFixPermissionsCmd(opts))
 
 	rootCmd.AddCommand(configCmd)
@@ -393,5 +395,187 @@ func runFixPermissions(opts *root.Options) error {
 	}
 
 	v.Success("Permissions fixed to 0600")
+	return nil
+}
+
+func newTestCmd(opts *root.Options) *cobra.Command {
+	return &cobra.Command{
+		Use:   "test",
+		Short: "Test connection to New Relic",
+		Long: `Test the configured credentials by connecting to New Relic.
+
+Verifies:
+  - API key is valid
+  - Account is accessible (if account ID is configured)
+  - NerdGraph API is responding`,
+		Example: `  newrelic-cli config test`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runTest(opts)
+		},
+	}
+}
+
+// ConnectionTestStatus represents the test result for JSON output
+type ConnectionTestStatus struct {
+	Success       bool   `json:"success"`
+	APIKeyValid   bool   `json:"api_key_valid"`
+	AccountAccess bool   `json:"account_access,omitempty"`
+	AccountID     int    `json:"account_id,omitempty"`
+	AccountName   string `json:"account_name,omitempty"`
+	UserEmail     string `json:"user_email,omitempty"`
+	Region        string `json:"region"`
+	Error         string `json:"error,omitempty"`
+}
+
+func runTest(opts *root.Options) error {
+	v := opts.View()
+
+	v.Println("Testing connection to New Relic...")
+	v.Println("")
+
+	client, err := opts.APIClient()
+	if err != nil {
+		v.Error("Failed to create client: %v", err)
+		return err
+	}
+
+	result, err := client.TestConnection()
+	if err != nil {
+		v.Error("Test failed: %v", err)
+		return err
+	}
+
+	// Build status for JSON output
+	status := ConnectionTestStatus{
+		Success:       result.APIKeyValid && (result.AccountAccess || client.AccountID.IsEmpty()),
+		APIKeyValid:   result.APIKeyValid,
+		AccountAccess: result.AccountAccess,
+		AccountID:     result.AccountID,
+		AccountName:   result.AccountName,
+		UserEmail:     result.UserEmail,
+		Region:        result.Region,
+	}
+
+	if result.Error != nil {
+		status.Error = result.ErrorMessage
+	}
+
+	if v.Format == view.FormatJSON {
+		return v.JSON(status)
+	}
+
+	// Table output
+	region := config.GetRegion()
+	v.Print("Region: %s\n", region)
+	v.Println("")
+
+	if result.APIKeyValid {
+		v.Success("API key valid")
+		if result.UserEmail != "" {
+			v.Print("  User: %s\n", result.UserEmail)
+		}
+	} else {
+		v.Error("API key invalid or expired")
+		if result.ErrorMessage != "" {
+			v.Println("")
+			v.Println("Error: " + result.ErrorMessage)
+		}
+		v.Println("")
+		v.Println("Check your credentials with: newrelic-cli config show")
+		v.Println("Reconfigure with: newrelic-cli init")
+		return fmt.Errorf("API key validation failed")
+	}
+
+	// Check account access if configured
+	accountID, accountErr := config.GetAccountID()
+	if accountErr == nil && accountID != "" {
+		if result.AccountAccess {
+			v.Success("Account %d accessible", result.AccountID)
+			if result.AccountName != "" {
+				v.Print("  Name: %s\n", result.AccountName)
+			}
+		} else {
+			v.Error("Account %s not accessible", accountID)
+			if result.ErrorMessage != "" {
+				v.Println("")
+				v.Println("Error: " + result.ErrorMessage)
+			}
+			return fmt.Errorf("account access failed")
+		}
+	}
+
+	v.Success("NerdGraph API responding")
+
+	v.Println("")
+	v.Success("Connection test passed!")
+	return nil
+}
+
+// clearOptions holds options for the clear command
+type clearOptions struct {
+	*root.Options
+	force bool
+}
+
+func newClearCmd(opts *root.Options) *cobra.Command {
+	clearOpts := &clearOptions{Options: opts}
+
+	cmd := &cobra.Command{
+		Use:   "clear",
+		Short: "Clear all stored credentials",
+		Long: `Remove all stored credentials (API key, account ID, and region).
+
+This is a convenience command equivalent to running:
+  newrelic-cli config delete-api-key
+  newrelic-cli config delete-account-id
+
+Note: Environment variables (NEWRELIC_*) will still be used if set.`,
+		Example: `  newrelic-cli config clear
+  newrelic-cli config clear --force`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runClear(clearOpts)
+		},
+	}
+
+	cmd.Flags().BoolVarP(&clearOpts.force, "force", "f", false, "Skip confirmation prompt")
+
+	return cmd
+}
+
+func runClear(opts *clearOptions) error {
+	v := opts.View()
+
+	if !opts.force {
+		p := &confirm.Prompter{
+			In:  opts.Stdin,
+			Out: opts.Stderr,
+		}
+		if !p.Confirm("Clear all stored credentials (API key, account ID, region)?") {
+			v.Warning("Operation canceled")
+			return nil
+		}
+	}
+
+	errors := config.ClearAll()
+
+	if len(errors) > 0 {
+		for _, err := range errors {
+			v.Warning(err.Error())
+		}
+		return fmt.Errorf("some credentials could not be cleared")
+	}
+
+	if config.IsSecureStorage() {
+		v.Success("Cleared API key from Keychain")
+		v.Success("Cleared account ID from Keychain")
+	} else {
+		v.Success("Cleared API key from config file")
+		v.Success("Cleared account ID from config file")
+	}
+	v.Success("Cleared region setting")
+
+	v.Println("")
+	v.Println("Note: Environment variables (NEWRELIC_*) will still be used if set.")
+
 	return nil
 }

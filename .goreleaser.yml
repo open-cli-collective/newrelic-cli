@@ -3,8 +3,8 @@ version: 2
 project_name: newrelic-cli
 
 builds:
-  - main: ./cmd/newrelic-cli
-    binary: newrelic-cli
+  - main: ./cmd/nrq
+    binary: nrq
     env:
       - CGO_ENABLED=0
     goos:
@@ -23,7 +23,7 @@ builds:
 archives:
   - formats:
       - tar.gz
-    name_template: "{{ .ProjectName }}_v{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    name_template: "nrq_v{{ .Version }}_{{ .Os }}_{{ .Arch }}"
     format_overrides:
       - goos: windows
         formats:

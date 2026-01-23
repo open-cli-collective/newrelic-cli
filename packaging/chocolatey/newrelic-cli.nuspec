@@ -28,7 +28,7 @@ Features:
 - Users: List and view user details
 - Multiple Output Formats: Table, JSON, and plain (scriptable) output
 
-Binary: newrelic-cli.exe</description>
+Binary: nrq.exe</description>
     <summary>Command-line interface for New Relic APIs</summary>
     <releaseNotes>https://github.com/open-cli-collective/newrelic-cli/releases</releaseNotes>
     <tags>newrelic cli monitoring apm observability devops sre</tags>

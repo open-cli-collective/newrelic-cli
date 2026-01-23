@@ -63,18 +63,18 @@ func (o *Options) APIClient() (*api.Client, error) {
 }
 
 var rootCmd = &cobra.Command{
-	Use:   "newrelic-cli",
+	Use:   "nrq",
 	Short: "A CLI tool for interacting with New Relic",
-	Long: `newrelic-cli is a command-line interface for New Relic.
+	Long: `nrq is a command-line interface for New Relic.
 
 It provides commands for managing applications, dashboards, alerts,
 users, and other New Relic resources.
 
 Configure your API key with:
-  newrelic-cli config set-api-key
+  nrq config set-api-key
 
 Set your account ID with:
-  newrelic-cli config set-account-id <your-account-id>
+  nrq config set-account-id <your-account-id>
 
 Or set environment variables:
   NEWRELIC_API_KEY

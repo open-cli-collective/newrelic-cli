@@ -1,0 +1,83 @@
+name: Test Chocolatey Package
+
+on:
+  pull_request:
+    paths:
+      - 'packaging/chocolatey/**'
+      - '.github/workflows/test-chocolatey.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'packaging/chocolatey/**'
+      - '.github/workflows/test-chocolatey.yml'
+
+jobs:
+  test-chocolatey:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+
+      - name: Build binary for testing
+        run: go build -o packaging/chocolatey/tools/nrq.exe ./cmd/nrq
+
+      - name: Prepare test package
+        shell: pwsh
+        working-directory: packaging/chocolatey
+        run: |
+          # Replace placeholder version with test version (must not be prerelease)
+          (Get-Content newrelic-cli.nuspec) `
+            -replace '<version>0.0.0</version>', '<version>0.0.1</version>' |
+            Set-Content newrelic-cli.nuspec
+
+          # Create a simple install script that uses the local binary
+          # (the real script downloads from GitHub, but we test structure here)
+          @'
+          $ErrorActionPreference = 'Stop'
+          $toolsDir = Split-Path -Parent $MyInvocation.MyCommand.Definition
+
+          # Binary is already in tools/ from CI build
+          Write-Host "newrelic-cli installed from local build for testing"
+
+          # Exclude non-executables from shimming
+          New-Item "$toolsDir\LICENSE.ignore" -Type File -Force | Out-Null
+          New-Item "$toolsDir\README.md.ignore" -Type File -Force | Out-Null
+          '@ | Set-Content tools/chocolateyInstall.ps1
+
+      - name: Pack Chocolatey package
+        shell: pwsh
+        working-directory: packaging/chocolatey
+        run: choco pack
+
+      - name: Install package locally
+        shell: pwsh
+        working-directory: packaging/chocolatey
+        run: choco install newrelic-cli -dv -s . --force
+
+      - name: Verify installation
+        shell: pwsh
+        run: |
+          Write-Host "Testing nrq --version..."
+          nrq --version
+          if ($LASTEXITCODE -ne 0) {
+            Write-Error "nrq --version failed"
+            exit 1
+          }
+          Write-Host "nrq is working!"
+
+      - name: Test uninstall
+        shell: pwsh
+        run: |
+          choco uninstall newrelic-cli -y
+
+          # Verify nrq is no longer available
+          $nrqPath = Get-Command nrq -ErrorAction SilentlyContinue
+          if ($nrqPath) {
+            Write-Error "nrq should not be available after uninstall"
+            exit 1
+          }
+          Write-Host "Uninstall successful!"

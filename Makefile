@@ -1,6 +1,6 @@
 .PHONY: build clean test test-cover test-short lint install release snapshot run fmt verify deps
 
-BINARY_NAME=newrelic-cli
+BINARY_NAME=nrq
 VERSION?=dev
 COMMIT?=$(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 BUILD_DATE?=$(shell date -u +"%Y-%m-%dT%H:%M:%SZ")
@@ -10,7 +10,7 @@ LDFLAGS=-ldflags "-X github.com/open-cli-collective/newrelic-cli/internal/versio
 	-X github.com/open-cli-collective/newrelic-cli/internal/version.BuildDate=$(BUILD_DATE)"
 
 build:
-	go build $(LDFLAGS) -o $(BINARY_NAME) ./cmd/newrelic-cli
+	go build $(LDFLAGS) -o $(BINARY_NAME) ./cmd/nrq
 
 clean:
 	rm -f $(BINARY_NAME)

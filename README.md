@@ -29,7 +29,7 @@ brew install --cask newrelic-cli
 ### Go Install
 
 ```bash
-go install github.com/open-cli-collective/newrelic-cli/cmd/newrelic-cli@latest
+go install github.com/open-cli-collective/newrelic-cli/cmd/nrq@latest
 ```
 
 ### Binary Downloads
@@ -40,16 +40,16 @@ Download pre-built binaries from the [Releases](https://github.com/open-cli-coll
 
 ```bash
 # 1. Configure your API key (stored securely)
-newrelic-cli config set-api-key
+nrq config set-api-key
 
 # 2. Set your account ID
-newrelic-cli config set-account-id 12345678
+nrq config set-account-id 12345678
 
 # 3. Verify configuration
-newrelic-cli config show
+nrq config show
 
 # 4. Start using the CLI
-newrelic-cli apps list
+nrq apps list
 ```
 
 ## Configuration
@@ -66,23 +66,23 @@ newrelic-cli apps list
 
 ```bash
 # Set API key (interactive prompt)
-newrelic-cli config set-api-key
+nrq config set-api-key
 
 # Set API key (inline)
-newrelic-cli config set-api-key NRAK-xxxxxxxxxxxxxxxxxxxx
+nrq config set-api-key NRAK-xxxxxxxxxxxxxxxxxxxx
 
 # Set account ID
-newrelic-cli config set-account-id 12345678
+nrq config set-account-id 12345678
 
 # Set region (US or EU)
-newrelic-cli config set-region EU
+nrq config set-region EU
 
 # View current configuration
-newrelic-cli config show
+nrq config show
 
 # Delete stored credentials
-newrelic-cli config delete-api-key
-newrelic-cli config delete-account-id
+nrq config delete-api-key
+nrq config delete-account-id
 ```
 
 ### Credential Storage
@@ -104,22 +104,22 @@ Generate shell completions for tab completion support:
 
 ```bash
 # Bash (Linux)
-newrelic-cli completion bash > /etc/bash_completion.d/newrelic-cli
+nrq completion bash > /etc/bash_completion.d/newrelic-cli
 
 # Bash (macOS with Homebrew)
-newrelic-cli completion bash > $(brew --prefix)/etc/bash_completion.d/newrelic-cli
+nrq completion bash > $(brew --prefix)/etc/bash_completion.d/newrelic-cli
 
 # Zsh
-newrelic-cli completion zsh > "${fpath[1]}/_newrelic-cli"
+nrq completion zsh > "${fpath[1]}/_newrelic-cli"
 
 # Fish
-newrelic-cli completion fish > ~/.config/fish/completions/newrelic-cli.fish
+nrq completion fish > ~/.config/fish/completions/newrelic-cli.fish
 
 # PowerShell
-newrelic-cli completion powershell >> $PROFILE
+nrq completion powershell >> $PROFILE
 ```
 
-Run `newrelic-cli completion --help` for detailed setup instructions.
+Run `nrq completion --help` for detailed setup instructions.
 
 ---
 
@@ -161,9 +161,9 @@ Manage APM applications.
 List all APM applications in your account.
 
 ```bash
-newrelic-cli apps list
-newrelic-cli apps list -o json
-newrelic-cli apps list -o plain
+nrq apps list
+nrq apps list -o json
+nrq apps list -o plain
 ```
 
 **Table Output:**
@@ -179,9 +179,9 @@ ID          NAME                        LANGUAGE    STATUS
 Get details for a specific application.
 
 ```bash
-newrelic-cli apps get <app-id>
-newrelic-cli apps get 12345678
-newrelic-cli apps get 12345678 -o json
+nrq apps get <app-id>
+nrq apps get 12345678
+nrq apps get 12345678 -o json
 ```
 
 **Table Output:**
@@ -199,8 +199,8 @@ Last Reported:   2024-01-15T10:30:00Z
 List available metrics for an application.
 
 ```bash
-newrelic-cli apps metrics <app-id>
-newrelic-cli apps metrics 12345678
+nrq apps metrics <app-id>
+nrq apps metrics 12345678
 ```
 
 ---
@@ -214,8 +214,8 @@ Manage alert policies.
 List all alert policies.
 
 ```bash
-newrelic-cli alerts policies list
-newrelic-cli alerts policies list -o json
+nrq alerts policies list
+nrq alerts policies list -o json
 ```
 
 **Table Output:**
@@ -230,8 +230,8 @@ ID          NAME                            INCIDENT PREFERENCE
 Get details for a specific alert policy.
 
 ```bash
-newrelic-cli alerts policies get <policy-id>
-newrelic-cli alerts policies get 12345
+nrq alerts policies get <policy-id>
+nrq alerts policies get 12345
 ```
 
 ---
@@ -245,8 +245,8 @@ Manage dashboards.
 List all dashboards.
 
 ```bash
-newrelic-cli dashboards list
-newrelic-cli dashboards list -o json
+nrq dashboards list
+nrq dashboards list -o json
 ```
 
 **Table Output:**
@@ -261,8 +261,8 @@ DEF456...                               API Performance             2
 Get details for a specific dashboard.
 
 ```bash
-newrelic-cli dashboards get <guid>
-newrelic-cli dashboards get "ABC123..."
+nrq dashboards get <guid>
+nrq dashboards get "ABC123..."
 ```
 
 ---
@@ -279,19 +279,19 @@ List deployments for an application with optional time filtering.
 
 ```bash
 # By app ID
-newrelic-cli deployments list 12345678
+nrq deployments list 12345678
 
 # By application name
-newrelic-cli deployments list --name "My Application"
+nrq deployments list --name "My Application"
 
 # By entity GUID
-newrelic-cli deployments list --guid "MjcxMjY0MHxBUE18..."
+nrq deployments list --guid "MjcxMjY0MHxBUE18..."
 
 # With time filtering
-newrelic-cli deployments list 12345678 --since "7 days ago" --until "yesterday"
+nrq deployments list 12345678 --since "7 days ago" --until "yesterday"
 
 # Limit results
-newrelic-cli deployments list 12345678 --limit 10
+nrq deployments list 12345678 --limit 10
 ```
 
 | Flag | Short | Description |
@@ -317,16 +317,16 @@ Create a deployment marker for an application.
 
 ```bash
 # By app ID
-newrelic-cli deployments create 12345678 --revision v1.2.3
+nrq deployments create 12345678 --revision v1.2.3
 
 # By application name
-newrelic-cli deployments create --name "My Application" --revision v1.2.3
+nrq deployments create --name "My Application" --revision v1.2.3
 
 # By entity GUID
-newrelic-cli deployments create --guid "MjcxMjY0MHxBUE18..." --revision v1.2.3
+nrq deployments create --guid "MjcxMjY0MHxBUE18..." --revision v1.2.3
 
 # Full example
-newrelic-cli deployments create 12345678 \
+nrq deployments create 12345678 \
   --revision v1.2.3 \
   --description "Bug fixes and performance improvements" \
   --user "alice" \
@@ -350,16 +350,16 @@ Search deployments across all applications using NRQL WHERE clause syntax.
 
 ```bash
 # Search by user
-newrelic-cli deployments search "user = 'jane.doe@example.com'"
+nrq deployments search "user = 'jane.doe@example.com'"
 
 # Search by revision pattern
-newrelic-cli deployments search "revision LIKE 'v2%'"
+nrq deployments search "revision LIKE 'v2%'"
 
 # Search with time range
-newrelic-cli deployments search "description LIKE '%hotfix%'" --since "30 days ago"
+nrq deployments search "description LIKE '%hotfix%'" --since "30 days ago"
 
 # Limit results
-newrelic-cli deployments search "changelog IS NOT NULL" --limit 50
+nrq deployments search "changelog IS NOT NULL" --limit 50
 ```
 
 | Flag | Short | Description |
@@ -388,22 +388,22 @@ Search and manage New Relic entities.
 Search for entities using NRQL-style queries.
 
 ```bash
-newrelic-cli entities search <query>
+nrq entities search <query>
 ```
 
 **Examples:**
 ```bash
 # Find all applications
-newrelic-cli entities search "type = 'APPLICATION'"
+nrq entities search "type = 'APPLICATION'"
 
 # Find by name pattern
-newrelic-cli entities search "name LIKE 'production%'"
+nrq entities search "name LIKE 'production%'"
 
 # Find by domain
-newrelic-cli entities search "domain = 'APM'"
+nrq entities search "domain = 'APM'"
 
 # Combined conditions
-newrelic-cli entities search "type = 'APPLICATION' AND name LIKE 'prod%'"
+nrq entities search "type = 'APPLICATION' AND name LIKE 'prod%'"
 ```
 
 **Table Output:**
@@ -424,8 +424,8 @@ Manage log parsing rules.
 List all log parsing rules.
 
 ```bash
-newrelic-cli logs rules list
-newrelic-cli logs rules list -o json
+nrq logs rules list
+nrq logs rules list -o json
 ```
 
 **Table Output:**
@@ -440,7 +440,7 @@ def-456...                              Extract error codes             false   
 Create a log parsing rule.
 
 ```bash
-newrelic-cli logs rules create [flags]
+nrq logs rules create [flags]
 ```
 
 | Flag | Short | Required | Description |
@@ -453,7 +453,7 @@ newrelic-cli logs rules create [flags]
 
 **Example:**
 ```bash
-newrelic-cli logs rules create \
+nrq logs rules create \
   --description "Parse user login events" \
   --grok "User %{UUID:user_id} logged in from %{IP:ip_address}" \
   --nrql "SELECT * FROM Log WHERE message LIKE 'User % logged in%'" \
@@ -465,7 +465,7 @@ newrelic-cli logs rules create \
 Update an existing log parsing rule. Only specified fields are modified.
 
 ```bash
-newrelic-cli logs rules update <rule-id> [flags]
+nrq logs rules update <rule-id> [flags]
 ```
 
 | Flag | Short | Description |
@@ -480,13 +480,13 @@ newrelic-cli logs rules update <rule-id> [flags]
 **Examples:**
 ```bash
 # Update description only
-newrelic-cli logs rules update abc-123 --description "Updated description"
+nrq logs rules update abc-123 --description "Updated description"
 
 # Disable a rule
-newrelic-cli logs rules update abc-123 --disabled
+nrq logs rules update abc-123 --disabled
 
 # Update multiple fields
-newrelic-cli logs rules update abc-123 \
+nrq logs rules update abc-123 \
   --grok "%{IP:client} %{WORD:method}" \
   --enabled
 ```
@@ -497,10 +497,10 @@ Delete a log parsing rule. Requires confirmation unless `--force` is specified.
 
 ```bash
 # With confirmation prompt
-newrelic-cli logs rules delete abc-123-def-456
+nrq logs rules delete abc-123-def-456
 
 # Skip confirmation
-newrelic-cli logs rules delete abc-123-def-456 --force
+nrq logs rules delete abc-123-def-456 --force
 ```
 
 | Flag | Short | Description |
@@ -520,19 +520,19 @@ Execute NerdGraph GraphQL queries.
 Execute a GraphQL query against the NerdGraph API.
 
 ```bash
-newrelic-cli nerdgraph query <graphql-query>
+nrq nerdgraph query <graphql-query>
 ```
 
 **Examples:**
 ```bash
 # Get current user info
-newrelic-cli nerdgraph query '{ actor { user { email name } } }'
+nrq nerdgraph query '{ actor { user { email name } } }'
 
 # List accounts
-newrelic-cli nerdgraph query '{ actor { accounts { id name } } }'
+nrq nerdgraph query '{ actor { accounts { id name } } }'
 
 # Complex query
-newrelic-cli nerdgraph query '{
+nrq nerdgraph query '{
   actor {
     account(id: 12345678) {
       name
@@ -555,22 +555,22 @@ Execute NRQL queries.
 Execute an NRQL query against your account.
 
 ```bash
-newrelic-cli nrql query <nrql-query>
+nrq nrql query <nrql-query>
 ```
 
 **Examples:**
 ```bash
 # Transaction count
-newrelic-cli nrql query "SELECT count(*) FROM Transaction SINCE 1 hour ago"
+nrq nrql query "SELECT count(*) FROM Transaction SINCE 1 hour ago"
 
 # Average response time by app
-newrelic-cli nrql query "SELECT average(duration) FROM Transaction FACET appName SINCE 1 day ago"
+nrq nrql query "SELECT average(duration) FROM Transaction FACET appName SINCE 1 day ago"
 
 # Error rate
-newrelic-cli nrql query "SELECT percentage(count(*), WHERE error IS true) FROM Transaction SINCE 1 hour ago"
+nrq nrql query "SELECT percentage(count(*), WHERE error IS true) FROM Transaction SINCE 1 hour ago"
 
 # Top slow transactions
-newrelic-cli nrql query "SELECT average(duration), count(*) FROM Transaction FACET name SINCE 1 hour ago LIMIT 10"
+nrq nrql query "SELECT average(duration), count(*) FROM Transaction FACET name SINCE 1 hour ago LIMIT 10"
 ```
 
 ---
@@ -584,8 +584,8 @@ Manage synthetic monitors.
 List all synthetic monitors.
 
 ```bash
-newrelic-cli synthetics list
-newrelic-cli synthetics list -o json
+nrq synthetics list
+nrq synthetics list -o json
 ```
 
 **Table Output:**
@@ -600,8 +600,8 @@ def-456...                              API Endpoint Check      API             
 Get details for a specific synthetic monitor.
 
 ```bash
-newrelic-cli synthetics get <monitor-id>
-newrelic-cli synthetics get abc-123-def-456
+nrq synthetics get <monitor-id>
+nrq synthetics get abc-123-def-456
 ```
 
 ---
@@ -615,8 +615,8 @@ Manage users.
 List all users in your account.
 
 ```bash
-newrelic-cli users list
-newrelic-cli users list -o json
+nrq users list
+nrq users list -o json
 ```
 
 **Table Output:**
@@ -631,15 +631,15 @@ ID          NAME                EMAIL                       ROLE
 Get details for a specific user.
 
 ```bash
-newrelic-cli users get <user-id>
-newrelic-cli users get 12345
+nrq users get <user-id>
+nrq users get 12345
 ```
 
 ---
 
 ### config
 
-Configure newrelic-cli credentials.
+Configure nrq credentials.
 
 #### config set-api-key
 
@@ -647,10 +647,10 @@ Set the New Relic API key.
 
 ```bash
 # Interactive (recommended)
-newrelic-cli config set-api-key
+nrq config set-api-key
 
 # Inline (less secure - visible in shell history)
-newrelic-cli config set-api-key NRAK-xxxxxxxxxxxxxxxxxxxx
+nrq config set-api-key NRAK-xxxxxxxxxxxxxxxxxxxx
 ```
 
 #### config set-account-id
@@ -658,7 +658,7 @@ newrelic-cli config set-api-key NRAK-xxxxxxxxxxxxxxxxxxxx
 Set the New Relic account ID.
 
 ```bash
-newrelic-cli config set-account-id 12345678
+nrq config set-account-id 12345678
 ```
 
 #### config set-region
@@ -666,8 +666,8 @@ newrelic-cli config set-account-id 12345678
 Set the New Relic region.
 
 ```bash
-newrelic-cli config set-region US   # Default
-newrelic-cli config set-region EU   # European datacenter
+nrq config set-region US   # Default
+nrq config set-region EU   # European datacenter
 ```
 
 #### config show
@@ -675,7 +675,7 @@ newrelic-cli config set-region EU   # European datacenter
 Show current configuration status.
 
 ```bash
-newrelic-cli config show
+nrq config show
 ```
 
 **Output:**
@@ -695,10 +695,10 @@ Delete the stored API key. Requires confirmation unless `--force` is specified.
 
 ```bash
 # With confirmation prompt
-newrelic-cli config delete-api-key
+nrq config delete-api-key
 
 # Skip confirmation
-newrelic-cli config delete-api-key --force
+nrq config delete-api-key --force
 ```
 
 | Flag | Short | Description |
@@ -711,10 +711,10 @@ Delete the stored account ID. Requires confirmation unless `--force` is specifie
 
 ```bash
 # With confirmation prompt
-newrelic-cli config delete-account-id
+nrq config delete-account-id
 
 # Skip confirmation
-newrelic-cli config delete-account-id --force
+nrq config delete-account-id --force
 ```
 
 | Flag | Short | Description |
@@ -730,8 +730,8 @@ newrelic-cli config delete-account-id --force
 Human-readable tabular format with headers and aligned columns.
 
 ```bash
-newrelic-cli apps list
-newrelic-cli apps list -o table
+nrq apps list
+nrq apps list -o table
 ```
 
 ### JSON
@@ -739,7 +739,7 @@ newrelic-cli apps list -o table
 Machine-readable JSON output for programmatic use.
 
 ```bash
-newrelic-cli apps list -o json
+nrq apps list -o json
 ```
 
 ### Plain
@@ -747,7 +747,7 @@ newrelic-cli apps list -o json
 Tab-separated values without headers, ideal for shell scripting.
 
 ```bash
-newrelic-cli apps list -o plain
+nrq apps list -o plain
 ```
 
 ---
@@ -758,17 +758,17 @@ newrelic-cli apps list -o plain
 
 ```bash
 # Get all app IDs
-newrelic-cli apps list -o plain | cut -f1
+nrq apps list -o plain | cut -f1
 
 # Get app ID by name
-newrelic-cli apps list -o json | jq -r '.[] | select(.name == "production-api") | .id'
+nrq apps list -o json | jq -r '.[] | select(.name == "production-api") | .id'
 ```
 
 ### Create Deployments from Git
 
 ```bash
 # Deploy with git info
-newrelic-cli deployments create $APP_ID \
+nrq deployments create $APP_ID \
   --revision "$(git rev-parse --short HEAD)" \
   --description "$(git log -1 --pretty=%B)" \
   --user "$(git config user.name)"
@@ -778,23 +778,23 @@ newrelic-cli deployments create $APP_ID \
 
 ```bash
 # Check for unhealthy apps
-newrelic-cli apps list -o json | jq -r '.[] | select(.health_status != "green") | .name'
+nrq apps list -o json | jq -r '.[] | select(.health_status != "green") | .name'
 ```
 
 ### Batch Operations
 
 ```bash
 # Record deployment for all production apps
-newrelic-cli apps list -o json | \
+nrq apps list -o json | \
   jq -r '.[] | select(.name | startswith("prod")) | .id' | \
-  xargs -I {} newrelic-cli deployments create {} --revision v1.0.0
+  xargs -I {} nrq deployments create {} --revision v1.0.0
 ```
 
 ### NRQL in Scripts
 
 ```bash
 # Get error count as a number
-ERROR_COUNT=$(newrelic-cli nrql query "SELECT count(*) FROM TransactionError SINCE 1 hour ago" | jq '.results[0].count')
+ERROR_COUNT=$(nrq nrql query "SELECT count(*) FROM TransactionError SINCE 1 hour ago" | jq '.results[0].count')
 echo "Errors in last hour: $ERROR_COUNT"
 ```
 
@@ -1048,7 +1048,7 @@ if err != nil {
         return
     }
     if api.IsUnauthorized(err) {
-        log.Fatal("Invalid API key - run 'newrelic-cli config set-api-key'")
+        log.Fatal("Invalid API key - run 'nrq config set-api-key'")
     }
     log.Fatalf("API error: %v", err)
 }

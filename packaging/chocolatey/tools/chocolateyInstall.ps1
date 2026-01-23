@@ -19,10 +19,10 @@ if ($env:PROCESSOR_ARCHITECTURE -eq 'ARM64') {
 }
 
 $baseUrl = "https://github.com/open-cli-collective/newrelic-cli/releases/download/v${version}"
-$zipFile = "newrelic-cli_v${version}_windows_${arch}.zip"
+$zipFile = "nrq_v${version}_windows_${arch}.zip"
 $url = "${baseUrl}/${zipFile}"
 
-Write-Host "Installing newrelic-cli ${version} for Windows ${arch}..."
+Write-Host "Installing nrq ${version} for Windows ${arch}..."
 Write-Host "URL: ${url}"
 Write-Host "Checksum (SHA256): ${checksum}"
 
@@ -36,4 +36,4 @@ Install-ChocolateyZipPackage -PackageName $env:ChocolateyPackageName `
 New-Item "$toolsDir\LICENSE.ignore" -Type File -Force | Out-Null
 New-Item "$toolsDir\README.md.ignore" -Type File -Force | Out-Null
 
-Write-Host "newrelic-cli installed successfully. Run 'newrelic-cli --help' to get started."
+Write-Host "newrelic-cli installed successfully. Run 'nrq --help' to get started."

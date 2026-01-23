@@ -38,7 +38,7 @@ make clean
 
 ```
 newrelic-cli/
-├── cmd/newrelic-cli/main.go    # Entry point - registers commands, calls Execute()
+├── cmd/nrq/main.go    # Entry point - registers commands, calls Execute()
 ├── api/                         # Public Go library (importable)
 │   ├── client.go               # Client struct, New(), NewWithConfig(), HTTP helpers
 │   ├── types.go                # All data types (Application, AlertPolicy, etc.)
@@ -285,7 +285,7 @@ This means:
 1. Create package in `internal/cmd/<name>/`
 2. Create `<name>.go` with Register function
 3. Create subcommand files (`list.go`, `get.go`, etc.)
-4. Add Register call to `cmd/newrelic-cli/main.go`
+4. Add Register call to `cmd/nrq/main.go`
 5. Add API methods to `api/` if needed
 6. Write tests
 

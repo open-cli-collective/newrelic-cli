@@ -6,6 +6,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/open-cli-collective/newrelic-cli/internal/cmd/root"
+	"github.com/open-cli-collective/newrelic-cli/internal/confirm"
 	"github.com/open-cli-collective/newrelic-cli/internal/view"
 )
 
@@ -19,6 +20,7 @@ func Register(rootCmd *cobra.Command, opts *root.Options) {
 
 	syntheticsCmd.AddCommand(newListCmd(opts))
 	syntheticsCmd.AddCommand(newGetCmd(opts))
+	syntheticsCmd.AddCommand(newDeleteCmd(opts))
 
 	rootCmd.AddCommand(syntheticsCmd)
 }
@@ -123,4 +125,72 @@ func runGet(opts *root.Options, monitorID string) error {
 		}
 		return nil
 	}
+}
+
+// deleteOptions holds options for the delete command
+type deleteOptions struct {
+	*root.Options
+	force bool
+}
+
+func newDeleteCmd(opts *root.Options) *cobra.Command {
+	deleteOpts := &deleteOptions{Options: opts}
+
+	cmd := &cobra.Command{
+		Use:   "delete <monitor-id>",
+		Short: "Delete a synthetic monitor",
+		Long: `Delete a synthetic monitor by its ID.
+
+By default, you will be prompted to confirm the deletion.
+Use --force to skip the confirmation prompt.
+
+WARNING: This action cannot be undone.`,
+		Example: `  # Delete with confirmation
+  newrelic-cli synthetics delete abc-123-def-456
+
+  # Delete without confirmation (use with caution)
+  newrelic-cli synthetics delete abc-123-def-456 --force`,
+		Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runDelete(deleteOpts, args[0])
+		},
+	}
+
+	cmd.Flags().BoolVarP(&deleteOpts.force, "force", "f", false, "Skip confirmation prompt")
+
+	return cmd
+}
+
+func runDelete(opts *deleteOptions, monitorID string) error {
+	v := opts.View()
+
+	// First, fetch the monitor to show its name in the confirmation
+	client, err := opts.APIClient()
+	if err != nil {
+		return err
+	}
+
+	monitor, err := client.GetSyntheticMonitor(monitorID)
+	if err != nil {
+		return fmt.Errorf("failed to get monitor: %w", err)
+	}
+
+	if !opts.force {
+		p := &confirm.Prompter{
+			In:  opts.Stdin,
+			Out: opts.Stderr,
+		}
+		msg := fmt.Sprintf("Delete synthetic monitor \"%s\" (ID: %s)?", monitor.Name, view.Truncate(monitorID, 20))
+		if !p.Confirm(msg) {
+			v.Warning("Operation canceled")
+			return nil
+		}
+	}
+
+	if err := client.DeleteSyntheticMonitor(monitorID); err != nil {
+		return fmt.Errorf("failed to delete monitor: %w", err)
+	}
+
+	v.Success("Synthetic monitor \"%s\" deleted", monitor.Name)
+	return nil
 }

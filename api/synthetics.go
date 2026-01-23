@@ -31,3 +31,9 @@ func (c *Client) GetSyntheticMonitor(monitorID string) (*SyntheticMonitor, error
 
 	return &monitor, nil
 }
+
+// DeleteSyntheticMonitor deletes a synthetic monitor by ID
+func (c *Client) DeleteSyntheticMonitor(monitorID string) error {
+	_, err := c.doRequest("DELETE", c.SyntheticsURL+"/monitors/"+monitorID, nil)
+	return err
+}

@@ -7,6 +7,7 @@ import (
 
 	"github.com/open-cli-collective/newrelic-cli/api"
 	"github.com/open-cli-collective/newrelic-cli/internal/cmd/root"
+	"github.com/open-cli-collective/newrelic-cli/internal/confirm"
 	"github.com/open-cli-collective/newrelic-cli/internal/view"
 )
 
@@ -20,6 +21,7 @@ func Register(rootCmd *cobra.Command, opts *root.Options) {
 
 	dashboardsCmd.AddCommand(newListCmd(opts))
 	dashboardsCmd.AddCommand(newGetCmd(opts))
+	dashboardsCmd.AddCommand(newDeleteCmd(opts))
 
 	rootCmd.AddCommand(dashboardsCmd)
 }
@@ -120,4 +122,72 @@ func runGet(opts *root.Options, guid api.EntityGUID) error {
 		}
 		return nil
 	}
+}
+
+// deleteOptions holds options for the delete command
+type deleteOptions struct {
+	*root.Options
+	force bool
+}
+
+func newDeleteCmd(opts *root.Options) *cobra.Command {
+	deleteOpts := &deleteOptions{Options: opts}
+
+	cmd := &cobra.Command{
+		Use:   "delete <guid>",
+		Short: "Delete a dashboard",
+		Long: `Delete a dashboard by its GUID.
+
+By default, you will be prompted to confirm the deletion.
+Use --force to skip the confirmation prompt.
+
+WARNING: This action cannot be undone.`,
+		Example: `  # Delete with confirmation
+  newrelic-cli dashboards delete "MjcxMjY0MHxWSVp8REFTSEJPQVJEXDI5Mjg="
+
+  # Delete without confirmation (use with caution)
+  newrelic-cli dashboards delete "MjcxMjY0MHxWSVp8REFTSEJPQVJEXDI5Mjg=" --force`,
+		Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runDelete(deleteOpts, api.EntityGUID(args[0]))
+		},
+	}
+
+	cmd.Flags().BoolVarP(&deleteOpts.force, "force", "f", false, "Skip confirmation prompt")
+
+	return cmd
+}
+
+func runDelete(opts *deleteOptions, guid api.EntityGUID) error {
+	v := opts.View()
+
+	// First, fetch the dashboard to show its name in the confirmation
+	client, err := opts.APIClient()
+	if err != nil {
+		return err
+	}
+
+	dashboard, err := client.GetDashboard(guid)
+	if err != nil {
+		return fmt.Errorf("failed to get dashboard: %w", err)
+	}
+
+	if !opts.force {
+		p := &confirm.Prompter{
+			In:  opts.Stdin,
+			Out: opts.Stderr,
+		}
+		msg := fmt.Sprintf("Delete dashboard \"%s\" (GUID: %s)?", dashboard.Name, view.Truncate(guid.String(), 20))
+		if !p.Confirm(msg) {
+			v.Warning("Operation canceled")
+			return nil
+		}
+	}
+
+	if err := client.DeleteDashboard(guid); err != nil {
+		return fmt.Errorf("failed to delete dashboard: %w", err)
+	}
+
+	v.Success("Dashboard \"%s\" deleted", dashboard.Name)
+	return nil
 }

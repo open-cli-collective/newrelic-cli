@@ -157,3 +157,45 @@ func (c *Client) GetDashboard(guid EntityGUID) (*DashboardDetail, error) {
 
 	return dashboard, nil
 }
+
+// DeleteDashboard deletes a dashboard by GUID
+func (c *Client) DeleteDashboard(guid EntityGUID) error {
+	mutation := `
+	mutation($guid: EntityGuid!) {
+		dashboardDelete(guid: $guid) {
+			status
+			errors {
+				description
+				type
+			}
+		}
+	}`
+
+	variables := map[string]interface{}{
+		"guid": guid.String(),
+	}
+
+	result, err := c.NerdGraphQuery(mutation, variables)
+	if err != nil {
+		return err
+	}
+
+	// Check for deletion errors
+	dashboardDelete, ok := safeMap(result["dashboardDelete"])
+	if !ok {
+		return &ResponseError{Message: "unexpected response format: missing dashboardDelete"}
+	}
+
+	status := safeString(dashboardDelete["status"])
+	if status != "SUCCESS" {
+		// Check for specific errors
+		if errors, ok := safeSlice(dashboardDelete["errors"]); ok && len(errors) > 0 {
+			if errMap, ok := safeMap(errors[0]); ok {
+				return fmt.Errorf("failed to delete dashboard: %s", safeString(errMap["description"]))
+			}
+		}
+		return fmt.Errorf("failed to delete dashboard: status %s", status)
+	}
+
+	return nil
+}

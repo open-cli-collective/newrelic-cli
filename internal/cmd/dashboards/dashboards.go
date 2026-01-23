@@ -24,8 +24,15 @@ func Register(rootCmd *cobra.Command, opts *root.Options) {
 	rootCmd.AddCommand(dashboardsCmd)
 }
 
+type listOptions struct {
+	*root.Options
+	limit int
+}
+
 func newListCmd(opts *root.Options) *cobra.Command {
-	return &cobra.Command{
+	listOpts := &listOptions{Options: opts}
+
+	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List all dashboards",
 		Long: `List all dashboards in your account.
@@ -33,14 +40,19 @@ func newListCmd(opts *root.Options) *cobra.Command {
 Displays dashboard GUID, name, and account ID. The GUID is a base64-encoded
 entity identifier that can be used with 'dashboards get'.`,
 		Example: `  newrelic-cli dashboards list
-  newrelic-cli dashboards list -o json`,
+  newrelic-cli dashboards list -o json
+  newrelic-cli dashboards list --limit 10`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runList(opts)
+			return runList(listOpts)
 		},
 	}
+
+	cmd.Flags().IntVarP(&listOpts.limit, "limit", "l", 0, "Limit number of results (0 = no limit)")
+
+	return cmd
 }
 
-func runList(opts *root.Options) error {
+func runList(opts *listOptions) error {
 	client, err := opts.APIClient()
 	if err != nil {
 		return err
@@ -49,6 +61,11 @@ func runList(opts *root.Options) error {
 	dashboards, err := client.ListDashboards()
 	if err != nil {
 		return err
+	}
+
+	// Apply limit
+	if opts.limit > 0 && len(dashboards) > opts.limit {
+		dashboards = dashboards[:opts.limit]
 	}
 
 	v := opts.View()

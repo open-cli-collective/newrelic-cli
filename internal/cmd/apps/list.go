@@ -9,8 +9,15 @@ import (
 	"github.com/open-cli-collective/newrelic-cli/internal/view"
 )
 
+type listOptions struct {
+	*root.Options
+	limit int
+}
+
 func newListCmd(opts *root.Options) *cobra.Command {
-	return &cobra.Command{
+	listOpts := &listOptions{Options: opts}
+
+	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List all APM applications",
 		Long: `List all APM applications in your account.
@@ -24,14 +31,21 @@ Health status values: green (healthy), orange (warning), red (critical), gray (n
   newrelic-cli apps list -o json
 
   # Plain output for parsing
-  newrelic-cli apps list -o plain | cut -f1  # Get app IDs only`,
+  newrelic-cli apps list -o plain | cut -f1  # Get app IDs only
+
+  # Limit results
+  newrelic-cli apps list --limit 5`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runList(opts)
+			return runList(listOpts)
 		},
 	}
+
+	cmd.Flags().IntVarP(&listOpts.limit, "limit", "l", 0, "Limit number of results (0 = no limit)")
+
+	return cmd
 }
 
-func runList(opts *root.Options) error {
+func runList(opts *listOptions) error {
 	client, err := opts.APIClient()
 	if err != nil {
 		return err
@@ -40,6 +54,11 @@ func runList(opts *root.Options) error {
 	apps, err := client.ListApplications()
 	if err != nil {
 		return err
+	}
+
+	// Apply limit
+	if opts.limit > 0 && len(apps) > opts.limit {
+		apps = apps[:opts.limit]
 	}
 
 	v := opts.View()

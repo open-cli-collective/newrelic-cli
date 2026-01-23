@@ -33,21 +33,35 @@ func Register(rootCmd *cobra.Command, opts *root.Options) {
 	rootCmd.AddCommand(logsCmd)
 }
 
+type listRulesOptions struct {
+	*root.Options
+	limit int
+}
+
 func newListRulesCmd(opts *root.Options) *cobra.Command {
-	return &cobra.Command{
+	listOpts := &listRulesOptions{Options: opts}
+
+	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List log parsing rules",
 		Long: `List all log parsing rules in your account.
 
 Displays rule ID, description, enabled status, and last update time.
 Use 'logs rules create' to add new rules or 'logs rules delete' to remove them.`,
+		Example: `  newrelic-cli logs rules list
+  newrelic-cli logs rules list -o json
+  newrelic-cli logs rules list --limit 10`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runListRules(opts)
+			return runListRules(listOpts)
 		},
 	}
+
+	cmd.Flags().IntVarP(&listOpts.limit, "limit", "l", 0, "Limit number of results (0 = no limit)")
+
+	return cmd
 }
 
-func runListRules(opts *root.Options) error {
+func runListRules(opts *listRulesOptions) error {
 	client, err := opts.APIClient()
 	if err != nil {
 		return err
@@ -56,6 +70,11 @@ func runListRules(opts *root.Options) error {
 	rules, err := client.ListLogParsingRules()
 	if err != nil {
 		return err
+	}
+
+	// Apply limit
+	if opts.limit > 0 && len(rules) > opts.limit {
+		rules = rules[:opts.limit]
 	}
 
 	v := opts.View()

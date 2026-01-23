@@ -12,6 +12,7 @@ import (
 	"github.com/open-cli-collective/newrelic-cli/internal/cmd/dashboards"
 	"github.com/open-cli-collective/newrelic-cli/internal/cmd/deployments"
 	"github.com/open-cli-collective/newrelic-cli/internal/cmd/entities"
+	"github.com/open-cli-collective/newrelic-cli/internal/cmd/initcmd"
 	"github.com/open-cli-collective/newrelic-cli/internal/cmd/logs"
 	"github.com/open-cli-collective/newrelic-cli/internal/cmd/nerdgraph"
 	"github.com/open-cli-collective/newrelic-cli/internal/cmd/nrql"
@@ -31,6 +32,7 @@ func main() {
 		dashboards.Register,
 		deployments.Register,
 		entities.Register,
+		initcmd.Register,
 		logs.Register,
 		nerdgraph.Register,
 		nrql.Register,

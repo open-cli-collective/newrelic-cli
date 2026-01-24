@@ -40,9 +40,9 @@ User types:
   FULL_USER_TIER:  Full platform user
   CORE_USER_TIER:  Core user
   BASIC_USER_TIER: Basic user`,
-		Example: `  newrelic-cli users list
-  newrelic-cli users list -o json
-  newrelic-cli users list --limit 20`,
+		Example: `  nrq users list
+  nrq users list -o json
+  nrq users list --limit 20`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runList(listOpts)
 		},
@@ -97,8 +97,8 @@ func newGetCmd(opts *root.Options) *cobra.Command {
 		Short: "Get details for a specific user",
 		Long: `Get detailed information about a user including their authentication
 domain and group memberships.`,
-		Example: `  newrelic-cli users get 12345
-  newrelic-cli users get 12345 -o json`,
+		Example: `  nrq users get 12345
+  nrq users get 12345 -o json`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runGet(opts, args[0])

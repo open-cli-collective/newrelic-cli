@@ -36,13 +36,13 @@ This interactive wizard will guide you through setting up:
 
 After configuration, the connection is tested automatically.`,
 		Example: `  # Interactive setup
-  newrelic-cli init
+  nrq init
 
   # Non-interactive setup
-  newrelic-cli init --api-key NRAK-xxx --account-id 12345 --region US
+  nrq init --api-key NRAK-xxx --account-id 12345 --region US
 
   # Skip connection verification
-  newrelic-cli init --no-verify`,
+  nrq init --no-verify`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runInit(initOpts)
 		},
@@ -157,7 +157,7 @@ func runInit(opts *initOptions) error {
 			v.Error("Failed to create client: %v", err)
 			v.Println("")
 			v.Println("Configuration saved but connection test failed.")
-			v.Println("You can test again with: newrelic-cli config test")
+			v.Println("You can test again with: nrq config test")
 			return nil
 		}
 
@@ -194,8 +194,8 @@ func runInit(opts *initOptions) error {
 	v.Success("Configuration saved.")
 	v.Println("")
 	v.Println("Try it out:")
-	v.Println("  newrelic-cli apps list")
-	v.Println("  newrelic-cli nrql \"SELECT count(*) FROM Transaction\"")
+	v.Println("  nrq apps list")
+	v.Println("  nrq nrql \"SELECT count(*) FROM Transaction\"")
 
 	return nil
 }

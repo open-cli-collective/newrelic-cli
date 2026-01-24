@@ -19,7 +19,7 @@ Any alternative solutions or features you've considered.
 Show how you'd use this feature:
 
 ```bash
-newrelic-cli <your-proposed-command>
+nrq <your-proposed-command>
 ```
 
 **Additional context**

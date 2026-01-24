@@ -7,8 +7,8 @@ import (
 
 // Common errors
 var (
-	ErrAccountIDRequired = errors.New("account ID required - run 'newrelic-cli config set-account-id' or set NEWRELIC_ACCOUNT_ID")
-	ErrAPIKeyRequired    = errors.New("API key required - run 'newrelic-cli config set-api-key' or set NEWRELIC_API_KEY")
+	ErrAccountIDRequired = errors.New("account ID required - run 'nrq config set-account-id' or set NEWRELIC_ACCOUNT_ID")
+	ErrAPIKeyRequired    = errors.New("API key required - run 'nrq config set-api-key' or set NEWRELIC_API_KEY")
 	ErrNotFound          = errors.New("resource not found")
 	ErrUnauthorized      = errors.New("unauthorized: invalid or missing API key")
 )

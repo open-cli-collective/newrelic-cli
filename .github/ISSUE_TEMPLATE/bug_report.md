@@ -6,11 +6,11 @@ labels: bug
 assignees: ''
 ---
 
-**newrelic-cli version**
-Run `newrelic-cli --version` and paste the output:
+**nrq version**
+Run `nrq --version` and paste the output:
 
 ```
-newrelic-cli version ...
+nrq version ...
 ```
 
 **Environment**

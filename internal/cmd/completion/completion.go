@@ -18,34 +18,34 @@ func Register(rootCmd *cobra.Command, opts *root.Options) {
 To load completions:
 
 Bash:
-  $ source <(newrelic-cli completion bash)
+  $ source <(nrq completion bash)
 
   # To load completions for each session, execute once:
   # Linux:
-  $ newrelic-cli completion bash > /etc/bash_completion.d/newrelic-cli
+  $ nrq completion bash > /etc/bash_completion.d/newrelic-cli
 
   # macOS:
-  $ newrelic-cli completion bash > $(brew --prefix)/etc/bash_completion.d/newrelic-cli
+  $ nrq completion bash > $(brew --prefix)/etc/bash_completion.d/newrelic-cli
 
 Zsh:
-  $ source <(newrelic-cli completion zsh)
+  $ source <(nrq completion zsh)
 
   # To load completions for each session, execute once:
-  $ newrelic-cli completion zsh > "${fpath[1]}/_newrelic-cli"
+  $ nrq completion zsh > "${fpath[1]}/_newrelic-cli"
 
   # You may need to start a new shell for completions to take effect.
 
 Fish:
-  $ newrelic-cli completion fish | source
+  $ nrq completion fish | source
 
   # To load completions for each session, execute once:
-  $ newrelic-cli completion fish > ~/.config/fish/completions/newrelic-cli.fish
+  $ nrq completion fish > ~/.config/fish/completions/newrelic-cli.fish
 
 PowerShell:
-  PS> newrelic-cli completion powershell | Out-String | Invoke-Expression
+  PS> nrq completion powershell | Out-String | Invoke-Expression
 
   # To load completions for each session, add to your profile:
-  PS> newrelic-cli completion powershell >> $PROFILE`,
+  PS> nrq completion powershell >> $PROFILE`,
 		DisableFlagsInUseLine: true,
 		ValidArgs:             []string{"bash", "zsh", "fish", "powershell"},
 		Args:                  cobra.MatchAll(cobra.ExactArgs(1), cobra.OnlyValidArgs),

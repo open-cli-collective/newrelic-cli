@@ -18,7 +18,7 @@ import (
 func Register(rootCmd *cobra.Command, opts *root.Options) {
 	configCmd := &cobra.Command{
 		Use:   "config",
-		Short: "Configure newrelic-cli credentials",
+		Short: "Configure nrq credentials",
 	}
 
 	configCmd.AddCommand(newSetAPIKeyCmd(opts))
@@ -280,7 +280,7 @@ func runShow(opts *root.Options) error {
 	// Check for permission warnings (Linux only)
 	if warning := config.CheckPermissions(); warning != "" {
 		v.Warning(warning)
-		v.Println("Run 'newrelic-cli config fix-permissions' to correct this")
+		v.Println("Run 'nrq config fix-permissions' to correct this")
 		v.Println("")
 	}
 
@@ -408,7 +408,7 @@ Verifies:
   - API key is valid
   - Account is accessible (if account ID is configured)
   - NerdGraph API is responding`,
-		Example: `  newrelic-cli config test`,
+		Example: `  nrq config test`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runTest(opts)
 		},
@@ -481,8 +481,8 @@ func runTest(opts *root.Options) error {
 			v.Println("Error: " + result.ErrorMessage)
 		}
 		v.Println("")
-		v.Println("Check your credentials with: newrelic-cli config show")
-		v.Println("Reconfigure with: newrelic-cli init")
+		v.Println("Check your credentials with: nrq config show")
+		v.Println("Reconfigure with: nrq init")
 		return fmt.Errorf("API key validation failed")
 	}
 
@@ -526,12 +526,12 @@ func newClearCmd(opts *root.Options) *cobra.Command {
 		Long: `Remove all stored credentials (API key, account ID, and region).
 
 This is a convenience command equivalent to running:
-  newrelic-cli config delete-api-key
-  newrelic-cli config delete-account-id
+  nrq config delete-api-key
+  nrq config delete-account-id
 
 Note: Environment variables (NEWRELIC_*) will still be used if set.`,
-		Example: `  newrelic-cli config clear
-  newrelic-cli config clear --force`,
+		Example: `  nrq config clear
+  nrq config clear --force`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runClear(clearOpts)
 		},

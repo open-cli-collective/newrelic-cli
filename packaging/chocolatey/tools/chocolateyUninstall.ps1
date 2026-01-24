@@ -8,4 +8,4 @@ Remove-Item "$toolsDir\README.md" -Force -ErrorAction SilentlyContinue
 Remove-Item "$toolsDir\LICENSE.ignore" -Force -ErrorAction SilentlyContinue
 Remove-Item "$toolsDir\README.md.ignore" -Force -ErrorAction SilentlyContinue
 
-Write-Host "newrelic-cli has been uninstalled."
+Write-Host "nrq has been uninstalled."

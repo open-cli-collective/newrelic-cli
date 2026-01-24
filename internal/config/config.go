@@ -34,7 +34,7 @@ func GetAPIKey() (string, error) {
 		return key, nil
 	}
 
-	return "", fmt.Errorf("no API key found - run 'newrelic-cli config set-api-key' or set NEWRELIC_API_KEY")
+	return "", fmt.Errorf("no API key found - run 'nrq config set-api-key' or set NEWRELIC_API_KEY")
 }
 
 // SetAPIKey stores the New Relic API key
@@ -61,7 +61,7 @@ func GetAccountID() (string, error) {
 		return id, nil
 	}
 
-	return "", fmt.Errorf("no account ID found - run 'newrelic-cli config set-account-id' or set NEWRELIC_ACCOUNT_ID")
+	return "", fmt.Errorf("no account ID found - run 'nrq config set-account-id' or set NEWRELIC_ACCOUNT_ID")
 }
 
 // SetAccountID stores the New Relic account ID

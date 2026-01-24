@@ -26,9 +26,9 @@ Incident preference values:
   PER_POLICY:             One incident per policy
   PER_CONDITION:          One incident per condition
   PER_CONDITION_AND_TARGET: One incident per condition and target`,
-		Example: `  newrelic-cli alerts policies list
-  newrelic-cli alerts policies list -o json
-  newrelic-cli alerts policies list --limit 10`,
+		Example: `  nrq alerts policies list
+  nrq alerts policies list -o json
+  nrq alerts policies list --limit 10`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runListPolicies(listOpts)
 		},

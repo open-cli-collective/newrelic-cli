@@ -48,9 +48,9 @@ func newListRulesCmd(opts *root.Options) *cobra.Command {
 
 Displays rule ID, description, enabled status, and last update time.
 Use 'logs rules create' to add new rules or 'logs rules delete' to remove them.`,
-		Example: `  newrelic-cli logs rules list
-  newrelic-cli logs rules list -o json
-  newrelic-cli logs rules list --limit 10`,
+		Example: `  nrq logs rules list
+  nrq logs rules list -o json
+  nrq logs rules list --limit 10`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runListRules(listOpts)
 		},
@@ -173,32 +173,32 @@ IMPORTANT:
   - Existing logs will NOT be retroactively parsed
   - If parsed returns null in NRQL tests, your pattern doesn't match`,
 		Example: `  # Parse user login events
-  newrelic-cli logs rules create \
+  nrq logs rules create \
     --description "Parse user login events" \
     --grok "User %{UUID:user_id} logged in from %{IP:ip_address}" \
     --nrql "SELECT * FROM Log WHERE message LIKE 'User % logged in%'"
 
   # Parse HTTP access logs
-  newrelic-cli logs rules create \
+  nrq logs rules create \
     --description "Parse HTTP access logs" \
     --grok "%{IP:client} - - %{DATA:timestamp} \"%{WORD:method} %{DATA:path}\" %{NUMBER:status}" \
     --nrql "SELECT * FROM Log WHERE logtype = 'accesslog'"
 
   # Parse error logs with Lucene filter
-  newrelic-cli logs rules create \
+  nrq logs rules create \
     --description "Parse application errors" \
     --grok "ERROR %{TIMESTAMP_ISO8601:ts} %{DATA:class}: %{GREEDYDATA:message}" \
     --nrql "SELECT * FROM Log WHERE level = 'error'" \
     --lucene "message:ERROR"
 
   # Handle optional prefix (logs from multiple sources)
-  newrelic-cli logs rules create \
+  nrq logs rules create \
     --description "Parse with optional prefix" \
     --grok "(?:^|%{GREEDYDATA}\s)%{DATA:service}::%{UUID:id} - %{GREEDYDATA:msg}" \
     --nrql "SELECT * FROM Log WHERE message LIKE '%::%'"
 
   # Custom regex capture for non-standard formats
-  newrelic-cli logs rules create \
+  nrq logs rules create \
     --description "Parse custom ID format" \
     --grok "%{GREEDYDATA}(?<custom_id>[A-Z]{3}-[0-9]{4})" \
     --nrql "SELECT * FROM Log WHERE message LIKE '%-%'"`,
@@ -315,26 +315,26 @@ IMPORTANT:
   - Existing logs will NOT be retroactively parsed
   - If parsed returns null in NRQL tests, your pattern doesn't match`,
 		Example: `  # Update the description
-  newrelic-cli logs rules update rule-123 --description "Updated description"
+  nrq logs rules update rule-123 --description "Updated description"
 
   # Update the GROK pattern
-  newrelic-cli logs rules update rule-123 --grok "%{IP:client} %{WORD:method}"
+  nrq logs rules update rule-123 --grok "%{IP:client} %{WORD:method}"
 
   # Disable a rule
-  newrelic-cli logs rules update rule-123 --disabled
+  nrq logs rules update rule-123 --disabled
 
   # Update multiple fields
-  newrelic-cli logs rules update rule-123 \
+  nrq logs rules update rule-123 \
     --description "Parse HTTP logs" \
     --grok "%{COMBINEDAPACHELOG}" \
     --enabled
 
   # Update to handle optional prefix
-  newrelic-cli logs rules update rule-123 \
+  nrq logs rules update rule-123 \
     --grok "(?:^|%{GREEDYDATA}\s)%{DATA:service}::%{UUID:id} - %{GREEDYDATA:msg}"
 
   # Update with custom regex capture
-  newrelic-cli logs rules update rule-123 \
+  nrq logs rules update rule-123 \
     --grok "%{GREEDYDATA}(?<custom_id>[A-Z]{3}-[0-9]{4})"`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {

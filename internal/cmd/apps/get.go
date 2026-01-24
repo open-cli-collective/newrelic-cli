@@ -15,8 +15,8 @@ func newGetCmd(opts *root.Options) *cobra.Command {
 		Long: `Get detailed information about a specific APM application.
 
 Displays ID, name, language, health status, reporting status, and last reported time.`,
-		Example: `  newrelic-cli apps get 12345678
-  newrelic-cli apps get 12345678 -o json`,
+		Example: `  nrq apps get 12345678
+  nrq apps get 12345678 -o json`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runGet(opts, args[0])

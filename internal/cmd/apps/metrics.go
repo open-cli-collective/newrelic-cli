@@ -17,8 +17,8 @@ func newMetricsCmd(opts *root.Options) *cobra.Command {
 Metric names follow the format: Category/Name (e.g., Apdex, HttpDispatcher,
 WebTransaction/Function/handler). Use these names with the Metric API or
 in NRQL queries with FROM Metric.`,
-		Example: `  newrelic-cli apps metrics 12345678
-  newrelic-cli apps metrics 12345678 -o json`,
+		Example: `  nrq apps metrics 12345678
+  nrq apps metrics 12345678 -o json`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runMetrics(opts, args[0])

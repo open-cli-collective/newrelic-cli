@@ -45,9 +45,9 @@ func newListCmd(opts *root.Options) *cobra.Command {
 
 Displays dashboard GUID, name, and account ID. The GUID is a base64-encoded
 entity identifier that can be used with 'dashboards get'.`,
-		Example: `  newrelic-cli dashboards list
-  newrelic-cli dashboards list -o json
-  newrelic-cli dashboards list --limit 10`,
+		Example: `  nrq dashboards list
+  nrq dashboards list -o json
+  nrq dashboards list --limit 10`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runList(listOpts)
 		},
@@ -102,8 +102,8 @@ func newGetCmd(opts *root.Options) *cobra.Command {
 
 The GUID is a base64-encoded entity identifier from 'dashboards list' or
 the New Relic UI (visible in the dashboard URL).`,
-		Example: `  newrelic-cli dashboards get "MjcxMjY0MHxWSVp8REFTSEJPQVJEXDI5Mjg="
-  newrelic-cli dashboards get "MjcxMjY0MHxWSVp8REFTSEJPQVJEXDI5Mjg=" -o json`,
+		Example: `  nrq dashboards get "MjcxMjY0MHxWSVp8REFTSEJPQVJEXDI5Mjg="
+  nrq dashboards get "MjcxMjY0MHxWSVp8REFTSEJPQVJEXDI5Mjg=" -o json`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runGet(opts, api.EntityGUID(args[0]))
@@ -183,10 +183,10 @@ The JSON file should contain the dashboard definition with the following structu
 
 Permissions: PUBLIC_READ_WRITE, PUBLIC_READ_ONLY, PRIVATE`,
 		Example: `  # Create a dashboard from a JSON file
-  newrelic-cli dashboards create --from-file dashboard.json
+  nrq dashboards create --from-file dashboard.json
 
   # Create and output result as JSON
-  newrelic-cli dashboards create --from-file dashboard.json -o json`,
+  nrq dashboards create --from-file dashboard.json -o json`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runCreate(createOpts)
 		},
@@ -262,10 +262,10 @@ func newUpdateCmd(opts *root.Options) *cobra.Command {
 The JSON file format is the same as for 'dashboards create'.
 The GUID identifies which dashboard to update.`,
 		Example: `  # Update a dashboard from a JSON file
-  newrelic-cli dashboards update "MjcxMjY0MHxWSVp8REFTSEJPQVJEXDI5Mjg=" --from-file dashboard.json
+  nrq dashboards update "MjcxMjY0MHxWSVp8REFTSEJPQVJEXDI5Mjg=" --from-file dashboard.json
 
   # Update and output result as JSON
-  newrelic-cli dashboards update "MjcxMjY0MHxWSVp8REFTSEJPQVJEXDI5Mjg=" --from-file dashboard.json -o json`,
+  nrq dashboards update "MjcxMjY0MHxWSVp8REFTSEJPQVJEXDI5Mjg=" --from-file dashboard.json -o json`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runUpdate(updateOpts, api.EntityGUID(args[0]))
@@ -344,10 +344,10 @@ Use --force to skip the confirmation prompt.
 
 WARNING: This action cannot be undone.`,
 		Example: `  # Delete with confirmation
-  newrelic-cli dashboards delete "MjcxMjY0MHxWSVp8REFTSEJPQVJEXDI5Mjg="
+  nrq dashboards delete "MjcxMjY0MHxWSVp8REFTSEJPQVJEXDI5Mjg="
 
   # Delete without confirmation (use with caution)
-  newrelic-cli dashboards delete "MjcxMjY0MHxWSVp8REFTSEJPQVJEXDI5Mjg=" --force`,
+  nrq dashboards delete "MjcxMjY0MHxWSVp8REFTSEJPQVJEXDI5Mjg=" --force`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runDelete(deleteOpts, api.EntityGUID(args[0]))

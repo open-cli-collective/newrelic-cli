@@ -42,19 +42,19 @@ Common domains and types:
   SYNTH:    MONITOR
   VIZ:      DASHBOARD`,
 		Example: `  # Find all APM applications
-  newrelic-cli entities search "type = 'APPLICATION'"
+  nrq entities search "type = 'APPLICATION'"
 
   # Find by name pattern
-  newrelic-cli entities search "name LIKE 'production%'"
+  nrq entities search "name LIKE 'production%'"
 
   # Find by domain
-  newrelic-cli entities search "domain = 'APM'"
+  nrq entities search "domain = 'APM'"
 
   # Combined conditions
-  newrelic-cli entities search "domain = 'APM' AND name LIKE 'api%'"
+  nrq entities search "domain = 'APM' AND name LIKE 'api%'"
 
   # Find dashboards
-  newrelic-cli entities search "type = 'DASHBOARD'"`,
+  nrq entities search "type = 'DASHBOARD'"`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runSearch(opts, args[0])

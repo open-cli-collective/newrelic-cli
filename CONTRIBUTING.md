@@ -30,7 +30,7 @@ make install
 ### Verify Installation
 
 ```bash
-./newrelic-cli --version
+./nrq --version
 ```
 
 ## Code Style
@@ -155,7 +155,7 @@ git push -u origin your-branch
 
 ```
 newrelic-cli/
-├── cmd/newrelic-cli/          # Entry point
+├── cmd/nrq/                   # Entry point
 │   └── main.go
 ├── api/                        # Public Go library
 │   ├── client.go              # HTTP client, New(), NewWithConfig()
@@ -259,7 +259,7 @@ func runList(opts *root.Options) error {
 
 ### Step 4: Register in main.go
 
-`cmd/newrelic-cli/main.go`:
+`cmd/nrq/main.go`:
 
 ```go
 import (

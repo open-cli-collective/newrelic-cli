@@ -25,16 +25,16 @@ func newListCmd(opts *root.Options) *cobra.Command {
 Displays application ID, name, language, and health status.
 Health status values: green (healthy), orange (warning), red (critical), gray (not reporting).`,
 		Example: `  # List all applications
-  newrelic-cli apps list
+  nrq apps list
 
   # Output as JSON for scripting
-  newrelic-cli apps list -o json
+  nrq apps list -o json
 
   # Plain output for parsing
-  newrelic-cli apps list -o plain | cut -f1  # Get app IDs only
+  nrq apps list -o plain | cut -f1  # Get app IDs only
 
   # Limit results
-  newrelic-cli apps list --limit 5`,
+  nrq apps list --limit 5`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runList(listOpts)
 		},

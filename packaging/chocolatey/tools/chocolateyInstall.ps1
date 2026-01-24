@@ -15,7 +15,7 @@ if ($env:PROCESSOR_ARCHITECTURE -eq 'ARM64') {
     $arch = 'amd64'
     $checksum = $checksumAmd64
 } else {
-    throw "32-bit Windows is not supported. newrelic-cli requires 64-bit Windows."
+    throw "32-bit Windows is not supported. nrq requires 64-bit Windows."
 }
 
 $baseUrl = "https://github.com/open-cli-collective/newrelic-cli/releases/download/v${version}"
@@ -36,4 +36,4 @@ Install-ChocolateyZipPackage -PackageName $env:ChocolateyPackageName `
 New-Item "$toolsDir\LICENSE.ignore" -Type File -Force | Out-Null
 New-Item "$toolsDir\README.md.ignore" -Type File -Force | Out-Null
 
-Write-Host "newrelic-cli installed successfully. Run 'nrq --help' to get started."
+Write-Host "nrq installed successfully. Run 'nrq --help' to get started."

@@ -50,9 +50,9 @@ Monitor types:
   SCRIPT_BROWSER: Scripted browser with custom scripts
 
 Status values: ENABLED, DISABLED, MUTED`,
-		Example: `  newrelic-cli synthetics list
-  newrelic-cli synthetics list -o json
-  newrelic-cli synthetics list --limit 10`,
+		Example: `  nrq synthetics list
+  nrq synthetics list -o json
+  nrq synthetics list --limit 10`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runList(listOpts)
 		},
@@ -107,8 +107,8 @@ func newGetCmd(opts *root.Options) *cobra.Command {
 		Short: "Get details for a specific synthetic monitor",
 		Long: `Get detailed information about a synthetic monitor including
 its type, status, frequency, and target URI (for applicable types).`,
-		Example: `  newrelic-cli synthetics get abc-123-def-456
-  newrelic-cli synthetics get abc-123-def-456 -o json`,
+		Example: `  nrq synthetics get abc-123-def-456
+  nrq synthetics get abc-123-def-456 -o json`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runGet(opts, args[0])
@@ -184,10 +184,10 @@ Status values: ENABLED, DISABLED, MUTED
 Common locations: AWS_US_EAST_1, AWS_US_EAST_2, AWS_US_WEST_1, AWS_US_WEST_2,
                   AWS_EU_WEST_1, AWS_EU_WEST_2, AWS_EU_CENTRAL_1, AWS_AP_SOUTHEAST_1`,
 		Example: `  # Create a monitor from a JSON file
-  newrelic-cli synthetics create --from-file monitor.json
+  nrq synthetics create --from-file monitor.json
 
   # Create and output result as JSON
-  newrelic-cli synthetics create --from-file monitor.json -o json`,
+  nrq synthetics create --from-file monitor.json -o json`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runCreate(createOpts)
 		},
@@ -270,10 +270,10 @@ func newUpdateCmd(opts *root.Options) *cobra.Command {
 The JSON file format is similar to 'synthetics create', but the type cannot be changed.
 The monitor-id identifies which monitor to update.`,
 		Example: `  # Update a monitor from a JSON file
-  newrelic-cli synthetics update abc-123-def-456 --from-file monitor.json
+  nrq synthetics update abc-123-def-456 --from-file monitor.json
 
   # Update and output result as JSON
-  newrelic-cli synthetics update abc-123-def-456 --from-file monitor.json -o json`,
+  nrq synthetics update abc-123-def-456 --from-file monitor.json -o json`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runUpdate(updateOpts, args[0])
@@ -352,10 +352,10 @@ Use --force to skip the confirmation prompt.
 
 WARNING: This action cannot be undone.`,
 		Example: `  # Delete with confirmation
-  newrelic-cli synthetics delete abc-123-def-456
+  nrq synthetics delete abc-123-def-456
 
   # Delete without confirmation (use with caution)
-  newrelic-cli synthetics delete abc-123-def-456 --force`,
+  nrq synthetics delete abc-123-def-456 --force`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runDelete(deleteOpts, args[0])

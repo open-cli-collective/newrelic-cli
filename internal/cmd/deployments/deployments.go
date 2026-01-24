@@ -50,20 +50,20 @@ The application can be specified by:
 
 Examples:
   # By app ID
-  newrelic-cli deployments list 12345678
+  nrq deployments list 12345678
 
   # By application name
-  newrelic-cli deployments list --name "my-production-app"
+  nrq deployments list --name "my-production-app"
 
   # By entity GUID
-  newrelic-cli deployments list --guid "MjcxMjY0MHxBUE18QVBQTElDQVRJT058MTM3NzA4OTc5OQ"
+  nrq deployments list --guid "MjcxMjY0MHxBUE18QVBQTElDQVRJT058MTM3NzA4OTc5OQ"
 
   # With time filtering
-  newrelic-cli deployments list 12345678 --since "7 days ago"
-  newrelic-cli deployments list --name "my-app" --since "2025-01-01" --until "2025-01-15"
+  nrq deployments list 12345678 --since "7 days ago"
+  nrq deployments list --name "my-app" --since "2025-01-01" --until "2025-01-15"
 
   # Limit results
-  newrelic-cli deployments list --name "my-app" --limit 5`,
+  nrq deployments list --name "my-app" --limit 5`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runList(listOpts, args)
@@ -176,8 +176,8 @@ The application can be specified by:
   - Entity GUID (--guid flag)
 
 Examples:
-  newrelic-cli deployments create 12345678 --revision "v1.2.3"
-  newrelic-cli deployments create --name "my-app" --revision "v1.2.3" --description "Bug fixes"`,
+  nrq deployments create 12345678 --revision "v1.2.3"
+  nrq deployments create --name "my-app" --revision "v1.2.3" --description "Bug fixes"`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runCreate(createOpts, args)
@@ -263,16 +263,16 @@ across all applications in your account.
 
 Examples:
   # Find deployments for apps matching a pattern
-  newrelic-cli deployments search "entity.name LIKE '%insights%'"
+  nrq deployments search "entity.name LIKE '%insights%'"
 
   # Find deployments by a specific user
-  newrelic-cli deployments search "user = 'deploy-bot'"
+  nrq deployments search "user = 'deploy-bot'"
 
   # Search with time bounds
-  newrelic-cli deployments search "entity.name LIKE '%prod%'" --since "7 days ago"
+  nrq deployments search "entity.name LIKE '%prod%'" --since "7 days ago"
 
   # Limit results
-  newrelic-cli deployments search "revision LIKE 'v2%'" --limit 10`,
+  nrq deployments search "revision LIKE 'v2%'" --limit 10`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runSearch(searchOpts, args[0])

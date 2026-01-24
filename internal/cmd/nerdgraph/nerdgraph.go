@@ -32,13 +32,13 @@ available queries and mutations:
 
 Output is always JSON format.`,
 		Example: `  # Get current user info
-  newrelic-cli nerdgraph query '{ actor { user { email name } } }'
+  nrq nerdgraph query '{ actor { user { email name } } }'
 
   # List accounts
-  newrelic-cli nerdgraph query '{ actor { accounts { id name } } }'
+  nrq nerdgraph query '{ actor { accounts { id name } } }'
 
   # Get entity by GUID
-  newrelic-cli nerdgraph query '{
+  nrq nerdgraph query '{
     actor {
       entity(guid: "YOUR_ENTITY_GUID") {
         name
@@ -49,7 +49,7 @@ Output is always JSON format.`,
   }'
 
   # Run NRQL query via GraphQL
-  newrelic-cli nerdgraph query '{
+  nrq nerdgraph query '{
     actor {
       account(id: 12345678) {
         nrql(query: "SELECT count(*) FROM Transaction SINCE 1 hour ago") {
@@ -60,7 +60,7 @@ Output is always JSON format.`,
   }'
 
   # Search entities
-  newrelic-cli nerdgraph query '{
+  nrq nerdgraph query '{
     actor {
       entitySearch(query: "domain = '\''APM'\'' AND type = '\''APPLICATION'\''") {
         results {

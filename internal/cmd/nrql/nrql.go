@@ -35,20 +35,20 @@ Supported time formats:
   - Special: "now", "today", "yesterday"
   - Absolute: "2025-01-01", "2025-01-01T00:00:00Z"`,
 		Example: `  # Direct query (shortcut)
-  newrelic-cli nrql "SELECT count(*) FROM Transaction SINCE 1 hour ago"
+  nrq nrql "SELECT count(*) FROM Transaction SINCE 1 hour ago"
 
   # Using query subcommand
-  newrelic-cli nrql query "SELECT count(*) FROM Transaction"
+  nrq nrql query "SELECT count(*) FROM Transaction"
 
   # Using --since flag (appends to query)
-  newrelic-cli nrql "SELECT count(*) FROM Transaction" --since "7 days ago"
+  nrq nrql "SELECT count(*) FROM Transaction" --since "7 days ago"
 
   # Using both --since and --until
-  newrelic-cli nrql "SELECT * FROM Log" --since "2025-01-01" --until "2025-01-15"`,
+  nrq nrql "SELECT * FROM Log" --since "2025-01-01" --until "2025-01-15"`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) == 0 {
-				return fmt.Errorf("query is required\n\nUsage:\n  newrelic-cli nrql \"<query>\"\n  newrelic-cli nrql query \"<query>\"\n\nDid you mean: newrelic-cli nrql query \"<your-query>\"?")
+				return fmt.Errorf("query is required\n\nUsage:\n  nrq nrql \"<query>\"\n  nrq nrql query \"<query>\"\n\nDid you mean: nrq nrql query \"<your-query>\"?")
 			}
 			return runQuery(queryOpts, args[0])
 		},
@@ -71,9 +71,9 @@ func newQueryCmd(opts *queryOptions) *cobra.Command {
 
 Time ranges can be specified either in the query itself (SINCE/UNTIL clauses)
 or via --since and --until flags which will be appended to your query.`,
-		Example: `  newrelic-cli nrql query "SELECT count(*) FROM Transaction SINCE 1 hour ago"
-  newrelic-cli nrql query "SELECT * FROM Log LIMIT 10"
-  newrelic-cli nrql query "SELECT count(*) FROM Transaction" --since "7 days ago"`,
+		Example: `  nrq nrql query "SELECT count(*) FROM Transaction SINCE 1 hour ago"
+  nrq nrql query "SELECT * FROM Log LIMIT 10"
+  nrq nrql query "SELECT count(*) FROM Transaction" --since "7 days ago"`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runQuery(opts, args[0])

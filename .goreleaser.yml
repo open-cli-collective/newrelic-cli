@@ -28,6 +28,26 @@ archives:
       - goos: windows
         formats:
           - zip
+    files:
+      - LICENSE
+      - README.md
+
+# Linux packages (.deb and .rpm)
+nfpms:
+  - id: nrq
+    package_name: nrq
+    vendor: Open CLI Collective
+    homepage: https://github.com/open-cli-collective/newrelic-cli
+    maintainer: Open CLI Collective <https://github.com/open-cli-collective>
+    description: Command-line interface for New Relic
+    license: MIT
+    formats:
+      - deb
+      - rpm
+    bindir: /usr/bin
+    contents:
+      - src: LICENSE
+        dst: /usr/share/licenses/nrq/LICENSE
 
 checksum:
   name_template: checksums.txt

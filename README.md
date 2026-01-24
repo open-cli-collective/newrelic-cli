@@ -19,22 +19,90 @@ A command-line interface for interacting with New Relic APIs.
 
 ## Installation
 
-### Homebrew (macOS/Linux)
+### macOS
+
+**Homebrew (recommended)**
 
 ```bash
-brew tap open-cli-collective/tap
-brew install --cask newrelic-cli
+brew install open-cli-collective/tap/newrelic-cli
 ```
 
-### Go Install
+> Note: This installs from our third-party tap.
+
+---
+
+### Windows
+
+**Chocolatey**
+
+```powershell
+choco install newrelic-cli
+```
+
+**Winget**
+
+```powershell
+winget install OpenCLICollective.newrelic-cli
+```
+
+---
+
+### Linux
+
+**Snap**
+
+```bash
+sudo snap install ocli-newrelic
+```
+
+> Note: After installation, the command is available as `nrq`.
+
+**APT (Debian/Ubuntu)**
+
+```bash
+# Add the GPG key
+curl -fsSL https://open-cli-collective.github.io/linux-packages/keys/gpg.asc | sudo gpg --dearmor -o /usr/share/keyrings/open-cli-collective.gpg
+
+# Add the repository
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/open-cli-collective.gpg] https://open-cli-collective.github.io/linux-packages/apt stable main" | sudo tee /etc/apt/sources.list.d/open-cli-collective.list
+
+# Install
+sudo apt update
+sudo apt install nrq
+```
+
+> Note: This is our third-party APT repository, not official Debian/Ubuntu repos.
+
+**DNF/YUM (Fedora/RHEL/CentOS)**
+
+```bash
+# Add the repository
+sudo tee /etc/yum.repos.d/open-cli-collective.repo << 'EOF'
+[open-cli-collective]
+name=Open CLI Collective
+baseurl=https://open-cli-collective.github.io/linux-packages/rpm
+enabled=1
+gpgcheck=1
+gpgkey=https://open-cli-collective.github.io/linux-packages/keys/gpg.asc
+EOF
+
+# Install
+sudo dnf install nrq
+```
+
+> Note: This is our third-party RPM repository, not official Fedora/RHEL repos.
+
+**Binary download**
+
+Download `.deb`, `.rpm`, or `.tar.gz` from the [Releases](https://github.com/open-cli-collective/newrelic-cli/releases) page.
+
+---
+
+### From Source
 
 ```bash
 go install github.com/open-cli-collective/newrelic-cli/cmd/nrq@latest
 ```
-
-### Binary Downloads
-
-Download pre-built binaries from the [Releases](https://github.com/open-cli-collective/newrelic-cli/releases) page.
 
 ## Quick Start
 

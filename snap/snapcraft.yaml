@@ -1,0 +1,62 @@
+name: ocli-newrelic
+base: core22
+version: git
+summary: Command-line interface for New Relic
+description: |
+  nrq is a CLI for interacting with New Relic APIs.
+
+  Features:
+  - APM applications, alert policies, and dashboards
+  - Deployment markers and entity search
+  - NRQL queries and NerdGraph GraphQL
+  - Synthetic monitors and log parsing rules
+  - Secure credential storage
+
+  Run 'nrq config set-api-key' to configure your API key.
+
+grade: stable
+confinement: strict
+
+architectures:
+  - build-on: amd64
+  - build-on: arm64
+
+plugs:
+  dot-config-newrelic-cli:
+    interface: personal-files
+    read:
+      - $HOME/.config/newrelic-cli
+    write:
+      - $HOME/.config/newrelic-cli
+
+apps:
+  ocli-newrelic:
+    command: bin/nrq
+    plugs:
+      - home
+      - network
+      - dot-config-newrelic-cli
+    aliases:
+      - nrq
+
+parts:
+  nrq:
+    plugin: go
+    source: .
+    build-snaps:
+      - go/1.24/stable
+    build-environment:
+      - CGO_ENABLED: "0"
+    override-build: |
+      # Get version from git
+      VERSION=$(git describe --tags --always --dirty 2>/dev/null || echo "dev")
+      COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+      DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+      # Build with ldflags
+      go build -o $SNAPCRAFT_PART_INSTALL/bin/nrq \
+        -ldflags "-s -w \
+          -X github.com/open-cli-collective/newrelic-cli/internal/version.Version=${VERSION} \
+          -X github.com/open-cli-collective/newrelic-cli/internal/version.Commit=${COMMIT} \
+          -X github.com/open-cli-collective/newrelic-cli/internal/version.BuildDate=${DATE}" \
+        ./cmd/nrq

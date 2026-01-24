@@ -36,7 +36,7 @@ brew install open-cli-collective/tap/newrelic-cli
 **Chocolatey**
 
 ```powershell
-choco install newrelic-cli
+choco install nrq-cli
 ```
 
 **Winget**

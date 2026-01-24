@@ -30,9 +30,9 @@ jobs:
         working-directory: packaging/chocolatey
         run: |
           # Replace placeholder version with test version (must not be prerelease)
-          (Get-Content newrelic-cli.nuspec) `
+          (Get-Content nrq-cli.nuspec) `
             -replace '<version>0.0.0</version>', '<version>0.0.1</version>' |
-            Set-Content newrelic-cli.nuspec
+            Set-Content nrq-cli.nuspec
 
           # Create a simple install script that uses the local binary
           # (the real script downloads from GitHub, but we test structure here)
@@ -56,7 +56,7 @@ jobs:
       - name: Install package locally
         shell: pwsh
         working-directory: packaging/chocolatey
-        run: choco install newrelic-cli -dv -s . --force
+        run: choco install nrq-cli -dv -s . --force
 
       - name: Verify installation
         shell: pwsh
@@ -72,7 +72,7 @@ jobs:
       - name: Test uninstall
         shell: pwsh
         run: |
-          choco uninstall newrelic-cli -y
+          choco uninstall nrq-cli -y
 
           # Verify nrq is no longer available
           $nrqPath = Get-Command nrq -ErrorAction SilentlyContinue

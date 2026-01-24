@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <package xmlns="http://schemas.microsoft.com/packaging/2015/06/nuspec.xsd">
   <metadata>
-    <id>newrelic-cli</id>
+    <id>nrq-cli</id>
     <version>0.0.0</version>
-    <title>New Relic CLI</title>
+    <title>nrq - New Relic CLI</title>
     <authors>open-cli-collective</authors>
     <owners>open-cli-collective</owners>
     <licenseUrl>https://github.com/open-cli-collective/newrelic-cli/blob/main/LICENSE</licenseUrl>

@@ -94,7 +94,17 @@ sudo dnf install nrq
 
 **Binary download**
 
-Download `.deb`, `.rpm`, or `.tar.gz` from the [Releases](https://github.com/open-cli-collective/newrelic-cli/releases) page.
+Download `.deb`, `.rpm`, or `.tar.gz` from the [Releases page](https://github.com/open-cli-collective/newrelic-cli/releases) - available for x64 and ARM64.
+
+```bash
+# Direct .deb install
+curl -LO https://github.com/open-cli-collective/newrelic-cli/releases/latest/download/nrq_VERSION_linux_amd64.deb
+sudo dpkg -i nrq_VERSION_linux_amd64.deb
+
+# Direct .rpm install
+curl -LO https://github.com/open-cli-collective/newrelic-cli/releases/latest/download/nrq-VERSION.x86_64.rpm
+sudo rpm -i nrq-VERSION.x86_64.rpm
+```
 
 ---
 

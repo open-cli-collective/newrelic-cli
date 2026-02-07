@@ -32,8 +32,4 @@ Install-ChocolateyZipPackage -PackageName $env:ChocolateyPackageName `
     -Checksum $checksum `
     -ChecksumType 'sha256'
 
-# Exclude non-executables from shimming
-New-Item "$toolsDir\LICENSE.ignore" -Type File -Force | Out-Null
-New-Item "$toolsDir\README.md.ignore" -Type File -Force | Out-Null
-
 Write-Host "nrq installed successfully. Run 'nrq --help' to get started."

@@ -1,3 +1,6 @@
+// Package api - keys.go provides methods for managing New Relic API keys
+// via the NerdGraph apiAccess API (keySearch, apiAccessCreateKeys,
+// apiAccessUpdateKeys, apiAccessDeleteKeys).
 package api
 
 import "fmt"

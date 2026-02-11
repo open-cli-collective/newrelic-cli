@@ -108,6 +108,19 @@ test(apps): add unit tests for metrics command
 chore(deps): update cobra to v1.8.0
 ```
 
+## Pull Request Titles and Releases
+
+**PR titles must use conventional commit format** because the repository uses squash merges with `PR_TITLE` as the commit message. The Auto Release workflow checks the squash commit message for a `feat:` or `fix:` prefix to decide whether to create a release.
+
+| PR Title | Triggers Release? |
+|----------|-------------------|
+| `feat(keys): add API key commands` | Yes |
+| `fix(nrql): handle empty results` | Yes |
+| `docs: update README` | No |
+| `Add API key commands` | **No** (missing prefix!) |
+
+If your PR changes Go code and should trigger a release, the title **must** start with `feat:`, `feat(scope):`, `fix:`, or `fix(scope):`.
+
 ## Pull Request Process
 
 ### 1. Create a Branch

@@ -1,3 +1,7 @@
+<!-- PR TITLE FORMAT: Must use conventional commit format (e.g., "feat(scope): ..." or "fix(scope): ...").
+     The title becomes the squash commit message and controls whether a release is created.
+     See CONTRIBUTING.md for details. -->
+
 ## Summary
 
 Brief description of changes.

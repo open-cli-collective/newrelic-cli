@@ -22,15 +22,14 @@ const (
 
 // GetAPIKey retrieves the New Relic API key
 func GetAPIKey() (string, error) {
-	// Try secure storage first
-	key, err := getCredential(APIKeyKey)
-	if err == nil && key != "" {
+	// Check environment variable first (allows override for automation)
+	if key := os.Getenv("NEWRELIC_API_KEY"); key != "" {
 		return key, nil
 	}
 
-	// Fallback to environment variable
-	key = os.Getenv("NEWRELIC_API_KEY")
-	if key != "" {
+	// Fallback to secure storage
+	key, err := getCredential(APIKeyKey)
+	if err == nil && key != "" {
 		return key, nil
 	}
 
@@ -49,15 +48,14 @@ func DeleteAPIKey() error {
 
 // GetAccountID retrieves the New Relic account ID
 func GetAccountID() (string, error) {
-	// Try secure storage first
-	id, err := getCredential(AccountIDKey)
-	if err == nil && id != "" {
+	// Check environment variable first (allows override for automation)
+	if id := os.Getenv("NEWRELIC_ACCOUNT_ID"); id != "" {
 		return id, nil
 	}
 
-	// Fallback to environment variable
-	id = os.Getenv("NEWRELIC_ACCOUNT_ID")
-	if id != "" {
+	// Fallback to secure storage
+	id, err := getCredential(AccountIDKey)
+	if err == nil && id != "" {
 		return id, nil
 	}
 
@@ -76,16 +74,15 @@ func DeleteAccountID() error {
 
 // GetRegion retrieves the New Relic region (US or EU)
 func GetRegion() string {
-	// Try secure storage first
+	// Check environment variable first (allows override for automation)
+	if region := os.Getenv("NEWRELIC_REGION"); region != "" {
+		return strings.ToUpper(region)
+	}
+
+	// Fallback to secure storage
 	region, err := getCredential(RegionKey)
 	if err == nil && region != "" {
 		return region
-	}
-
-	// Fallback to environment variable
-	region = os.Getenv("NEWRELIC_REGION")
-	if region != "" {
-		return strings.ToUpper(region)
 	}
 
 	return "US"

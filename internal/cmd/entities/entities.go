@@ -5,9 +5,15 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/open-cli-collective/newrelic-cli/internal/cmd/nrql"
 	"github.com/open-cli-collective/newrelic-cli/internal/cmd/root"
 	"github.com/open-cli-collective/newrelic-cli/internal/view"
 )
+
+type searchOptions struct {
+	*root.Options
+	link bool
+}
 
 // Register adds the entities commands to the root command
 func Register(rootCmd *cobra.Command, opts *root.Options) {
@@ -23,7 +29,9 @@ func Register(rootCmd *cobra.Command, opts *root.Options) {
 }
 
 func newSearchCmd(opts *root.Options) *cobra.Command {
-	return &cobra.Command{
+	searchOpts := &searchOptions{Options: opts}
+
+	cmd := &cobra.Command{
 		Use:   "search <query>",
 		Short: "Search for entities",
 		Long: `Search for entities using NRQL-style query syntax.
@@ -54,15 +62,22 @@ Common domains and types:
   nrq entities search "domain = 'APM' AND name LIKE 'api%'"
 
   # Find dashboards
-  nrq entities search "type = 'DASHBOARD'"`,
+  nrq entities search "type = 'DASHBOARD'"
+
+  # Include deep links to New Relic
+  nrq entities search "domain = 'APM'" --link`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runSearch(opts, args[0])
+			return runSearch(searchOpts, args[0])
 		},
 	}
+
+	cmd.Flags().BoolVar(&searchOpts.link, "link", false, "Include New Relic deep link URLs in output")
+
+	return cmd
 }
 
-func runSearch(opts *root.Options, query string) error {
+func runSearch(opts *searchOptions, query string) error {
 	client, err := opts.APIClient()
 	if err != nil {
 		return err
@@ -81,15 +96,23 @@ func runSearch(opts *root.Options, query string) error {
 	}
 
 	headers := []string{"GUID", "NAME", "TYPE", "DOMAIN", "ACCOUNT ID"}
+	if opts.link {
+		headers = append(headers, "LINK")
+	}
+
 	rows := make([][]string, len(entities))
 	for i, e := range entities {
-		rows[i] = []string{
+		row := []string{
 			view.Truncate(e.GUID.String(), 40),
 			view.Truncate(e.Name, 30),
 			e.Type,
 			e.Domain,
 			fmt.Sprintf("%d", e.AccountID),
 		}
+		if opts.link {
+			row = append(row, nrql.BuildEntityDeepLink(e.GUID.String()))
+		}
+		rows[i] = row
 	}
 
 	return v.Render(headers, rows, entities)

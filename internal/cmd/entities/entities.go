@@ -5,14 +5,16 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/open-cli-collective/newrelic-cli/internal/cmd/nrql"
 	"github.com/open-cli-collective/newrelic-cli/internal/cmd/root"
+	"github.com/open-cli-collective/newrelic-cli/internal/deeplink"
 	"github.com/open-cli-collective/newrelic-cli/internal/view"
 )
 
 type searchOptions struct {
 	*root.Options
-	link bool
+	link  bool
+	since string
+	until string
 }
 
 // Register adds the entities commands to the root command
@@ -73,6 +75,8 @@ Common domains and types:
 	}
 
 	cmd.Flags().BoolVar(&searchOpts.link, "link", false, "Include New Relic deep link URLs in output")
+	cmd.Flags().StringVar(&searchOpts.since, "since", "", "Time range start for deep links (e.g., '1 hour ago', '2025-01-01')")
+	cmd.Flags().StringVar(&searchOpts.until, "until", "", "Time range end for deep links (e.g., 'now', '2025-01-15')")
 
 	return cmd
 }
@@ -95,6 +99,15 @@ func runSearch(opts *searchOptions, query string) error {
 		return nil
 	}
 
+	// Parse time range for deep links (only when --link is set)
+	var beginMs, endMs int64
+	if opts.link {
+		beginMs, endMs, err = deeplink.ParseTimeRange(opts.since, opts.until)
+		if err != nil {
+			return err
+		}
+	}
+
 	headers := []string{"GUID", "NAME", "TYPE", "DOMAIN", "ACCOUNT ID"}
 	if opts.link {
 		headers = append(headers, "LINK")
@@ -110,7 +123,7 @@ func runSearch(opts *searchOptions, query string) error {
 			fmt.Sprintf("%d", e.AccountID),
 		}
 		if opts.link {
-			row = append(row, nrql.BuildEntityDeepLink(e.GUID.String()))
+			row = append(row, deeplink.BuildEntityDeepLink(e.GUID.String(), beginMs, endMs))
 		}
 		rows[i] = row
 	}

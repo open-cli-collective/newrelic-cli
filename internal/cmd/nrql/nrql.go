@@ -1,18 +1,14 @@
 package nrql
 
 import (
-	"encoding/base64"
-	"encoding/json"
 	"fmt"
-	"net/url"
-	"strconv"
 	"strings"
 
 	"github.com/spf13/cobra"
 
 	"github.com/open-cli-collective/newrelic-cli/api"
 	"github.com/open-cli-collective/newrelic-cli/internal/cmd/root"
-	"github.com/open-cli-collective/newrelic-cli/internal/config"
+	"github.com/open-cli-collective/newrelic-cli/internal/deeplink"
 )
 
 type queryOptions struct {
@@ -99,6 +95,11 @@ or via --since and --until flags which will be appended to your query.`,
 }
 
 func runQuery(opts *queryOptions, nrql string) error {
+	client, err := opts.APIClient()
+	if err != nil {
+		return err
+	}
+
 	// Build the final query with time range flags
 	finalQuery := nrql
 
@@ -121,29 +122,17 @@ func runQuery(opts *queryOptions, nrql string) error {
 		finalQuery += fmt.Sprintf(" UNTIL %d", until.Unix())
 	}
 
-	// If --link flag is set, generate a deep link URL without needing an API key
+	// If --link flag is set, generate a deep link URL instead of executing
 	if opts.link {
-		accountIDStr, err := config.GetAccountID()
-		if err != nil {
-			return fmt.Errorf("account ID required for --link: %w", err)
-		}
-		accountID, err := strconv.Atoi(accountIDStr)
-		if err != nil {
-			return fmt.Errorf("invalid account ID %q: %w", accountIDStr, err)
-		}
-
-		deepLink, err := BuildNRQLDeepLink(accountID, finalQuery)
+		accountID, err := client.GetAccountIDInt()
 		if err != nil {
 			return err
 		}
+
+		deepLink := deeplink.BuildNRQLDeepLink(accountID, finalQuery)
 		v := opts.View()
 		v.Println(deepLink)
 		return nil
-	}
-
-	client, err := opts.APIClient()
-	if err != nil {
-		return err
 	}
 
 	result, err := client.QueryNRQL(finalQuery)
@@ -153,35 +142,6 @@ func runQuery(opts *queryOptions, nrql string) error {
 
 	v := opts.View()
 	return v.JSON(result)
-}
-
-// BuildNRQLDeepLink generates a New Relic deep link URL that opens the query
-// builder with the given NRQL query pre-populated and auto-executed.
-func BuildNRQLDeepLink(accountID int, nrql string) (string, error) {
-	pane := map[string]interface{}{
-		"nerdletId":              "data-exploration.query-builder",
-		"initialActiveInterface": "nrqlEditor",
-		"initialAccountId":       accountID,
-		"initialNrqlValue":       nrql,
-		"isViewingQuery":         true,
-	}
-
-	paneJSON, err := json.Marshal(pane)
-	if err != nil {
-		return "", fmt.Errorf("encoding deep link pane: %w", err)
-	}
-	paneEncoded := base64.StdEncoding.EncodeToString(paneJSON)
-
-	params := url.Values{}
-	params.Set("platform[accountId]", strconv.Itoa(accountID))
-	params.Set("pane", paneEncoded)
-
-	return "https://one.newrelic.com/launcher/nr1-core.explorer?" + params.Encode(), nil
-}
-
-// BuildEntityDeepLink generates a New Relic deep link URL for an entity.
-func BuildEntityDeepLink(entityGUID string) string {
-	return "https://one.newrelic.com/redirect/entity/" + url.PathEscape(entityGUID)
 }
 
 // containsClause checks if the NRQL query already contains a specific clause

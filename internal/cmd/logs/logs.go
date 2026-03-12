@@ -7,6 +7,7 @@ import (
 
 	"github.com/open-cli-collective/newrelic-cli/api"
 	"github.com/open-cli-collective/newrelic-cli/internal/cmd/root"
+	"github.com/open-cli-collective/newrelic-cli/internal/deeplink"
 	"github.com/open-cli-collective/newrelic-cli/internal/confirm"
 	"github.com/open-cli-collective/newrelic-cli/internal/view"
 )
@@ -30,7 +31,70 @@ func Register(rootCmd *cobra.Command, opts *root.Options) {
 	rulesCmd.AddCommand(newDeleteRuleCmd(opts))
 
 	logsCmd.AddCommand(rulesCmd)
+	logsCmd.AddCommand(newLinkCmd(opts))
 	rootCmd.AddCommand(logsCmd)
+}
+
+type linkOptions struct {
+	*root.Options
+	since string
+	until string
+}
+
+func newLinkCmd(opts *root.Options) *cobra.Command {
+	linkOpts := &linkOptions{Options: opts}
+
+	cmd := &cobra.Command{
+		Use:   "link <filter>",
+		Short: "Generate a New Relic log viewer deep link",
+		Long: `Generate a deep link URL that opens the New Relic log viewer
+with the given Lucene filter query pre-populated.
+
+Filter syntax uses Lucene query format:
+  entity.name:"service-name"           - Match entity
+  level:"ERROR"                        - Match log level
+  entity.name:"svc" level:"ERROR"      - Multiple conditions (AND)
+  (entity.name:"a" OR entity.name:"b") - OR conditions
+  message:"*keyword*"                  - Wildcard search
+
+Time range flags (--since, --until) set the visible window in the log viewer.
+Without them, NR defaults to the last 30 minutes which may miss older data.`,
+		Example: `  # Link to error logs for a service (last hour)
+  nrq logs link 'entity.name:"prd-use1-monitapp-user-api-service" level:"ERROR"' --since "1 hour ago"
+
+  # Link to logs in a specific time range
+  nrq logs link 'message:"*timeout*"' --since "2026-03-10" --until "2026-03-11"
+
+  # Link to logs from multiple services
+  nrq logs link '(entity.name:"svc-a" OR entity.name:"svc-b") level:"ERROR"' --since "7 days ago"`,
+		Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			client, err := opts.APIClient()
+			if err != nil {
+				return err
+			}
+
+			accountID, err := client.GetAccountIDInt()
+			if err != nil {
+				return err
+			}
+
+			beginMs, endMs, err := deeplink.ParseTimeRange(linkOpts.since, linkOpts.until)
+			if err != nil {
+				return err
+			}
+
+			deepLink := deeplink.BuildLogDeepLink(accountID, args[0], beginMs, endMs)
+			v := opts.View()
+			v.Println(deepLink)
+			return nil
+		},
+	}
+
+	cmd.Flags().StringVar(&linkOpts.since, "since", "", "Time range start (e.g., '1 hour ago', '2026-01-01')")
+	cmd.Flags().StringVar(&linkOpts.until, "until", "", "Time range end (e.g., 'now', '2026-01-15')")
+
+	return cmd
 }
 
 type listRulesOptions struct {

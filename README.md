@@ -469,6 +469,12 @@ Search for entities using NRQL-style queries.
 nrq entities search <query>
 ```
 
+| Flag | Description |
+|------|-------------|
+| `--link` | Include New Relic deep link URLs in output |
+| `--since` | Time range start for deep links (e.g., `1 hour ago`, `2025-01-01`) |
+| `--until` | Time range end for deep links (e.g., `now`, `2025-01-15`) |
+
 **Examples:**
 ```bash
 # Find all applications
@@ -482,6 +488,9 @@ nrq entities search "domain = 'APM'"
 
 # Combined conditions
 nrq entities search "type = 'APPLICATION' AND name LIKE 'prod%'"
+
+# Include deep links with a time range
+nrq entities search "domain = 'APM'" --link --since "1 hour ago"
 ```
 
 **Table Output:**
@@ -489,6 +498,35 @@ nrq entities search "type = 'APPLICATION' AND name LIKE 'prod%'"
 GUID                                    NAME                    TYPE            DOMAIN      ACCOUNT ID
 ABC123...                               production-api          APPLICATION     APM         12345678
 DEF456...                               production-web          APPLICATION     APM         12345678
+```
+
+---
+
+### logs link
+
+Generate a New Relic deep link that opens the log viewer with a Lucene filter query pre-populated.
+
+```bash
+nrq logs link <lucene-filter>
+```
+
+| Flag | Description |
+|------|-------------|
+| `--since` | Time range start (e.g., `30 minutes ago`, `2025-01-01`) |
+| `--until` | Time range end (e.g., `now`, `2025-01-15`) |
+
+When `--since` is provided without `--until`, the end defaults to now.
+
+**Examples:**
+```bash
+# Link to error logs for a service
+nrq logs link 'entity.name:"my-service" level:"ERROR"'
+
+# With time range
+nrq logs link 'level:"ERROR"' --since "30 minutes ago"
+
+# Multiple entities
+nrq logs link '(entity.name:"svc-a" OR entity.name:"svc-b") level:"ERROR"' --since "1 hour ago"
 ```
 
 ---
@@ -628,27 +666,36 @@ nrq nerdgraph query '{
 
 Execute NRQL queries.
 
-#### nrql query
-
-Execute an NRQL query against your account.
-
 ```bash
+nrq nrql <nrql-query>
 nrq nrql query <nrql-query>
 ```
+
+| Flag | Description |
+|------|-------------|
+| `--link` | Output a New Relic deep link URL instead of executing the query |
+| `--since` | Time range start, appended as SINCE clause (e.g., `7 days ago`, `2025-01-01`) |
+| `--until` | Time range end, appended as UNTIL clause (e.g., `now`, `2025-01-15`) |
 
 **Examples:**
 ```bash
 # Transaction count
-nrq nrql query "SELECT count(*) FROM Transaction SINCE 1 hour ago"
+nrq nrql "SELECT count(*) FROM Transaction SINCE 1 hour ago"
 
 # Average response time by app
-nrq nrql query "SELECT average(duration) FROM Transaction FACET appName SINCE 1 day ago"
+nrq nrql "SELECT average(duration) FROM Transaction FACET appName SINCE 1 day ago"
 
 # Error rate
-nrq nrql query "SELECT percentage(count(*), WHERE error IS true) FROM Transaction SINCE 1 hour ago"
+nrq nrql "SELECT percentage(count(*), WHERE error IS true) FROM Transaction SINCE 1 hour ago"
 
 # Top slow transactions
-nrq nrql query "SELECT average(duration), count(*) FROM Transaction FACET name SINCE 1 hour ago LIMIT 10"
+nrq nrql "SELECT average(duration), count(*) FROM Transaction FACET name SINCE 1 hour ago LIMIT 10"
+
+# Generate a deep link to open the query in New Relic
+nrq nrql --link "SELECT count(*) FROM Transaction SINCE 1 hour ago"
+
+# Using --since flag (appends to query)
+nrq nrql "SELECT count(*) FROM Transaction" --since "7 days ago"
 ```
 
 ---

@@ -1,0 +1,32 @@
+name: PR Title Lint
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize]
+
+jobs:
+  check-title:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check conventional commit prefix
+        run: |
+          TITLE="${{ github.event.pull_request.title }}"
+          PATTERN="^(feat|fix|docs|refactor|test|chore|ci|perf|build|style|revert)(\(.+\))?!?: .+"
+
+          if [[ ! "$TITLE" =~ $PATTERN ]]; then
+            echo "::error::PR title must use conventional commit format: type(scope): description"
+            echo ""
+            echo "Valid prefixes: feat, fix, docs, refactor, test, chore, ci, perf, build, style, revert"
+            echo ""
+            echo "Examples:"
+            echo "  feat(nrql): add --link flag for deep links"
+            echo "  fix(api): handle empty response body"
+            echo "  docs: update README with new commands"
+            echo ""
+            echo "Why: Squash merges use the PR title as the commit message."
+            echo "Auto-release triggers on feat: and fix: prefixes."
+            echo "See CONTRIBUTING.md for details."
+            exit 1
+          fi
+
+          echo "PR title is valid: $TITLE"

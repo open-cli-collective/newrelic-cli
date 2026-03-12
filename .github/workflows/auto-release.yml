@@ -4,11 +4,6 @@ on:
   push:
     branches:
       - main
-    # Gate 1: Only trigger when Go code actually changes
-    paths:
-      - '**.go'
-      - 'go.mod'
-      - 'go.sum'
 
 permissions:
   contents: write
@@ -16,7 +11,7 @@ permissions:
 jobs:
   create-release:
     runs-on: ubuntu-latest
-    # Gate 2: Only release for feat: and fix: commits (actual functionality changes)
+    # Only release for feat: and fix: commits (actual functionality changes)
     if: >-
       startsWith(github.event.head_commit.message, 'feat:') ||
       startsWith(github.event.head_commit.message, 'feat(') ||

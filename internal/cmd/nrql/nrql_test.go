@@ -33,11 +33,22 @@ func TestBuildNRQLDeepLink(t *testing.T) {
 			accountID: 99999,
 			nrql:      "SELECT average(duration) FROM Transaction WHERE appName = 'my-app' FACET host SINCE 7 days ago TIMESERIES",
 		},
+		{
+			name:      "query with single quotes and newlines",
+			accountID: 2712640,
+			nrql:      "SELECT * FROM Log WHERE message LIKE '%error\n%' AND name = 'foo'",
+		},
+		{
+			name:      "query with unicode",
+			accountID: 2712640,
+			nrql:      "SELECT count(*) FROM Transaction WHERE name = '日本語テスト'",
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := BuildNRQLDeepLink(tt.accountID, tt.nrql)
+			result, err := BuildNRQLDeepLink(tt.accountID, tt.nrql)
+			require.NoError(t, err)
 
 			// Verify URL starts with the correct base
 			assert.True(t, strings.HasPrefix(result, "https://one.newrelic.com/launcher/nr1-core.explorer?"))
@@ -84,6 +95,16 @@ func TestBuildEntityDeepLink(t *testing.T) {
 			name:       "dashboard",
 			entityGUID: "MXxWSVp8REFTSEJPQVJEX3wxMjM0NTY3OA==",
 			expected:   "https://one.newrelic.com/redirect/entity/MXxWSVp8REFTSEJPQVJEX3wxMjM0NTY3OA==",
+		},
+		{
+			name:       "GUID with slash is escaped",
+			entityGUID: "abc+def/ghi=",
+			expected:   "https://one.newrelic.com/redirect/entity/abc+def%2Fghi=",
+		},
+		{
+			name:       "GUID with question mark is escaped",
+			entityGUID: "MXxBUE18QVBQTElDQVRJT04?MTIz",
+			expected:   "https://one.newrelic.com/redirect/entity/MXxBUE18QVBQTElDQVRJT04%3FMTIz",
 		},
 	}
 

@@ -1,7 +1,10 @@
 package nrql
 
 import (
+	"encoding/base64"
+	"encoding/json"
 	"fmt"
+	"net/url"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -14,6 +17,7 @@ type queryOptions struct {
 	*root.Options
 	since string
 	until string
+	link  bool
 }
 
 // Register adds the nrql commands to the root command
@@ -44,7 +48,10 @@ Supported time formats:
   nrq nrql "SELECT count(*) FROM Transaction" --since "7 days ago"
 
   # Using both --since and --until
-  nrq nrql "SELECT * FROM Log" --since "2025-01-01" --until "2025-01-15"`,
+  nrq nrql "SELECT * FROM Log" --since "2025-01-01" --until "2025-01-15"
+
+  # Generate a deep link to open the query in New Relic
+  nrq nrql --link "SELECT count(*) FROM Transaction SINCE 1 hour ago"`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) == 0 {
@@ -56,6 +63,7 @@ Supported time formats:
 
 	nrqlCmd.Flags().StringVar(&queryOpts.since, "since", "", "Time range start (e.g., '7 days ago', '2025-01-01')")
 	nrqlCmd.Flags().StringVar(&queryOpts.until, "until", "", "Time range end (e.g., 'now', '2025-01-15')")
+	nrqlCmd.Flags().BoolVar(&queryOpts.link, "link", false, "Output a New Relic deep link URL instead of executing the query")
 
 	// Add query subcommand for compatibility
 	nrqlCmd.AddCommand(newQueryCmd(queryOpts))
@@ -73,7 +81,8 @@ Time ranges can be specified either in the query itself (SINCE/UNTIL clauses)
 or via --since and --until flags which will be appended to your query.`,
 		Example: `  nrq nrql query "SELECT count(*) FROM Transaction SINCE 1 hour ago"
   nrq nrql query "SELECT * FROM Log LIMIT 10"
-  nrq nrql query "SELECT count(*) FROM Transaction" --since "7 days ago"`,
+  nrq nrql query "SELECT count(*) FROM Transaction" --since "7 days ago"
+  nrq nrql query --link "SELECT count(*) FROM Transaction SINCE 1 hour ago"`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runQuery(opts, args[0])
@@ -82,6 +91,7 @@ or via --since and --until flags which will be appended to your query.`,
 
 	cmd.Flags().StringVar(&opts.since, "since", "", "Time range start (e.g., '7 days ago', '2025-01-01')")
 	cmd.Flags().StringVar(&opts.until, "until", "", "Time range end (e.g., 'now', '2025-01-15')")
+	cmd.Flags().BoolVar(&opts.link, "link", false, "Output a New Relic deep link URL instead of executing the query")
 
 	return cmd
 }
@@ -114,6 +124,19 @@ func runQuery(opts *queryOptions, nrql string) error {
 		finalQuery += fmt.Sprintf(" UNTIL %d", until.Unix())
 	}
 
+	// If --link flag is set, generate a deep link URL instead of executing
+	if opts.link {
+		accountID, err := client.GetAccountIDInt()
+		if err != nil {
+			return err
+		}
+
+		deepLink := BuildNRQLDeepLink(accountID, finalQuery)
+		v := opts.View()
+		v.Println(deepLink)
+		return nil
+	}
+
 	result, err := client.QueryNRQL(finalQuery)
 	if err != nil {
 		return err
@@ -121,6 +144,32 @@ func runQuery(opts *queryOptions, nrql string) error {
 
 	v := opts.View()
 	return v.JSON(result)
+}
+
+// BuildNRQLDeepLink generates a New Relic deep link URL that opens the query
+// builder with the given NRQL query pre-populated and auto-executed.
+func BuildNRQLDeepLink(accountID int, nrql string) string {
+	pane := map[string]interface{}{
+		"nerdletId":              "data-exploration.query-builder",
+		"initialActiveInterface": "nrqlEditor",
+		"initialAccountId":       accountID,
+		"initialNrqlValue":       nrql,
+		"isViewingQuery":         true,
+	}
+
+	paneJSON, _ := json.Marshal(pane)
+	paneEncoded := base64.StdEncoding.EncodeToString(paneJSON)
+
+	return fmt.Sprintf(
+		"https://one.newrelic.com/launcher/nr1-core.explorer?platform%%5BaccountId%%5D=%d&pane=%s",
+		accountID,
+		url.QueryEscape(paneEncoded),
+	)
+}
+
+// BuildEntityDeepLink generates a New Relic deep link URL for an entity.
+func BuildEntityDeepLink(entityGUID string) string {
+	return fmt.Sprintf("https://one.newrelic.com/redirect/entity/%s", entityGUID)
 }
 
 // containsClause checks if the NRQL query already contains a specific clause

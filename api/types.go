@@ -255,7 +255,7 @@ type DashboardPage struct {
 	Widgets []DashboardWidget `json:"widgets"`
 }
 
-// DashboardWidget represents a widget on a dashboard page
+// DashboardWidget represents a widget on a dashboard page, including its layout position
 type DashboardWidget struct {
 	ID            string                 `json:"id"`
 	Title         string                 `json:"title"`

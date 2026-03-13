@@ -260,6 +260,7 @@ type DashboardWidget struct {
 	ID            string                 `json:"id"`
 	Title         string                 `json:"title"`
 	Visualization map[string]interface{} `json:"visualization"`
+	Layout        map[string]interface{} `json:"layout,omitempty"`
 	Configuration map[string]interface{} `json:"rawConfiguration"`
 }
 

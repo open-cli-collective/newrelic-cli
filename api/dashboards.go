@@ -87,6 +87,7 @@ func (c *Client) GetDashboard(guid EntityGUID) (*DashboardDetail, error) {
 							id
 							title
 							visualization { id }
+							layout { column row width height }
 							rawConfiguration
 						}
 					}
@@ -144,6 +145,9 @@ func (c *Client) GetDashboard(guid EntityGUID) (*DashboardDetail, error) {
 					}
 					if viz, ok := safeMap(widget["visualization"]); ok {
 						dw.Visualization = viz
+					}
+					if layout, ok := safeMap(widget["layout"]); ok {
+						dw.Layout = layout
 					}
 					if conf, ok := safeMap(widget["rawConfiguration"]); ok {
 						dw.Configuration = conf
@@ -399,6 +403,9 @@ func parseDashboardEntity(entity map[string]interface{}) *DashboardDetail {
 					}
 					if viz, ok := safeMap(widget["visualization"]); ok {
 						dw.Visualization = viz
+					}
+					if layout, ok := safeMap(widget["layout"]); ok {
+						dw.Layout = layout
 					}
 					if conf, ok := safeMap(widget["rawConfiguration"]); ok {
 						dw.Configuration = conf

@@ -280,6 +280,132 @@ func TestSetCredential_StdinIngress(t *testing.T) {
 	assert.NotContains(t, out.String()+errb.String(), sentinel)
 }
 
+// M1: --from-env ingress for set-credential — value lands in the keyring,
+// never echoed; empty/unset var is a hard error (no silent empty key).
+func TestSetCredential_FromEnvIngress(t *testing.T) {
+	testutil.Setup(t)
+	t.Setenv("NRQ_INGRESS_VAR", sentinel)
+	rootCmd, opts := root.NewRootCmd()
+	var o, e bytes.Buffer
+	opts.Stdout, opts.Stderr = &o, &e
+	root.RegisterAll(rootCmd, opts, configcmd.Register)
+	rootCmd.SetArgs([]string{"set-credential", "--ref", "newrelic-cli/default", "--key", "api_key", "--from-env", "NRQ_INGRESS_VAR"})
+	require.NoError(t, rootCmd.Execute())
+	assert.NotContains(t, o.String()+e.String(), sentinel)
+
+	st, err := keychain.OpenNoMigrate()
+	require.NoError(t, err)
+	defer func() { _ = st.Close() }()
+	got, err := st.APIKey()
+	require.NoError(t, err)
+	assert.Equal(t, sentinel, got)
+
+	// Empty/unset env var must fail loudly, not store an empty key.
+	rootCmd2, opts2 := root.NewRootCmd()
+	var o2, e2 bytes.Buffer
+	opts2.Stdout, opts2.Stderr = &o2, &e2
+	root.RegisterAll(rootCmd2, opts2, configcmd.Register)
+	rootCmd2.SetArgs([]string{"set-credential", "--ref", "newrelic-cli/default", "--key", "api_key", "--from-env", "NRQ_UNSET_VAR", "--overwrite"})
+	require.Error(t, rootCmd2.Execute(), "empty/unset --from-env var must fail")
+}
+
+// M1: init --api-key-from-env ingress; value never echoed, not in config.yml.
+func TestInit_FromEnvIngress(t *testing.T) {
+	testutil.Setup(t)
+	t.Setenv("NRQ_INGRESS_VAR", sentinel)
+	rootCmd, opts := root.NewRootCmd()
+	var o, e bytes.Buffer
+	opts.Stdout, opts.Stderr = &o, &e
+	root.RegisterAll(rootCmd, opts, initcmd.Register)
+	rootCmd.SetArgs([]string{"init", "--api-key-from-env", "NRQ_INGRESS_VAR", "--account-id", "42", "--no-verify"})
+	require.NoError(t, rootCmd.Execute())
+	assert.NotContains(t, o.String()+e.String(), sentinel)
+	raw, _ := os.ReadFile(config.Path())
+	assert.NotContains(t, string(raw), sentinel)
+
+	st, err := keychain.OpenNoMigrate()
+	require.NoError(t, err)
+	defer func() { _ = st.Close() }()
+	got, _ := st.APIKey()
+	assert.Equal(t, sentinel, got)
+}
+
+// L3: init --overwrite scripted ingress replaces an existing keyring value
+// end-to-end (the explicit-intent path), value never echoed.
+func TestInit_OverwriteScriptedIngress(t *testing.T) {
+	testutil.Setup(t)
+	st0, err := keychain.OpenNoMigrate()
+	require.NoError(t, err)
+	require.NoError(t, st0.SetAPIKey("NRAK-existing-000001"))
+	_ = st0.Close()
+
+	rootCmd, opts := root.NewRootCmd()
+	var o, e bytes.Buffer
+	opts.Stdout, opts.Stderr = &o, &e
+	opts.Stdin = strings.NewReader(sentinel + "\n")
+	root.RegisterAll(rootCmd, opts, initcmd.Register)
+	rootCmd.SetArgs([]string{"init", "--api-key-stdin", "--overwrite", "--no-verify"})
+	require.NoError(t, rootCmd.Execute())
+	assert.NotContains(t, o.String()+e.String(), sentinel)
+
+	st, err := keychain.OpenNoMigrate()
+	require.NoError(t, err)
+	defer func() { _ = st.Close() }()
+	got, _ := st.APIKey()
+	assert.Equal(t, sentinel, got, "--overwrite must replace the existing key")
+}
+
+// M3: config clear --dry-run reports without changing anything; --all also
+// removes config.yml; both are idempotent and non-interactive.
+func TestConfigClear_DryRunAndAll(t *testing.T) {
+	testutil.Setup(t)
+	st0, err := keychain.OpenNoMigrate()
+	require.NoError(t, err)
+	require.NoError(t, st0.SetAPIKey("NRAK-clear-00000001"))
+	_ = st0.Close()
+	cfg := &config.Config{CredentialRef: "newrelic-cli/default", AccountID: "42"}
+	require.NoError(t, cfg.Save())
+
+	out, _, err := run(t, "config", "clear", "--dry-run", "--all")
+	require.NoError(t, err)
+	assert.Contains(t, out, "would remove")
+	// Dry-run changed nothing.
+	st, err := keychain.OpenNoMigrate()
+	require.NoError(t, err)
+	assert.True(t, st.HasAPIKey(), "dry-run must not delete")
+	_ = st.Close()
+	_, statErr := os.Stat(config.Path())
+	require.NoError(t, statErr, "dry-run must not remove config.yml")
+
+	_, _, err = run(t, "config", "clear", "--all")
+	require.NoError(t, err)
+	st2, err := keychain.OpenNoMigrate()
+	require.NoError(t, err)
+	assert.False(t, st2.HasAPIKey())
+	_ = st2.Close()
+	_, statErr = os.Stat(config.Path())
+	assert.True(t, os.IsNotExist(statErr), "--all removes config.yml")
+
+	// Idempotent: a second clear --all still exits 0.
+	_, _, err = run(t, "config", "clear", "--all")
+	assert.NoError(t, err, "clear is idempotent")
+}
+
+// L1: `config show -o json` reports api_key presence as a bool and never the
+// value (secret-absence pinned for the JSON surface).
+func TestConfigShow_JSON_NoSecretValue(t *testing.T) {
+	testutil.Setup(t)
+	st0, err := keychain.OpenNoMigrate()
+	require.NoError(t, err)
+	require.NoError(t, st0.SetAPIKey(sentinel))
+	_ = st0.Close()
+
+	out, _, err := run(t, "config", "show", "-o", "json")
+	require.NoError(t, err)
+	assert.Contains(t, out, `"api_key_present": true`)
+	assert.NotContains(t, out, sentinel, "config show JSON must never contain the value")
+}
+
 // §1.11 item 1: init writes no secret field to config.yml.
 func TestInit_NoSecretInConfigYML(t *testing.T) {
 	testutil.Setup(t)

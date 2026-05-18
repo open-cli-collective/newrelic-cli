@@ -19,6 +19,7 @@ import (
 
 	"github.com/open-cli-collective/newrelic-cli/internal/cmd/configcmd"
 	"github.com/open-cli-collective/newrelic-cli/internal/cmd/initcmd"
+	"github.com/open-cli-collective/newrelic-cli/internal/cmd/me"
 	"github.com/open-cli-collective/newrelic-cli/internal/cmd/root"
 	"github.com/open-cli-collective/newrelic-cli/internal/config"
 	"github.com/open-cli-collective/newrelic-cli/internal/keychain"
@@ -596,6 +597,24 @@ func TestInit_AccountIDFromEnv_Errors(t *testing.T) {
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "at most one of --account-id")
 	})
+}
+
+// INT-444 (Codex PR Major): `nrq me` must not echo a fat-fingered
+// positional secret — same §1.12 class fixed for init/set-credential.
+func TestNoLeak_Me_PositionalArgRejected(t *testing.T) {
+	testutil.Setup(t)
+	rootCmd, opts := root.NewRootCmd()
+	var o, e bytes.Buffer
+	opts.Stdout, opts.Stderr = &o, &e
+	rootCmd.SetOut(&o)
+	rootCmd.SetErr(&e)
+	root.RegisterAll(rootCmd, opts, me.Register)
+	rootCmd.SetArgs([]string{"me", sentinel})
+	err := rootCmd.Execute()
+	require.Error(t, err)
+	assert.NotContains(t, o.String()+e.String(), sentinel)
+	assert.NotContains(t, err.Error(), sentinel)
+	assert.Contains(t, err.Error(), "no positional arguments")
 }
 
 // INT-444 S2: --non-interactive with no key and no ingress flag fails loud

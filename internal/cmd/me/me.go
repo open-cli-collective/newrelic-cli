@@ -26,7 +26,10 @@ authenticated New Relic user and, when an account ID is configured, account
 access. Exits non-zero if the key is invalid or the configured account is
 not accessible — so it doubles as a scripted health check. The API key
 itself is never displayed (§1.12).`,
-		Args: cobra.NoArgs,
+		// Static no-args validator: cobra.NoArgs quotes args[0] in its
+		// error, so `nrq me NRAK-…` would echo a fat-fingered secret to
+		// stderr/logs (§1.12) — the same class fixed for init/set-credential.
+		Args: root.NoPositionalArgs,
 		RunE: func(_ *cobra.Command, _ []string) error {
 			return runMe(opts)
 		},

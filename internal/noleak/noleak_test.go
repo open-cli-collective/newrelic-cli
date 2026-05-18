@@ -234,8 +234,8 @@ func TestMigration_CleanupFailure_NoSignal_FileRetained(t *testing.T) {
 	t.Cleanup(func() { _ = os.Chmod(dir, 0o700) })
 
 	out, errOut, err := run(t, "__probe", "-o", "json")
-	require.Error(t, err, "migration must fail when a legacy original cannot be removed")
-	assert.NotContains(t, out, `"_migration"`, "no signal on incomplete migration")
+	require.Error(t, err, "migration must fail when it cannot complete (config save or legacy scrub)")
+	assert.NotContains(t, out, `"_migration"`, "no signal on an incomplete migration")
 	assert.NotContains(t, errOut, "one-time operation")
 	assert.NotContains(t, out+errOut, sentinel)
 	_, statErr := os.Stat(legacy)
@@ -404,6 +404,43 @@ func TestConfigShow_JSON_NoSecretValue(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, out, `"api_key_present": true`)
 	assert.NotContains(t, out, sentinel, "config show JSON must never contain the value")
+}
+
+// An invalid --ref fails up front with an actionable message naming the
+// flag — not deep inside OpenRef.
+func TestSetCredential_InvalidRef_Actionable(t *testing.T) {
+	testutil.Setup(t)
+	rootCmd, opts := root.NewRootCmd()
+	var o, e bytes.Buffer
+	opts.Stdout, opts.Stderr = &o, &e
+	opts.Stdin = strings.NewReader("NRAK-whatever-00001\n")
+	root.RegisterAll(rootCmd, opts, configcmd.Register)
+	rootCmd.SetArgs([]string{"set-credential", "--ref", "no-slash-here", "--key", "api_key", "--stdin"})
+	err := rootCmd.Execute()
+	require.Error(t, err)
+	assert.Contains(t, err.Error()+o.String()+e.String(), "--ref")
+}
+
+// A secret-only init (no account-id/region, non-interactive, no prior
+// config.yml) must NOT create config.yml just to restate the default ref.
+func TestInit_SecretOnly_NoConfigYMLCreated(t *testing.T) {
+	testutil.Setup(t)
+	rootCmd, opts := root.NewRootCmd()
+	var o, e bytes.Buffer
+	opts.Stdout, opts.Stderr = &o, &e
+	opts.Stdin = strings.NewReader(sentinel + "\n")
+	root.RegisterAll(rootCmd, opts, initcmd.Register)
+	rootCmd.SetArgs([]string{"init", "--api-key-stdin", "--no-verify"})
+	require.NoError(t, rootCmd.Execute())
+
+	_, statErr := os.Stat(config.Path())
+	assert.True(t, os.IsNotExist(statErr),
+		"secret-only init must not create config.yml")
+	st, err := keychain.OpenNoMigrate()
+	require.NoError(t, err)
+	defer func() { _ = st.Close() }()
+	got, _ := st.APIKey()
+	assert.Equal(t, sentinel, got)
 }
 
 // §1.11 item 1: init writes no secret field to config.yml.

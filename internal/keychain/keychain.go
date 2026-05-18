@@ -145,8 +145,17 @@ func (s *Store) Backend() (credstore.Backend, credstore.Source) { return s.cs.Ba
 // (an errors.Is-matchable wrapper of credstore.ErrNotFound) when unset.
 func (s *Store) APIKey() (string, error) {
 	v, err := s.cs.Get(s.profile, KeyAPIKey)
-	if errors.Is(err, credstore.ErrNotFound) || (err == nil && v == "") {
+	if errors.Is(err, credstore.ErrNotFound) {
 		return "", ErrMissingAPIKey
+	}
+	if err == nil && v == "" {
+		// A stored-but-empty value is NOT "never set" — it is a corrupted
+		// keyring entry. Surface it distinctly so it is not silently
+		// indistinguishable from absence (which would mask backend
+		// corruption and send the user down the wrong remediation path).
+		return "", fmt.Errorf("%w: api_key present but empty at %s — corrupted keyring entry; "+
+			"re-run `nrq init` or `nrq set-credential --key api_key --stdin --overwrite`",
+			ErrCorruptedAPIKey, s.ref)
 	}
 	if err != nil {
 		// Never embed the value; naming ref/key/op is allowed (§1.12).
@@ -212,3 +221,8 @@ func (s *Store) Clear() ([]string, error) {
 var ErrMissingAPIKey = errors.New(
 	"nrq: no API key in keyring — run `nrq init` or " +
 		"`nrq set-credential --key api_key --stdin`")
+
+// ErrCorruptedAPIKey is the stable identity for "api_key exists but is
+// empty" — a distinct, errors.Is-matchable state from ErrMissingAPIKey so
+// callers/tests can tell genuine absence from a corrupted backend entry.
+var ErrCorruptedAPIKey = errors.New("nrq: api_key keyring entry is present but empty")

@@ -2,6 +2,8 @@ package keychain
 
 import (
 	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -82,6 +84,23 @@ func TestPlanMigration_SecretLegacyVsKeyring_FailsUnlessOverwrite(t *testing.T) 
 	require.NoError(t, err)
 	assert.True(t, p.writeSecret)
 	assert.Equal(t, "NRAK-legacy", p.secretValue)
+}
+
+// --overwrite forcing a legacy value over a DIFFERENT existing keyring
+// value is destructive — the plan flags replacedExisting so the command
+// layer can warn. (Equal value or no target must NOT flag it.)
+func TestPlanMigration_OverwriteReplacingDifferent_FlagsReplaced(t *testing.T) {
+	d := discovered{secrets: []secretCandidate{{location: "file:/p#api_key", value: "NRAK-legacy"}}}
+
+	p, err := planMigration(svc, prof, ref, &config.Config{}, d, target("NRAK-different"), true)
+	require.NoError(t, err)
+	assert.True(t, p.writeSecret)
+	assert.True(t, p.replacedExisting, "overwrite of a differing existing value is destructive")
+
+	// No pre-existing target → not a destructive replace.
+	p2, err := planMigration(svc, prof, ref, &config.Config{}, d, noTarget, true)
+	require.NoError(t, err)
+	assert.False(t, p2.replacedExisting)
 }
 
 func TestPlanMigration_LegacyVsLegacyDisagree_OverwriteStillFails(t *testing.T) {
@@ -174,6 +193,28 @@ func TestPlanMigration_NonSecret_NeverConflicts(t *testing.T) {
 	p, err := planMigration(svc, prof, ref, &config.Config{}, d, noTarget, false)
 	require.NoError(t, err)
 	assert.Equal(t, "US", p.foldRegion) // keychain (priority 0) wins
+}
+
+// discover() labels each legacy source so a scrub failure is actionable
+// (names the specific source, not just the ref) — #11.
+func TestDiscover_LabelsLegacyFileSource(t *testing.T) {
+	tmp := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", tmp)
+	t.Setenv("HOME", tmp)
+	t.Setenv(legacyKeychainScanDisabledEnv, "1") // hermetic: no security shell-out
+	legacyDir := filepath.Join(tmp, "newrelic-cli")
+	require.NoError(t, os.MkdirAll(legacyDir, 0o700))
+	require.NoError(t, os.WriteFile(filepath.Join(legacyDir, "credentials"),
+		[]byte("api_key=NRAK-x\n"), 0o600))
+	d := discover()
+	require.NotEmpty(t, d.deleters)
+	var found bool
+	for _, ld := range d.deleters {
+		if strings.Contains(ld.label, "file ") && strings.Contains(ld.label, "credentials") {
+			found = true
+		}
+	}
+	assert.True(t, found, "legacy file deleter must carry a 'file <path>' label; got %+v", d.deleters)
 }
 
 func TestConflictErr_NoValueLeak(t *testing.T) {

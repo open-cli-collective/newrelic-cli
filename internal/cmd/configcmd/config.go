@@ -90,16 +90,21 @@ func runSetCredential(o *setCredentialOptions) error {
 	if o.stdin == (o.fromEnv != "") {
 		return errors.New("provide exactly one of --stdin or --from-env (the value is never a flag/positional — §1.5)")
 	}
-	// --ref is optional only when an active config.yml supplies one.
 	if o.ref == "" {
-		cfg, err := config.Load()
-		if err != nil {
-			return err
-		}
-		if _, statErr := os.Stat(config.Path()); statErr != nil || cfg.CredentialRef == "" {
-			return fmt.Errorf("no config.yml with a credential_ref found at %s: pass --ref (e.g. --ref %s)",
+		// --ref is optional only when an active config.yml exists.
+		// (config.Load always applies DefaultCredentialRef, so the only
+		// real gate here is whether config.yml is present — a missing file
+		// means no configured ref to inherit.)
+		if _, statErr := os.Stat(config.Path()); statErr != nil {
+			return fmt.Errorf("no config.yml found at %s: pass --ref (e.g. --ref %s)",
 				config.Path(), config.DefaultCredentialRef)
 		}
+	} else if _, _, err := credstore.ParseRef(o.ref); err != nil {
+		// Validate the user-facing --ref up front so an invalid value
+		// fails with an actionable message naming the flag, not deep
+		// inside OpenRef.
+		return fmt.Errorf("invalid --ref %q: %w (expected <service>/<profile>, e.g. %s)",
+			o.ref, err, config.DefaultCredentialRef)
 	}
 
 	var secret string

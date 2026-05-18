@@ -61,12 +61,20 @@ type nonSecretCandidate struct {
 	location string // descriptor for _migration `from`
 }
 
+// labeledDeleter removes one legacy original; label names the source (e.g.
+// "macOS Keychain newrelic-cli/api_key", "file <path>") so a scrub failure
+// is actionable rather than only naming the ref.
+type labeledDeleter struct {
+	label string
+	del   func() error
+}
+
 // discovered is everything found on disk/keychain plus the deleters that
 // remove every legacy original after a successful migration.
 type discovered struct {
 	secrets    []secretCandidate
 	nonSecrets []nonSecretCandidate
-	deleters   []func() error // every legacy original that currently exists
+	deleters   []labeledDeleter // every legacy original that currently exists
 }
 
 // migrateLegacyOverwrite runs the one-time migration. overwrite (the §1.8
@@ -105,15 +113,32 @@ func migrateLegacyOverwrite(s *Store, cfg *config.Config, overwrite bool) error 
 		cfg.Region = plan.foldRegion
 	}
 	if err := cfg.Save(); err != nil {
-		return fmt.Errorf("migration wrote the keyring but saving config.yml failed: %w", err)
+		// Only claim a keyring write if one actually happened this run
+		// (an idempotent re-run has plan.writeSecret == false).
+		if plan.writeSecret {
+			return fmt.Errorf("migration wrote the keyring but saving config.yml failed: %w", err)
+		}
+		return fmt.Errorf("migration could not save config.yml at %s: %w", s.ref, err)
+	}
+
+	// --overwrite that replaced a DIFFERENT existing keyring value is
+	// destructive — surface it so an accidental --overwrite is not silent
+	// (never the value, §1.12).
+	if plan.replacedExisting {
+		fmt.Fprintf(os.Stderr,
+			"warning: --overwrite replaced an existing, different api_key in keyring %s\n", s.ref)
 	}
 
 	// Phase 3: delete every legacy original. If ANY deleter fails the
-	// migration is incomplete — return the error and emit NO signal (nothing
-	// may claim "one-time operation" with a legacy copy still on disk).
-	for _, del := range d.deleters {
-		if err := del(); err != nil {
-			return fmt.Errorf("migration wrote the keyring/config but could not remove a legacy original (%s): %w", s.ref, err)
+	// migration is incomplete — return the error (naming the specific
+	// source) and emit NO signal (nothing may claim "one-time operation"
+	// with a legacy copy still on disk). Retry is idempotent: the keyring
+	// already holds the (equal) value, so the next run is a no-op write
+	// and re-attempts the remaining deleters.
+	for _, ld := range d.deleters {
+		if err := ld.del(); err != nil {
+			return fmt.Errorf("migration wrote the keyring/config but could not remove legacy original [%s] (%s): %w",
+				ld.label, s.ref, err)
 		}
 	}
 
@@ -150,6 +175,9 @@ type migrationPlan struct {
 	changes        []credstore.MigrationChange
 	movedSecret    bool
 	movedNonSecret []string // fields whose value changed config.yml this run
+	// replacedExisting: --overwrite forced a legacy value over a DIFFERENT
+	// pre-existing keyring value (destructive — warn the user).
+	replacedExisting bool
 }
 
 // planMigration is the pure §1.8 resolver. It performs NO I/O (`current`
@@ -184,6 +212,10 @@ func planMigration(service, profile, ref string, cfg *config.Config, d discovere
 			p.writeSecret = true
 			p.secretValue = d.secrets[0].value
 			p.movedSecret = true
+			// Reached with a pre-existing target only when overwrite is set
+			// AND the value differs (the no-overwrite-disagree and
+			// agree cases are handled above) — i.e. a destructive replace.
+			p.replacedExisting = hasTarget && overwrite && secretDisagrees(distinct, target)
 			p.changes = append(p.changes, credstore.MigrationJSONEntry(
 				secretField, d.secrets[0].location,
 				fmt.Sprintf("keyring:%s/%s/%s", service, profile, KeyAPIKey)))
@@ -277,17 +309,15 @@ func discover() discovered {
 	var d discovered
 
 	if runtime.GOOS == "darwin" && os.Getenv(legacyKeychainScanDisabledEnv) == "" {
+		var kcAccounts []string
 		if v, ok := keychainRead(legacyKeychainService, secretField); ok {
-			field := secretField
 			d.secrets = append(d.secrets, secretCandidate{
-				location: fmt.Sprintf("keychain:%s/%s", legacyKeychainService, field),
+				location: fmt.Sprintf("keychain:%s/%s", legacyKeychainService, secretField),
 				value:    v,
 			})
-			d.deleters = append(d.deleters,
-				func() error { return keychainDelete(legacyKeychainService, field) })
+			kcAccounts = append(kcAccounts, secretField)
 		}
 		for _, field := range nonSecretFields {
-			field := field
 			if v, ok := keychainRead(legacyKeychainService, field); ok {
 				d.nonSecrets = append(d.nonSecrets, nonSecretCandidate{
 					field:    field,
@@ -295,9 +325,23 @@ func discover() discovered {
 					priority: 0, // keychain beats file
 					location: fmt.Sprintf("keychain:%s/%s", legacyKeychainService, field),
 				})
-				d.deleters = append(d.deleters,
-					func() error { return keychainDelete(legacyKeychainService, field) })
+				kcAccounts = append(kcAccounts, field)
 			}
+		}
+		if len(kcAccounts) > 0 {
+			accounts := kcAccounts // capture
+			d.deleters = append(d.deleters, labeledDeleter{
+				label: fmt.Sprintf("macOS Keychain service %s (%s)",
+					legacyKeychainService, strings.Join(accounts, ", ")),
+				del: func() error {
+					for _, a := range accounts {
+						if err := keychainDelete(legacyKeychainService, a); err != nil {
+							return err
+						}
+					}
+					return nil
+				},
+			})
 		}
 	}
 
@@ -332,7 +376,10 @@ func discover() discovered {
 			}
 		}
 		if usedFile {
-			d.deleters = append(d.deleters, fileDeleter)
+			d.deleters = append(d.deleters, labeledDeleter{
+				label: "file " + path,
+				del:   fileDeleter,
+			})
 		}
 	}
 	return d

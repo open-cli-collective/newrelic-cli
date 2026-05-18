@@ -16,6 +16,8 @@ import (
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 
+	"github.com/open-cli-collective/cli-common/credstore"
+
 	"github.com/open-cli-collective/newrelic-cli/internal/cmd/root"
 	"github.com/open-cli-collective/newrelic-cli/internal/config"
 	"github.com/open-cli-collective/newrelic-cli/internal/keychain"
@@ -161,8 +163,15 @@ func runInit(opts *initOptions) error {
 		}
 		cfg.Region = region
 	}
-	if err := cfg.Save(); err != nil {
-		return fmt.Errorf("save config: %w", err)
+	// Only write config.yml when a non-secret field was actually supplied,
+	// OR config.yml already exists (keep it consistent / persist a folded
+	// migration). A secret-only ingress in a pipeline must not create or
+	// touch config.yml just to restate the default credential_ref.
+	_, statErr := os.Stat(config.Path())
+	if accountID != "" || region != "" || statErr == nil {
+		if err := cfg.Save(); err != nil {
+			return fmt.Errorf("save config: %w", err)
+		}
 	}
 
 	if !opts.noVerify {
@@ -209,7 +218,17 @@ func storeSecret(v *view.View, st *keychain.Store, secret string, overwrite bool
 	if overwrite {
 		return st.SetAPIKeyOverwrite(secret)
 	}
-	return st.SetAPIKey(secret)
+	if err := st.SetAPIKey(secret); err != nil {
+		// A concurrent `nrq init` could win the keyring write between the
+		// HasAPIKey() pre-check and here (TOCTOU): map the raw ErrExists to
+		// the same actionable message set-credential gives.
+		if errors.Is(err, credstore.ErrExists) {
+			return errors.New(
+				"an API key is already in the keyring; re-run with --overwrite to replace it")
+		}
+		return err
+	}
+	return nil
 }
 
 func readSecret(o *initOptions) (string, error) {

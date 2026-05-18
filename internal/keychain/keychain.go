@@ -175,6 +175,13 @@ func (s *Store) SetAPIKey(v string) error { return s.set(v, false) }
 func (s *Store) SetAPIKeyOverwrite(v string) error { return s.set(v, true) }
 
 func (s *Store) set(v string, overwrite bool) error {
+	// Write-time empty guard: never store an empty api_key. The user-facing
+	// ingress paths already validate, but a future library/test caller that
+	// bypasses the command layer must get a clear rejection here rather
+	// than silently creating the ErrCorruptedAPIKey state.
+	if v == "" {
+		return errors.New("api_key must not be empty")
+	}
 	var opts []credstore.SetOpt
 	if overwrite {
 		opts = append(opts, credstore.WithOverwrite())
@@ -202,11 +209,15 @@ func (s *Store) DeleteAPIKey() error {
 	return nil
 }
 
-// HasAPIKey reports presence without returning the value (used by
-// `config show` / `init` overwrite prompts — §2.5: presence only).
+// HasAPIKey reports whether a USABLE api_key is present (non-empty), without
+// returning the value (§2.5: presence only). An empty stored value is NOT
+// "present": treating it as present would make the init no-clobber guard
+// (hadKey := HasAPIKey()) refuse to let a user repair a corrupted (empty)
+// entry without first knowing to run `config clear`. Empty ⇒ false here ⇒
+// init ingress proceeds and overwrites the corrupt entry.
 func (s *Store) HasAPIKey() bool {
-	ok, err := s.cs.Exists(s.profile, KeyAPIKey)
-	return err == nil && ok
+	v, err := s.cs.Get(s.profile, KeyAPIKey)
+	return err == nil && v != ""
 }
 
 // Clear removes the whole bundle under the active profile (config clear,

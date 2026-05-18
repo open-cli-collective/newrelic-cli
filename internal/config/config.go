@@ -114,8 +114,12 @@ func (c *Config) applyDefaults() {
 	}
 }
 
-// Save writes config.yml at 0600 under a 0700 directory. Non-secret, but
-// there is no reason for it to be world-readable.
+// Save writes config.yml at 0600 under a 0700 directory, ATOMICALLY
+// (write to a temp file in the same dir, then rename). A crash mid-write
+// must not leave a truncated config.yml: it carries credential_ref (§1.3),
+// and a partial file would silently fall back to DefaultCredentialRef on
+// the next Open() — pointing at a different keyring bundle than the user
+// configured. Non-secret, but no reason to be world-readable.
 func (c *Config) Save() error {
 	if err := os.MkdirAll(Dir(), 0o700); err != nil {
 		return fmt.Errorf("create config dir: %w", err)
@@ -124,11 +128,34 @@ func (c *Config) Save() error {
 	if err != nil {
 		return fmt.Errorf("marshal config: %w", err)
 	}
-	if err := os.WriteFile(Path(), data, 0o600); err != nil {
-		return fmt.Errorf("write config %s: %w", Path(), err)
+	tmp, err := os.CreateTemp(Dir(), ".config-*.yml.tmp")
+	if err != nil {
+		return fmt.Errorf("create temp config: %w", err)
+	}
+	tmpName := tmp.Name()
+	defer func() { _ = os.Remove(tmpName) }() // no-op once renamed
+	if err := tmp.Chmod(0o600); err != nil {
+		_ = tmp.Close()
+		return fmt.Errorf("chmod temp config: %w", err)
+	}
+	if _, err := tmp.Write(data); err != nil {
+		_ = tmp.Close()
+		return fmt.Errorf("write temp config: %w", err)
+	}
+	if err := tmp.Close(); err != nil {
+		return fmt.Errorf("close temp config: %w", err)
+	}
+	if err := os.Rename(tmpName, Path()); err != nil {
+		return fmt.Errorf("rename config into place %s: %w", Path(), err)
 	}
 	return nil
 }
+
+// LegacyCredentialsPath is the pre-credstore plaintext file location. It is
+// derived from Dir() so it provably tracks the SAME XDG/HOME resolution as
+// config.yml — the old code respected XDG_CONFIG_HOME, and the §1.8
+// migration must look exactly where the old code wrote.
+func LegacyCredentialsPath() string { return filepath.Join(Dir(), "credentials") }
 
 // ResolveAccountID returns the effective account ID and its source.
 // Precedence is env > config.yml (§2.5: non-secret runtime override useful

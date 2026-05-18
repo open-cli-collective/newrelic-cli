@@ -406,6 +406,32 @@ func TestConfigShow_JSON_NoSecretValue(t *testing.T) {
 	assert.NotContains(t, out, sentinel, "config show JSON must never contain the value")
 }
 
+// §1.10 fresh-install automation primitive: on a box with NO config.yml,
+// `nrq set-credential --key api_key --stdin` (no --ref) must work, falling
+// back to the default ref — not error demanding --ref.
+func TestSetCredential_FreshInstall_NoRefNoConfig(t *testing.T) {
+	testutil.Setup(t)
+	_, statErr := os.Stat(config.Path())
+	require.True(t, os.IsNotExist(statErr), "precondition: no config.yml")
+
+	rootCmd, opts := root.NewRootCmd()
+	var o, e bytes.Buffer
+	opts.Stdout, opts.Stderr = &o, &e
+	opts.Stdin = strings.NewReader(sentinel + "\n")
+	root.RegisterAll(rootCmd, opts, configcmd.Register)
+	rootCmd.SetArgs([]string{"set-credential", "--key", "api_key", "--stdin"})
+	require.NoError(t, rootCmd.Execute(), "fresh-install set-credential must not require --ref")
+	assert.NotContains(t, o.String()+e.String(), sentinel)
+
+	st, err := keychain.OpenNoMigrate()
+	require.NoError(t, err)
+	defer func() { _ = st.Close() }()
+	assert.Equal(t, "newrelic-cli/default", st.Ref())
+	got, err := st.APIKey()
+	require.NoError(t, err)
+	assert.Equal(t, sentinel, got)
+}
+
 // An invalid --ref fails up front with an actionable message naming the
 // flag — not deep inside OpenRef.
 func TestSetCredential_InvalidRef_Actionable(t *testing.T) {

@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"runtime"
 	"sort"
 	"strings"
@@ -121,14 +120,6 @@ func migrateLegacyOverwrite(s *Store, cfg *config.Config, overwrite bool) error 
 		return fmt.Errorf("migration could not save config.yml at %s: %w", s.ref, err)
 	}
 
-	// --overwrite that replaced a DIFFERENT existing keyring value is
-	// destructive — surface it so an accidental --overwrite is not silent
-	// (never the value, §1.12).
-	if plan.replacedExisting {
-		fmt.Fprintf(os.Stderr,
-			"warning: --overwrite replaced an existing, different api_key in keyring %s\n", s.ref)
-	}
-
 	// Phase 3: delete every legacy original. If ANY deleter fails the
 	// migration is incomplete — return the error (naming the specific
 	// source) and emit NO signal (nothing may claim "one-time operation"
@@ -142,11 +133,21 @@ func migrateLegacyOverwrite(s *Store, cfg *config.Config, overwrite bool) error 
 		}
 	}
 
-	// Phase 4: only now — full success boundary crossed — surface the signal
-	// for every field actually moved this run (§1.8 bans silent migration;
-	// §2.5 moves all three). Record _migration ONLY on a JSON run (recording
-	// it on a text run would leave a stale block a later JSON command in the
-	// same process could splice in).
+	// Phase 4: full success boundary crossed.
+	//
+	// --overwrite that replaced a DIFFERENT existing keyring value is
+	// destructive — surface it now (NOT before Phase 3, so the warning is
+	// never printed for a migration that then failed to complete; never
+	// the value, §1.12).
+	if plan.replacedExisting {
+		fmt.Fprintf(os.Stderr,
+			"warning: --overwrite replaced an existing, different api_key in keyring %s\n", s.ref)
+	}
+
+	// Surface the signal for every field actually moved this run (§1.8
+	// bans silent migration; §2.5 moves all three). Record _migration ONLY
+	// on a JSON run (recording it on a text run would leave a stale block a
+	// later JSON command in the same process could splice in).
 	if len(plan.changes) > 0 {
 		if output.IsJSON() {
 			output.RecordMigration(credstore.NewMigrationBlock(plan.changes...))
@@ -334,12 +335,17 @@ func discover() discovered {
 				label: fmt.Sprintf("macOS Keychain service %s (%s)",
 					legacyKeychainService, strings.Join(accounts, ", ")),
 				del: func() error {
+					// Best effort across every account so a transient
+					// denial on one does not strand the others; report
+					// the complete failure set (still returns non-nil so
+					// the outer Phase-3 abort + no-signal invariant holds).
+					var errs []error
 					for _, a := range accounts {
 						if err := keychainDelete(legacyKeychainService, a); err != nil {
-							return err
+							errs = append(errs, fmt.Errorf("%s/%s: %w", legacyKeychainService, a, err))
 						}
 					}
-					return nil
+					return errors.Join(errs...)
 				},
 			})
 		}
@@ -385,13 +391,11 @@ func discover() discovered {
 	return d
 }
 
-func legacyCredentialsPath() string {
-	if xdg := os.Getenv("XDG_CONFIG_HOME"); xdg != "" {
-		return filepath.Join(xdg, "newrelic-cli", "credentials")
-	}
-	home, _ := os.UserHomeDir()
-	return filepath.Join(home, ".config", "newrelic-cli", "credentials")
-}
+// legacyCredentialsPath delegates to config.LegacyCredentialsPath so the
+// §1.8 discovery looks at exactly the same XDG/HOME-resolved location the
+// old code wrote to and the new config.yml uses (single source of truth —
+// no XDG-divergence gap for users who ran the old nrq with XDG_CONFIG_HOME).
+func legacyCredentialsPath() string { return config.LegacyCredentialsPath() }
 
 // readLegacyFile parses the legacy flat key=value credentials file (NOT an
 // INI; no [sections]). Missing file → nil (the steady state, not an error).

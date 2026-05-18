@@ -37,21 +37,17 @@ func TestAdapter_RoundTrip(t *testing.T) {
 	assert.Equal(t, "newrelic-cli/default", st.Ref())
 }
 
-// A stored-but-empty api_key is a corrupted entry, distinctly reported —
-// NOT folded into ErrMissingAPIKey (which would mask backend corruption).
-func TestAPIKey_EmptyStored_DistinctFromMissing(t *testing.T) {
+// Adapter-level no-empty write guard (#6): the public setter rejects an
+// empty value rather than creating a corrupted entry.
+func TestSetAPIKey_RejectsEmpty(t *testing.T) {
 	testutil.Setup(t)
 	st, err := keychain.Open()
 	require.NoError(t, err)
 	defer func() { _ = st.Close() }()
-	require.NoError(t, st.SetAPIKey("")) // backend stores empty
-
-	_, err = st.APIKey()
+	err = st.SetAPIKey("")
 	require.Error(t, err)
-	assert.True(t, errors.Is(err, keychain.ErrCorruptedAPIKey),
-		"empty stored value must be ErrCorruptedAPIKey")
-	assert.False(t, errors.Is(err, keychain.ErrMissingAPIKey),
-		"must NOT be indistinguishable from never-set")
+	assert.Contains(t, err.Error(), "must not be empty")
+	assert.False(t, st.HasAPIKey(), "rejected write must not create an entry")
 }
 
 func TestAdapter_Clear(t *testing.T) {

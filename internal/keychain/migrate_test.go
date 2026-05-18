@@ -217,6 +217,36 @@ func TestDiscover_LabelsLegacyFileSource(t *testing.T) {
 	assert.True(t, found, "legacy file deleter must carry a 'file <path>' label; got %+v", d.deleters)
 }
 
+// A backend that holds an empty api_key (external/legacy corruption — the
+// adapter's own setter now rejects empty, but a pre-existing or
+// out-of-band empty entry can still exist) must be reported distinctly as
+// ErrCorruptedAPIKey, NOT folded into ErrMissingAPIKey (which would mask
+// corruption and send the user down the wrong remediation path). #2.
+func TestAPIKey_EmptyStored_DistinctFromMissing(t *testing.T) {
+	tmp := t.TempDir()
+	t.Setenv("HOME", tmp)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(tmp, "xdg"))
+	t.Setenv("NEWRELIC_CLI_KEYRING_BACKEND", "file")
+	t.Setenv("NEWRELIC_CLI_KEYRING_PASSPHRASE", "test-pass")
+	t.Setenv(legacyKeychainScanDisabledEnv, "1")
+
+	cfg := &config.Config{CredentialRef: "newrelic-cli/default"}
+	st, err := openWith(cfg, false, false)
+	require.NoError(t, err)
+	defer func() { _ = st.Close() }()
+
+	// Plant an empty value via the underlying store, bypassing the
+	// adapter's write-time empty guard (simulating backend/legacy
+	// corruption).
+	require.NoError(t, st.cs.Set(st.profile, KeyAPIKey, "", credstore.WithOverwrite()))
+
+	_, err = st.APIKey()
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, ErrCorruptedAPIKey), "empty stored value → ErrCorruptedAPIKey")
+	assert.False(t, errors.Is(err, ErrMissingAPIKey), "must NOT look like never-set")
+	assert.False(t, st.HasAPIKey(), "HasAPIKey must be false for an empty entry (so init can repair it)")
+}
+
 func TestConflictErr_NoValueLeak(t *testing.T) {
 	err := secretConflictErr(svc, prof, ref, []secretCandidate{
 		{location: "file:/p#api_key", value: "SUPER-SECRET"},

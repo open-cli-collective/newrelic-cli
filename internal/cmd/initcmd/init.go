@@ -263,7 +263,10 @@ func promptSecret(o *initOptions, label string) (string, error) {
 }
 
 func prompt(o *initOptions, label string) string {
-	fmt.Fprint(o.Stdout, label)
+	// Prompts go to stderr (like promptSecret): stdout is the data channel
+	// (`nrq init -o json > out`, CI, 1Password shell plugin) and a prompt
+	// on stdout would corrupt the captured stream.
+	fmt.Fprint(o.Stderr, label)
 	line, _ := bufio.NewReader(o.Stdin).ReadString('\n')
 	return strings.TrimSpace(line)
 }

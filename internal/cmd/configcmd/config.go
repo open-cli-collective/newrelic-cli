@@ -1,422 +1,352 @@
+// Package configcmd implements `nrq config …` plus the top-level
+// `nrq set-credential` ingress command, reworked for the cli-common
+// credstore single-key bundle per the Open CLI Collective Secret-Handling
+// Standard §2.5. The API key lives only in the OS keyring; account_id and
+// region are non-secret config.yml fields.
 package configcmd
 
 import (
-	"bufio"
+	"errors"
 	"fmt"
+	"io"
+	"os"
 	"strings"
 
 	"github.com/spf13/cobra"
 
+	"github.com/open-cli-collective/cli-common/credstore"
+
 	"github.com/open-cli-collective/newrelic-cli/internal/cmd/root"
 	"github.com/open-cli-collective/newrelic-cli/internal/config"
-	"github.com/open-cli-collective/newrelic-cli/internal/confirm"
+	"github.com/open-cli-collective/newrelic-cli/internal/keychain"
 	"github.com/open-cli-collective/newrelic-cli/internal/validate"
 	"github.com/open-cli-collective/newrelic-cli/internal/view"
 )
 
-// Register adds the config commands to the root command
+// Register adds `config` (with subcommands) and the top-level
+// `set-credential` ingress command to the root command.
 func Register(rootCmd *cobra.Command, opts *root.Options) {
 	configCmd := &cobra.Command{
 		Use:   "config",
-		Short: "Configure nrq credentials",
+		Short: "Configure nrq (non-secret config.yml + credential diagnostics)",
 	}
-
-	configCmd.AddCommand(newSetAPIKeyCmd(opts))
-	configCmd.AddCommand(newDeleteAPIKeyCmd(opts))
-	configCmd.AddCommand(newSetAccountIDCmd(opts))
-	configCmd.AddCommand(newDeleteAccountIDCmd(opts))
-	configCmd.AddCommand(newSetRegionCmd(opts))
+	configCmd.AddCommand(newSetCmd(opts))
+	configCmd.AddCommand(newSetAccountIDAliasCmd(opts))
+	configCmd.AddCommand(newSetRegionAliasCmd(opts))
+	configCmd.AddCommand(newSetAPIKeyDeprecatedCmd(opts))
 	configCmd.AddCommand(newShowCmd(opts))
 	configCmd.AddCommand(newTestCmd(opts))
 	configCmd.AddCommand(newClearCmd(opts))
-	configCmd.AddCommand(newFixPermissionsCmd(opts))
 
 	rootCmd.AddCommand(configCmd)
+	rootCmd.AddCommand(newSetCredentialCmd(opts))
 }
 
-func newSetAPIKeyCmd(opts *root.Options) *cobra.Command {
-	return &cobra.Command{
-		Use:   "set-api-key [key]",
-		Short: "Set the New Relic API key",
-		Long: `Set the New Relic API key for authentication.
+// ---- nrq set-credential (§1.5.2 ingress) -----------------------------------
 
-On macOS: Key is stored securely in the system Keychain.
-On Linux: Key is stored in ~/.config/newrelic-cli/credentials (file permissions 0600).
+type setCredentialOptions struct {
+	*root.Options
+	ref       string
+	key       string
+	stdin     bool
+	fromEnv   string
+	overwrite bool
+}
 
-If no key is provided as an argument, you will be prompted to enter it.`,
-		Args: cobra.MaximumNArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return runSetAPIKey(opts, args)
+func newSetCredentialCmd(opts *root.Options) *cobra.Command {
+	o := &setCredentialOptions{Options: opts}
+	cmd := &cobra.Command{
+		Use:   "set-credential --key api_key (--stdin | --from-env VAR)",
+		Short: "Store a secret in the OS keyring (low-level scripted ingress)",
+		Long: `set-credential is the low-level, single-secret, scriptable ingress
+path (§1.5.2). It writes one key to the OS keyring. The value is read from
+stdin or a named environment variable — NEVER from a flag or positional
+argument (those leak via ps / shell history).
+
+Examples:
+  op read "op://Vault/New Relic/api key" | nrq set-credential --key api_key --stdin
+  nrq set-credential --key api_key --from-env NEWRELIC_API_KEY
+  nrq set-credential --ref newrelic-cli/default --key api_key --stdin`,
+		Args: cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			return runSetCredential(o)
 		},
 	}
+	cmd.Flags().StringVar(&o.ref, "ref", "", "Credential ref (default: config.yml credential_ref)")
+	cmd.Flags().StringVar(&o.key, "key", "", "Bundle key to set (only \"api_key\" is allowed)")
+	cmd.Flags().BoolVar(&o.stdin, "stdin", false, "Read the secret value from stdin")
+	cmd.Flags().StringVar(&o.fromEnv, "from-env", "", "Read the secret value from this environment variable")
+	cmd.Flags().BoolVar(&o.overwrite, "overwrite", false, "Replace an existing keyring value (refuses by default)")
+	return cmd
 }
 
-func runSetAPIKey(opts *root.Options, args []string) error {
-	v := opts.View()
+func runSetCredential(o *setCredentialOptions) error {
+	v := o.View()
 
-	if !config.IsSecureStorage() {
-		v.Warning("Warning: On Linux, your API key will be stored in a config file")
-		v.Println("         (~/.config/newrelic-cli/credentials) with restricted permissions (0600).")
-		v.Println("         This is less secure than macOS Keychain storage.")
-		v.Println("")
+	if o.key != keychain.KeyAPIKey {
+		return fmt.Errorf("unsupported --key %q: nrq's only bundle key is %q (§1.5.2)",
+			o.key, keychain.KeyAPIKey)
 	}
-
-	var apiKey string
-	if len(args) > 0 {
-		apiKey = args[0]
-	} else {
-		fmt.Fprint(opts.Stdout, "Enter New Relic API key: ")
-		reader := bufio.NewReader(opts.Stdin)
-		input, err := reader.ReadString('\n')
-		if err != nil {
-			return fmt.Errorf("failed to read input: %w", err)
+	if o.stdin == (o.fromEnv != "") {
+		return errors.New("provide exactly one of --stdin or --from-env (the value is never a flag/positional — §1.5)")
+	}
+	// --ref is optional: when omitted, OpenRef("") inherits config.yml's
+	// credential_ref, or DefaultCredentialRef when there is no config.yml
+	// (the §1.10 fresh-install automation primitive — `op read | nrq
+	// set-credential --key api_key --stdin` must work with no prior
+	// config). When provided, validate it up front so an invalid value
+	// fails with a message naming the --ref flag, not deep inside OpenRef.
+	if o.ref != "" {
+		if _, _, err := credstore.ParseRef(o.ref); err != nil {
+			return fmt.Errorf("invalid --ref %q: %w (expected <service>/<profile>, e.g. %s)",
+				o.ref, err, config.DefaultCredentialRef)
 		}
-		apiKey = strings.TrimSpace(input)
 	}
 
-	// Validate API key
-	warning, err := validate.APIKey(apiKey)
+	var secret string
+	if o.stdin {
+		b, err := io.ReadAll(o.Stdin)
+		if err != nil {
+			return fmt.Errorf("read secret from stdin: %w", err)
+		}
+		secret = strings.TrimRight(string(b), "\r\n")
+	} else {
+		secret = os.Getenv(o.fromEnv)
+		if secret == "" {
+			return fmt.Errorf("environment variable %s is empty or unset", o.fromEnv)
+		}
+	}
+	if warning, err := validate.APIKey(secret); err != nil {
+		return err
+	} else if warning != "" {
+		v.Warning("%s", warning)
+	}
+
+	st, err := keychain.OpenRef(o.ref) // pure ingress: no migration
 	if err != nil {
 		return err
 	}
-	if warning != "" {
-		v.Warning("Warning: " + warning)
-	}
+	defer func() { _ = st.Close() }()
 
-	if err := config.SetAPIKey(apiKey); err != nil {
-		return fmt.Errorf("failed to store API key: %w", err)
+	// No-clobber by default (§1.5/§1.11): an existing keyring value is never
+	// silently replaced — the user must pass --overwrite.
+	if st.HasAPIKey() && !o.overwrite {
+		return fmt.Errorf("%s already set at %s; pass --overwrite to replace it", o.key, st.Ref())
 	}
-
-	if config.IsSecureStorage() {
-		v.Success("API key stored securely in Keychain")
+	if o.overwrite {
+		err = st.SetAPIKeyOverwrite(secret)
 	} else {
-		v.Success("API key stored in ~/.config/newrelic-cli/credentials")
+		err = st.SetAPIKey(secret)
 	}
+	if err != nil {
+		if errors.Is(err, credstore.ErrExists) {
+			return fmt.Errorf("%s already set at %s; pass --overwrite to replace it", o.key, st.Ref())
+		}
+		return err
+	}
+	v.Success("Stored %s in the OS keyring at %s", o.key, st.Ref())
 	return nil
 }
 
-// deleteAPIKeyOptions holds options for the delete-api-key command
-type deleteAPIKeyOptions struct {
+// ---- config set / aliases (non-secret config.yml) --------------------------
+
+type setOptions struct {
 	*root.Options
-	force bool
+	accountID string
+	region    string
 }
 
-func newDeleteAPIKeyCmd(opts *root.Options) *cobra.Command {
-	deleteOpts := &deleteAPIKeyOptions{Options: opts}
-
+func newSetCmd(opts *root.Options) *cobra.Command {
+	o := &setOptions{Options: opts}
 	cmd := &cobra.Command{
-		Use:   "delete-api-key",
-		Short: "Delete the stored New Relic API key",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return runDeleteAPIKey(deleteOpts)
+		Use:   "set [--account-id ID] [--region US|EU]",
+		Short: "Set non-secret config (account ID, region) in config.yml",
+		Long: `Write non-secret configuration to config.yml. These are not
+credentials, so flag/positional values are fine (only secret-bearing
+ingress is restricted — §1.5). For the API key use 'nrq init' or
+'nrq set-credential'.`,
+		Args: cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			return runSet(o.Options, o.accountID, o.region)
 		},
 	}
-
-	cmd.Flags().BoolVarP(&deleteOpts.force, "force", "f", false, "Skip confirmation prompt")
-
+	cmd.Flags().StringVar(&o.accountID, "account-id", "", "New Relic account ID")
+	cmd.Flags().StringVar(&o.region, "region", "", "New Relic region (US or EU)")
 	return cmd
 }
 
-func runDeleteAPIKey(opts *deleteAPIKeyOptions) error {
+func runSet(opts *root.Options, accountID, region string) error {
 	v := opts.View()
-
-	if !opts.force {
-		p := &confirm.Prompter{
-			In:  opts.Stdin,
-			Out: opts.Stderr,
-		}
-		if !p.Confirm("Delete stored API key?") {
-			v.Warning("Operation canceled")
-			return nil
-		}
+	if accountID == "" && region == "" {
+		return errors.New("nothing to set: pass --account-id and/or --region")
 	}
-
-	if err := config.DeleteAPIKey(); err != nil {
-		return fmt.Errorf("failed to delete API key: %w", err)
-	}
-
-	if config.IsSecureStorage() {
-		v.Success("API key deleted from Keychain")
-	} else {
-		v.Success("API key deleted from config file")
-	}
-	return nil
-}
-
-func newSetAccountIDCmd(opts *root.Options) *cobra.Command {
-	return &cobra.Command{
-		Use:   "set-account-id <account-id>",
-		Short: "Set the New Relic account ID",
-		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return runSetAccountID(opts, args[0])
-		},
-	}
-}
-
-func runSetAccountID(opts *root.Options, accountID string) error {
-	v := opts.View()
-
-	// Validate account ID
-	if err := validate.AccountID(accountID); err != nil {
+	cfg, err := config.Load()
+	if err != nil {
 		return err
 	}
-
-	if err := config.SetAccountID(accountID); err != nil {
-		return fmt.Errorf("failed to store account ID: %w", err)
+	if accountID != "" {
+		if err := validate.AccountID(accountID); err != nil {
+			return err
+		}
+		cfg.AccountID = accountID
 	}
-
-	if config.IsSecureStorage() {
-		v.Success("Account ID stored securely in Keychain")
-	} else {
-		v.Success("Account ID stored in config file")
+	if region != "" {
+		region = strings.ToUpper(region)
+		if err := validate.Region(region); err != nil {
+			return err
+		}
+		cfg.Region = region
+	}
+	if err := cfg.Save(); err != nil {
+		return fmt.Errorf("save config: %w", err)
+	}
+	if accountID != "" {
+		v.Success("account_id set to %s in %s", accountID, config.Path())
+	}
+	if region != "" {
+		v.Success("region set to %s in %s", strings.ToUpper(region), config.Path())
 	}
 	return nil
 }
 
-// deleteAccountIDOptions holds options for the delete-account-id command
-type deleteAccountIDOptions struct {
-	*root.Options
-	force bool
-}
-
-func newDeleteAccountIDCmd(opts *root.Options) *cobra.Command {
-	deleteOpts := &deleteAccountIDOptions{Options: opts}
-
-	cmd := &cobra.Command{
-		Use:   "delete-account-id",
-		Short: "Delete the stored New Relic account ID",
+// set-account-id / set-region: thin deprecating aliases of `config set`,
+// retained for one deprecation cycle (§2.5). Non-secret, so positional args
+// are fine.
+func newSetAccountIDAliasCmd(opts *root.Options) *cobra.Command {
+	return &cobra.Command{
+		Use:        "set-account-id <account-id>",
+		Short:      "Deprecated: use `nrq config set --account-id`",
+		Deprecated: "use `nrq config set --account-id <id>`",
+		Args:       cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runDeleteAccountID(deleteOpts)
+			return runSet(opts, args[0], "")
 		},
 	}
+}
 
-	cmd.Flags().BoolVarP(&deleteOpts.force, "force", "f", false, "Skip confirmation prompt")
+func newSetRegionAliasCmd(opts *root.Options) *cobra.Command {
+	return &cobra.Command{
+		Use:        "set-region <region>",
+		Short:      "Deprecated: use `nrq config set --region`",
+		Deprecated: "use `nrq config set --region <US|EU>`",
+		Args:       cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runSet(opts, "", args[0])
+		},
+	}
+}
 
+// ---- config set-api-key: hard-deprecated (§1.5 / §2.5) ---------------------
+
+// newSetAPIKeyDeprecatedCmd accepts no value by ANY path — positional, flag,
+// or the old no-arg interactive prompt. Every invocation exits nonzero with
+// the migration message. Positional secret ingress is banned alongside
+// flag-passed (§1.5).
+func newSetAPIKeyDeprecatedCmd(opts *root.Options) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:                "set-api-key",
+		Short:              "Removed: the API key now lives in the OS keyring",
+		DisableFlagParsing: true, // a stray --api-key=... must not look valid
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			return setAPIKeyRemovedErr()
+		},
+	}
 	return cmd
 }
 
-func runDeleteAccountID(opts *deleteAccountIDOptions) error {
-	v := opts.View()
-
-	if !opts.force {
-		p := &confirm.Prompter{
-			In:  opts.Stdin,
-			Out: opts.Stderr,
-		}
-		if !p.Confirm("Delete stored account ID?") {
-			v.Warning("Operation canceled")
-			return nil
-		}
-	}
-
-	if err := config.DeleteAccountID(); err != nil {
-		return fmt.Errorf("failed to delete account ID: %w", err)
-	}
-
-	if config.IsSecureStorage() {
-		v.Success("Account ID deleted from Keychain")
-	} else {
-		v.Success("Account ID deleted from config file")
-	}
-	return nil
+func setAPIKeyRemovedErr() error {
+	return errors.New(
+		"`nrq config set-api-key` is removed: the API key is no longer stored on disk " +
+			"or accepted as a positional/flag/prompted value (§1.5). Ingest it via the keyring instead:\n" +
+			"  nrq set-credential --ref " + config.DefaultCredentialRef + " --key api_key --stdin\n" +
+			"  op read \"op://Vault/New Relic/api key\" | nrq set-credential --key api_key --stdin\n" +
+			"  nrq init")
 }
 
-func newSetRegionCmd(opts *root.Options) *cobra.Command {
-	return &cobra.Command{
-		Use:   "set-region <region>",
-		Short: "Set the New Relic region (US or EU)",
-		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return runSetRegion(opts, args[0])
-		},
-	}
-}
+// ---- config show (§2.5 diagnostic; never the secret value) -----------------
 
-func runSetRegion(opts *root.Options, region string) error {
-	v := opts.View()
-
-	region = strings.ToUpper(region)
-
-	// Validate region
-	if err := validate.Region(region); err != nil {
-		return err
-	}
-
-	if err := config.SetRegion(region); err != nil {
-		return fmt.Errorf("failed to store region: %w", err)
-	}
-
-	v.Success("Region set to %s", region)
-	return nil
+type showStatus struct {
+	CredentialRef    string `json:"credential_ref"`
+	Backend          string `json:"backend"`
+	BackendSource    string `json:"backend_source"`
+	PassphraseSource string `json:"passphrase_source,omitempty"`
+	APIKeyPresent    bool   `json:"api_key_present"`
+	AccountID        string `json:"account_id,omitempty"`
+	AccountIDSource  string `json:"account_id_source"`
+	Region           string `json:"region"`
+	RegionSource     string `json:"region_source"`
 }
 
 func newShowCmd(opts *root.Options) *cobra.Command {
 	return &cobra.Command{
 		Use:   "show",
-		Short: "Show current configuration status",
-		RunE: func(cmd *cobra.Command, args []string) error {
+		Short: "Show credential/config status (no secret values)",
+		RunE: func(cmd *cobra.Command, _ []string) error {
 			return runShow(opts)
 		},
 	}
 }
 
-// ConfigStatus represents configuration status for JSON output
-// NOTE: API key value is intentionally NOT included for security
-type ConfigStatus struct {
-	APIKeyConfigured bool   `json:"api_key_configured"`
-	APIKeySource     string `json:"api_key_source,omitempty"`
-	AccountID        string `json:"account_id,omitempty"`
-	AccountIDSource  string `json:"account_id_source,omitempty"`
-	Region           string `json:"region"`
-	RegionSource     string `json:"region_source"`
-	StorageType      string `json:"storage_type"`
-}
-
 func runShow(opts *root.Options) error {
 	v := opts.View()
-	status := config.GetCredentialStatus()
+	cfg, err := config.Load()
+	if err != nil {
+		return err
+	}
+	// OpenNoMigrate: show is the diagnostic and must stay usable during an
+	// unresolved §1.8 conflict (running migration first would fail it and
+	// hide the very state the user needs to see to remediate).
+	st, err := keychain.OpenNoMigrate()
+	if err != nil {
+		return err
+	}
+	defer func() { _ = st.Close() }()
 
-	// Check for permission warnings (Linux only)
-	if warning := config.CheckPermissions(); warning != "" {
-		v.Warning(warning)
-		v.Println("Run 'nrq config fix-permissions' to correct this")
-		v.Println("")
+	backend, bsrc := st.Backend()
+	accountID, aSrc := cfg.ResolveAccountID()
+	region, rSrc := cfg.ResolveRegion()
+	status := showStatus{
+		CredentialRef:   st.Ref(),
+		Backend:         string(backend),
+		BackendSource:   string(bsrc),
+		APIKeyPresent:   st.HasAPIKey(),
+		AccountID:       accountID,
+		AccountIDSource: string(aSrc),
+		Region:          region,
+		RegionSource:    string(rSrc),
+	}
+	if backend == credstore.BackendFile {
+		status.PassphraseSource = keychain.PassphraseSource(st.Service())
 	}
 
-	// Build configuration status
-	configStatus := ConfigStatus{
-		Region:      config.GetRegion(),
-		StorageType: "config_file",
-	}
-
-	if config.IsSecureStorage() {
-		configStatus.StorageType = "keychain"
-	}
-
-	// API Key
-	var apiKeyMasked string
-	if apiKey, err := config.GetAPIKey(); err == nil {
-		configStatus.APIKeyConfigured = true
-		if status["api_key_env"] {
-			configStatus.APIKeySource = "environment"
-		} else {
-			configStatus.APIKeySource = "stored"
-		}
-		// Mask API key for display (first 8 + last 4)
-		if len(apiKey) > 12 {
-			apiKeyMasked = apiKey[:8] + strings.Repeat("*", len(apiKey)-12) + apiKey[len(apiKey)-4:]
-		} else {
-			apiKeyMasked = strings.Repeat("*", len(apiKey))
-		}
-	}
-
-	// Account ID
-	if accountID, err := config.GetAccountID(); err == nil {
-		configStatus.AccountID = accountID
-		if status["account_id_env"] {
-			configStatus.AccountIDSource = "environment"
-		} else {
-			configStatus.AccountIDSource = "stored"
-		}
-	}
-
-	// Region source
-	if status["region_stored"] {
-		configStatus.RegionSource = "stored"
-	} else if status["region_env"] {
-		configStatus.RegionSource = "environment"
-	} else {
-		configStatus.RegionSource = "default"
-	}
-
-	// JSON output - never include API key value
 	if v.Format == view.FormatJSON {
-		return v.JSON(configStatus)
+		return v.JSON(status)
 	}
 
-	// Table/Plain output
-	v.Println("Configuration Status:")
+	v.Println("Configuration status:")
 	v.Println("")
-
-	// API Key
-	if configStatus.APIKeyConfigured {
-		v.Print("  API Key:    %s (%s)\n", apiKeyMasked, configStatus.APIKeySource)
-	} else {
-		v.Println("  API Key:    Not configured")
+	v.Print("  Credential ref: %s\n", status.CredentialRef)
+	v.Print("  Backend:        %s (%s)\n", status.Backend, status.BackendSource)
+	if status.PassphraseSource != "" {
+		v.Print("  Passphrase:     %s\n", status.PassphraseSource)
 	}
-
-	// Account ID
-	if configStatus.AccountID != "" {
-		v.Print("  Account ID: %s (%s)\n", configStatus.AccountID, configStatus.AccountIDSource)
+	if status.APIKeyPresent {
+		v.Println("  API key:        present (in keyring)")
 	} else {
-		v.Println("  Account ID: Not configured")
+		v.Println("  API key:        not set — run `nrq init` or `nrq set-credential`")
 	}
-
-	// Region
-	v.Print("  Region:     %s (%s)\n", configStatus.Region, configStatus.RegionSource)
-
-	v.Println("")
-
-	// Storage type
-	if config.IsSecureStorage() {
-		v.Println("Storage: macOS Keychain (secure)")
+	if status.AccountID != "" {
+		v.Print("  Account ID:     %s (%s)\n", status.AccountID, status.AccountIDSource)
 	} else {
-		v.Println("Storage: Config file (~/.config/newrelic-cli/credentials)")
+		v.Println("  Account ID:     not set")
 	}
-
+	v.Print("  Region:         %s (%s)\n", status.Region, status.RegionSource)
 	return nil
 }
 
-func newFixPermissionsCmd(opts *root.Options) *cobra.Command {
-	return &cobra.Command{
-		Use:   "fix-permissions",
-		Short: "Fix config file permissions to 0600 (Linux only)",
-		Long: `Fix the permissions on the credentials file to ensure they are secure.
+// ---- config test (connection smoke; routes through the lazy resolver) ------
 
-On Linux, the credentials file should have permissions 0600 (owner read/write only).
-On macOS, this command has no effect as credentials are stored in the Keychain.`,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return runFixPermissions(opts)
-		},
-	}
-}
-
-func runFixPermissions(opts *root.Options) error {
-	v := opts.View()
-
-	if config.IsSecureStorage() {
-		v.Println("On macOS, credentials are stored in the Keychain - no file permissions to fix")
-		return nil
-	}
-
-	if err := config.FixPermissions(); err != nil {
-		return fmt.Errorf("failed to fix permissions: %w", err)
-	}
-
-	v.Success("Permissions fixed to 0600")
-	return nil
-}
-
-func newTestCmd(opts *root.Options) *cobra.Command {
-	return &cobra.Command{
-		Use:   "test",
-		Short: "Test connection to New Relic",
-		Long: `Test the configured credentials by connecting to New Relic.
-
-Verifies:
-  - API key is valid
-  - Account is accessible (if account ID is configured)
-  - NerdGraph API is responding`,
-		Example: `  nrq config test`,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return runTest(opts)
-		},
-	}
-}
-
-// ConnectionTestStatus represents the test result for JSON output
-type ConnectionTestStatus struct {
+type connectionTestStatus struct {
 	Success       bool   `json:"success"`
 	APIKeyValid   bool   `json:"api_key_valid"`
 	AccountAccess bool   `json:"account_access,omitempty"`
@@ -427,26 +357,29 @@ type ConnectionTestStatus struct {
 	Error         string `json:"error,omitempty"`
 }
 
+func newTestCmd(opts *root.Options) *cobra.Command {
+	return &cobra.Command{
+		Use:   "test",
+		Short: "Test connection to New Relic",
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			return runTest(opts)
+		},
+	}
+}
+
 func runTest(opts *root.Options) error {
 	v := opts.View()
-
-	v.Println("Testing connection to New Relic...")
-	v.Println("")
-
-	client, err := opts.APIClient()
+	client, err := opts.APIClient() // lazy resolver: opens keyring, runs §1.8
 	if err != nil {
 		v.Error("Failed to create client: %v", err)
 		return err
 	}
-
 	result, err := client.TestConnection()
 	if err != nil {
 		v.Error("Test failed: %v", err)
 		return err
 	}
-
-	// Build status for JSON output
-	status := ConnectionTestStatus{
+	status := connectionTestStatus{
 		Success:       result.APIKeyValid && (result.AccountAccess || client.AccountID.IsEmpty()),
 		APIKeyValid:   result.APIKeyValid,
 		AccountAccess: result.AccountAccess,
@@ -455,20 +388,12 @@ func runTest(opts *root.Options) error {
 		UserEmail:     result.UserEmail,
 		Region:        result.Region,
 	}
-
 	if result.Error != nil {
 		status.Error = result.ErrorMessage
 	}
-
 	if v.Format == view.FormatJSON {
 		return v.JSON(status)
 	}
-
-	// Table output
-	region := config.GetRegion()
-	v.Print("Region: %s\n", region)
-	v.Println("")
-
 	if result.APIKeyValid {
 		v.Success("API key valid")
 		if result.UserEmail != "" {
@@ -477,105 +402,117 @@ func runTest(opts *root.Options) error {
 	} else {
 		v.Error("API key invalid or expired")
 		if result.ErrorMessage != "" {
-			v.Println("")
 			v.Println("Error: " + result.ErrorMessage)
 		}
-		v.Println("")
-		v.Println("Check your credentials with: nrq config show")
 		v.Println("Reconfigure with: nrq init")
-		return fmt.Errorf("API key validation failed")
+		return errors.New("API key validation failed")
 	}
-
-	// Check account access if configured
-	accountID, accountErr := config.GetAccountID()
-	if accountErr == nil && accountID != "" {
+	if !client.AccountID.IsEmpty() {
 		if result.AccountAccess {
 			v.Success("Account %d accessible", result.AccountID)
-			if result.AccountName != "" {
-				v.Print("  Name: %s\n", result.AccountName)
-			}
 		} else {
-			v.Error("Account %s not accessible", accountID)
-			if result.ErrorMessage != "" {
-				v.Println("")
-				v.Println("Error: " + result.ErrorMessage)
-			}
-			return fmt.Errorf("account access failed")
+			v.Error("Account not accessible")
+			return errors.New("account access failed")
 		}
 	}
-
-	v.Success("NerdGraph API responding")
-
-	v.Println("")
 	v.Success("Connection test passed!")
 	return nil
 }
 
-// clearOptions holds options for the clear command
+// ---- config clear (§1.7: idempotent, non-interactive) ----------------------
+
 type clearOptions struct {
 	*root.Options
-	force bool
+	all    bool
+	dryRun bool
 }
 
 func newClearCmd(opts *root.Options) *cobra.Command {
-	clearOpts := &clearOptions{Options: opts}
-
+	o := &clearOptions{Options: opts}
 	cmd := &cobra.Command{
 		Use:   "clear",
-		Short: "Clear all stored credentials",
-		Long: `Remove all stored credentials (API key, account ID, and region).
+		Short: "Remove the stored API key (and with --all, config.yml too)",
+		Long: `Remove credentials. Idempotent and non-interactive (exit 0 even
+if nothing was stored) — safe for automation.
 
-This is a convenience command equivalent to running:
-  nrq config delete-api-key
-  nrq config delete-account-id
+  clear         removes the active ref's keyring keys (the api_key).
+  clear --all   also removes config.yml (account_id, region, credential_ref).
+  clear --dry-run  reports what would be removed, changes nothing.
 
-Note: Environment variables (NEWRELIC_*) will still be used if set.`,
-		Example: `  nrq config clear
-  nrq config clear --force`,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return runClear(clearOpts)
+nrq has no cache directories, so --all scope is exactly {keyring bundle,
+config.yml}.`,
+		Args: cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			return runClear(o)
 		},
 	}
-
-	cmd.Flags().BoolVarP(&clearOpts.force, "force", "f", false, "Skip confirmation prompt")
-
+	cmd.Flags().BoolVar(&o.all, "all", false, "Also remove config.yml")
+	cmd.Flags().BoolVar(&o.dryRun, "dry-run", false, "Report what would be removed; change nothing")
 	return cmd
 }
 
-func runClear(opts *clearOptions) error {
-	v := opts.View()
+func runClear(o *clearOptions) error {
+	v := o.View()
+	// OpenNoMigrate: clear is the advertised §1.8 conflict remediation; if
+	// migration ran first it would fail with the conflict error before clear
+	// could delete the keyring entry, leaving the user no way out.
+	st, err := keychain.OpenNoMigrate()
+	if err != nil {
+		return err
+	}
+	defer func() { _ = st.Close() }()
 
-	if !opts.force {
-		p := &confirm.Prompter{
-			In:  opts.Stdin,
-			Out: opts.Stderr,
+	if o.dryRun {
+		if st.HasAPIKey() {
+			v.Println("would remove: api_key from keyring " + st.Ref())
+		} else {
+			v.Println("would remove: (no api_key in keyring)")
 		}
-		if !p.Confirm("Clear all stored credentials (API key, account ID, region)?") {
-			v.Warning("Operation canceled")
-			return nil
+		if o.all {
+			if _, statErr := os.Stat(config.Path()); statErr == nil {
+				v.Println("would remove: " + config.Path())
+			} else {
+				v.Println("would remove: (no config.yml)")
+			}
+			if _, statErr := os.Stat(config.LegacyCredentialsPath()); statErr == nil {
+				v.Println("would remove: " + config.LegacyCredentialsPath() + " (legacy plaintext)")
+			}
 		}
+		return nil
 	}
 
-	errors := config.ClearAll()
-
-	if len(errors) > 0 {
-		for _, err := range errors {
-			v.Warning(err.Error())
-		}
-		return fmt.Errorf("some credentials could not be cleared")
+	removed, err := st.Clear()
+	if err != nil {
+		return fmt.Errorf("clear keyring bundle: %w", err)
 	}
-
-	if config.IsSecureStorage() {
-		v.Success("Cleared API key from Keychain")
-		v.Success("Cleared account ID from Keychain")
+	if len(removed) > 0 {
+		v.Success("Removed %d key(s) from keyring %s", len(removed), st.Ref())
 	} else {
-		v.Success("Cleared API key from config file")
-		v.Success("Cleared account ID from config file")
+		v.Println("No keyring keys to remove (already clear)")
 	}
-	v.Success("Cleared region setting")
 
-	v.Println("")
-	v.Println("Note: Environment variables (NEWRELIC_*) will still be used if set.")
-
+	if o.all {
+		if err := os.Remove(config.Path()); err != nil {
+			if !os.IsNotExist(err) {
+				return fmt.Errorf("remove %s: %w", config.Path(), err)
+			}
+			v.Println("No config.yml to remove (already clear)")
+		} else {
+			v.Success("Removed %s", config.Path())
+		}
+		// Also scrub the legacy plaintext credentials file. Without this a
+		// `clear --all` on a workstation that never ran the §1.8 migration
+		// leaves the legacy secret on disk, and the next Open() re-migrates
+		// it back into the keyring — silently undoing the wipe.
+		if lp := config.LegacyCredentialsPath(); lp != "" {
+			if err := os.Remove(lp); err != nil {
+				if !os.IsNotExist(err) {
+					return fmt.Errorf("remove %s: %w", lp, err)
+				}
+			} else {
+				v.Success("Removed %s (legacy plaintext)", lp)
+			}
+		}
+	}
 	return nil
 }

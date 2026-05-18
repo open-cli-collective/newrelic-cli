@@ -8,14 +8,16 @@ import (
 
 	"github.com/open-cli-collective/newrelic-cli/api"
 	"github.com/open-cli-collective/newrelic-cli/internal/config"
+	"github.com/open-cli-collective/newrelic-cli/internal/keychain"
+	"github.com/open-cli-collective/newrelic-cli/internal/output"
 	"github.com/open-cli-collective/newrelic-cli/internal/version"
 	"github.com/open-cli-collective/newrelic-cli/internal/view"
 )
 
-// RegisterFunc is a function that registers a command
+// RegisterFunc registers a command tree onto a root command.
 type RegisterFunc func(rootCmd *cobra.Command, opts *Options)
 
-// Options contains global command options
+// Options contains global command options.
 type Options struct {
 	Output  string
 	NoColor bool
@@ -25,7 +27,7 @@ type Options struct {
 	Stderr  io.Writer
 }
 
-// DefaultOptions returns options with defaults
+// DefaultOptions returns options with defaults.
 func DefaultOptions() *Options {
 	return &Options{
 		Output: "table",
@@ -35,7 +37,7 @@ func DefaultOptions() *Options {
 	}
 }
 
-// View returns a configured view from options
+// View returns a configured view from options.
 func (o *Options) View() *view.View {
 	v := view.New(o.Stdout, o.Stderr)
 	v.Format = view.Format(o.Output)
@@ -43,15 +45,32 @@ func (o *Options) View() *view.View {
 	return v
 }
 
-// APIClient creates a New Relic API client with options applied
+// APIClient is the single lazy chokepoint for runtime credential resolution
+// (§2.5 / §1.11). It is invoked ONLY by commands that actually need an API
+// client — never from PersistentPreRunE — so `init`, `set-credential`,
+// `config *`, `--help`, and no-credential paths never force keyring access
+// or the §1.8 migration. Because it is the one place that opens the keyring,
+// the migration runs at a single deterministic point: the stderr/_migration
+// signal, non-zero-exit behavior, and §1.8 ingress-after-migration ordering
+// are all deterministic.
 func (o *Options) APIClient() (*api.Client, error) {
-	apiKey, err := config.GetAPIKey()
+	store, err := keychain.Open() // runs the one-time §1.8 migration
 	if err != nil {
 		return nil, err
 	}
+	defer func() { _ = store.Close() }()
 
-	accountID, _ := config.GetAccountID() // Optional
-	region := config.GetRegion()
+	apiKey, err := store.APIKey()
+	if err != nil {
+		return nil, err // ErrMissingAPIKey: actionable, no leak
+	}
+
+	cfg, err := config.Load()
+	if err != nil {
+		return nil, err
+	}
+	accountID, _ := cfg.ResolveAccountID() // optional; env > config
+	region, _ := cfg.ResolveRegion()       // env > config > "US"
 
 	return api.NewWithConfig(api.ClientConfig{
 		APIKey:    apiKey,
@@ -62,65 +81,72 @@ func (o *Options) APIClient() (*api.Client, error) {
 	}), nil
 }
 
-var rootCmd = &cobra.Command{
-	Use:   "nrq",
-	Short: "A CLI tool for interacting with New Relic",
-	Long: `nrq is a command-line interface for New Relic.
+const rootLong = `nrq is a command-line interface for New Relic.
 
 It provides commands for managing applications, dashboards, alerts,
 users, and other New Relic resources.
 
-Configure your API key with:
-  nrq config set-api-key
+First-time setup (stores the API key in the OS keyring, never on disk):
+  nrq init
 
-Set your account ID with:
-  nrq config set-account-id <your-account-id>
+Non-interactive credential ingress:
+  op read "op://vault/New Relic/api key" | nrq set-credential --key api_key --stdin
+  nrq set-credential --key api_key --from-env NEWRELIC_API_KEY
 
-Or set environment variables:
-  NEWRELIC_API_KEY
-  NEWRELIC_ACCOUNT_ID
-  NEWRELIC_REGION (US or EU)`,
-	Version: version.Info(),
-	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-		// Validate output format
-		output, _ := cmd.Flags().GetString("output")
-		return view.ValidateFormat(output)
-	},
-}
+Set the non-secret account ID / region (written to config.yml):
+  nrq config set --account-id <id> --region US
 
-var globalOpts = DefaultOptions()
+Non-secret runtime overrides (precedence: env > config.yml):
+  NEWRELIC_ACCOUNT_ID, NEWRELIC_REGION
 
-func init() {
-	rootCmd.PersistentFlags().StringVarP(&globalOpts.Output, "output", "o", "table",
+NEWRELIC_API_KEY is accepted ONLY as setup ingress (init/set-credential
+--from-env); it is no longer read at runtime (§1.11).`
+
+// NewRootCmd builds a fresh root command and its Options. Returning a new
+// tree per call (no package globals) is what makes the §1.11.6
+// real-entrypoint acceptance tests isolated — repeated Execute() runs in one
+// test process cannot bleed flag/output/migration state.
+func NewRootCmd() (*cobra.Command, *Options) {
+	opts := DefaultOptions()
+
+	cmd := &cobra.Command{
+		Use:     "nrq",
+		Short:   "A CLI tool for interacting with New Relic",
+		Long:    rootLong,
+		Version: version.Info(),
+		PersistentPreRunE: func(cmd *cobra.Command, _ []string) error {
+			if err := view.ValidateFormat(opts.Output); err != nil {
+				return err
+			}
+			// Mirror the resolved format so the §1.8 migration can choose
+			// the stderr line vs the _migration JSON splice. The deprecated
+			// --json bool still forces JSON.
+			format := opts.Output
+			if jsonFlag, _ := cmd.Flags().GetBool("json"); jsonFlag {
+				format = "json"
+				opts.Output = "json"
+			}
+			output.OutputFormat = format
+			return nil
+		},
+	}
+
+	cmd.PersistentFlags().StringVarP(&opts.Output, "output", "o", "table",
 		"Output format: table, json, or plain")
-	rootCmd.PersistentFlags().BoolVar(&globalOpts.NoColor, "no-color", false,
+	cmd.PersistentFlags().BoolVar(&opts.NoColor, "no-color", false,
 		"Disable colored output")
-	rootCmd.PersistentFlags().BoolVarP(&globalOpts.Verbose, "verbose", "v", false,
+	cmd.PersistentFlags().BoolVarP(&opts.Verbose, "verbose", "v", false,
 		"Enable verbose output (shows API requests)")
+	cmd.PersistentFlags().Bool("json", false, "Output in JSON format (deprecated: use -o json)")
+	_ = cmd.PersistentFlags().MarkDeprecated("json", "use --output json instead")
 
-	// Keep backward compatibility with --json flag
-	rootCmd.PersistentFlags().Bool("json", false, "Output in JSON format (deprecated: use -o json)")
-	rootCmd.PersistentFlags().MarkDeprecated("json", "use --output json instead")
+	return cmd, opts
 }
 
-// Execute runs the root command
-func Execute() error {
-	return rootCmd.Execute()
-}
-
-// RootCmd returns the root command (for registering subcommands)
-func RootCmd() *cobra.Command {
-	return rootCmd
-}
-
-// GlobalOpts returns the global options
-func GlobalOpts() *Options {
-	return globalOpts
-}
-
-// RegisterCommands registers all subcommands with the provided register functions
-func RegisterCommands(registerFuncs ...RegisterFunc) {
-	for _, register := range registerFuncs {
-		register(rootCmd, globalOpts)
+// RegisterAll applies the given register functions to cmd/opts. Used by both
+// the real entrypoint and the §1.11.6 acceptance tests.
+func RegisterAll(cmd *cobra.Command, opts *Options, fns ...RegisterFunc) {
+	for _, fn := range fns {
+		fn(cmd, opts)
 	}
 }

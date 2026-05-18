@@ -1,332 +1,184 @@
+// Package config holds nrq's non-secret on-disk configuration per the Open
+// CLI Collective Secret-Handling Standard §1.2 / §2.5. No access secret is
+// ever written here — the New Relic API key lives only in the OS keyring via
+// cli-common's credstore (see internal/keychain). This file owns config.yml:
+// the authoritative credential_ref (§1.3), the non-secret account_id/region,
+// and the optional §1.4 file-backend opt-in.
+//
+// §2.5 decisions encoded here:
+//   - account_id / region are non-secret runtime config, NOT credentials.
+//   - NEWRELIC_ACCOUNT_ID / NEWRELIC_REGION remain non-secret runtime
+//     overrides with precedence env > config.yml (they are not secret /
+//     unlocking material, so they do not fall under §1.11's env ban).
+//   - There is NO api_key accessor in this package. The only runtime path to
+//     the secret is the keychain adapter, reached via the command layer's
+//     lazy API-client resolver.
 package config
 
 import (
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
-	"runtime"
 	"strings"
+
+	"gopkg.in/yaml.v3"
 )
 
 const (
-	serviceName = "newrelic-cli"
+	// DefaultCredentialRef applies when config.yml is absent or omits
+	// credential_ref. It is still parsed through credstore.ParseRef by
+	// callers — never assumed structurally (§1.3 / §2.5).
+	DefaultCredentialRef = "newrelic-cli/default"
+
+	// DefaultRegion is New Relic's US data center, used when neither the
+	// env override nor config.yml specifies a region (preserves the legacy
+	// "US" default).
+	DefaultRegion = "US"
+
+	appDirName     = "newrelic-cli"
+	configFileName = "config.yml"
+
+	envAccountID = "NEWRELIC_ACCOUNT_ID"
+	envRegion    = "NEWRELIC_REGION"
 )
 
-// Credential keys
+// Source describes where a resolved non-secret value came from, for
+// `config show` (§2.5: show the source of each non-secret value).
+type Source string
+
 const (
-	APIKeyKey    = "api_key"
-	AccountIDKey = "account_id"
-	RegionKey    = "region"
+	SourceEnv    Source = "env"
+	SourceConfig Source = "config"
+	SourceUnset  Source = "unset"
 )
 
-// GetAPIKey retrieves the New Relic API key
-func GetAPIKey() (string, error) {
-	// Check environment variable first (allows override for automation)
-	if key := os.Getenv("NEWRELIC_API_KEY"); key != "" {
-		return key, nil
-	}
-
-	// Fallback to secure storage
-	key, err := getCredential(APIKeyKey)
-	if err == nil && key != "" {
-		return key, nil
-	}
-
-	return "", fmt.Errorf("no API key found - run 'nrq config set-api-key' or set NEWRELIC_API_KEY")
+// Config is nrq's config.yml. Everything here is safe for an org to commit to
+// a private/MDM-controlled store (§1.2); none of it is an access secret.
+type Config struct {
+	// CredentialRef is the authoritative <service>/<profile> keyring ref
+	// (§1.3). Callers resolve it via credstore.ParseRef; the service and
+	// profile are never hard-coded from a convention.
+	CredentialRef string `yaml:"credential_ref"`
+	// AccountID is the non-secret New Relic account ID.
+	AccountID string `yaml:"account_id,omitempty"`
+	// Region is the non-secret New Relic data center ("US" or "EU").
+	Region string `yaml:"region,omitempty"`
+	// Keyring carries the optional §1.4 explicit file-backend opt-in.
+	Keyring KeyringConfig `yaml:"keyring,omitempty"`
 }
 
-// SetAPIKey stores the New Relic API key
-func SetAPIKey(key string) error {
-	return setCredential(APIKeyKey, key)
+// KeyringConfig is the §1.4 backend selector. Backend == "file" forces the
+// encrypted-file backend unconditionally; empty means OS default selection.
+type KeyringConfig struct {
+	Backend string `yaml:"backend,omitempty"`
 }
 
-// DeleteAPIKey removes the New Relic API key
-func DeleteAPIKey() error {
-	return deleteCredential(APIKeyKey)
-}
-
-// GetAccountID retrieves the New Relic account ID
-func GetAccountID() (string, error) {
-	// Check environment variable first (allows override for automation)
-	if id := os.Getenv("NEWRELIC_ACCOUNT_ID"); id != "" {
-		return id, nil
-	}
-
-	// Fallback to secure storage
-	id, err := getCredential(AccountIDKey)
-	if err == nil && id != "" {
-		return id, nil
-	}
-
-	return "", fmt.Errorf("no account ID found - run 'nrq config set-account-id' or set NEWRELIC_ACCOUNT_ID")
-}
-
-// SetAccountID stores the New Relic account ID
-func SetAccountID(id string) error {
-	return setCredential(AccountIDKey, id)
-}
-
-// DeleteAccountID removes the New Relic account ID
-func DeleteAccountID() error {
-	return deleteCredential(AccountIDKey)
-}
-
-// GetRegion retrieves the New Relic region (US or EU)
-func GetRegion() string {
-	// Check environment variable first (allows override for automation)
-	if region := os.Getenv("NEWRELIC_REGION"); region != "" {
-		return strings.ToUpper(region)
-	}
-
-	// Fallback to secure storage
-	region, err := getCredential(RegionKey)
-	if err == nil && region != "" {
-		return region
-	}
-
-	return "US"
-}
-
-// SetRegion stores the New Relic region
-func SetRegion(region string) error {
-	return setCredential(RegionKey, strings.ToUpper(region))
-}
-
-// IsSecureStorage returns true if using secure storage (macOS Keychain)
-func IsSecureStorage() bool {
-	return runtime.GOOS == "darwin"
-}
-
-// GetCredentialStatus returns the current credential status
-func GetCredentialStatus() map[string]bool {
-	status := make(map[string]bool)
-
-	if key, _ := getCredential(APIKeyKey); key != "" {
-		status["api_key_stored"] = true
-	}
-	if id, _ := getCredential(AccountIDKey); id != "" {
-		status["account_id_stored"] = true
-	}
-	if region, _ := getCredential(RegionKey); region != "" {
-		status["region_stored"] = true
-	}
-
-	status["api_key_env"] = os.Getenv("NEWRELIC_API_KEY") != ""
-	status["account_id_env"] = os.Getenv("NEWRELIC_ACCOUNT_ID") != ""
-	status["region_env"] = os.Getenv("NEWRELIC_REGION") != ""
-
-	return status
-}
-
-// CheckPermissions verifies config file has secure permissions (Linux only)
-// Returns warning message if permissions are too open, empty string otherwise
-func CheckPermissions() string {
-	if runtime.GOOS == "darwin" {
-		return "" // macOS uses Keychain, no file to check
-	}
-
-	configPath := getConfigFilePath()
-	info, err := os.Stat(configPath)
-	if err != nil {
-		return "" // File doesn't exist, that's OK
-	}
-
-	mode := info.Mode().Perm()
-	if mode != 0600 {
-		return fmt.Sprintf("Warning: credentials file has permissions %04o, expected 0600", mode)
-	}
-
-	return ""
-}
-
-// FixPermissions corrects config file permissions to 0600 (Linux only)
-func FixPermissions() error {
-	if runtime.GOOS == "darwin" {
-		return nil // macOS uses Keychain, nothing to fix
-	}
-
-	configPath := getConfigFilePath()
-	if _, err := os.Stat(configPath); os.IsNotExist(err) {
-		return fmt.Errorf("credentials file does not exist")
-	}
-
-	return os.Chmod(configPath, 0600)
-}
-
-// ClearAll removes all stored credentials (API key, account ID, region)
-// Returns errors encountered during deletion (continues deleting even if some fail)
-func ClearAll() []error {
-	var errors []error
-
-	// Delete API key
-	if err := DeleteAPIKey(); err != nil {
-		// Only add error if the key was actually stored
-		if _, getErr := getCredential(APIKeyKey); getErr == nil {
-			errors = append(errors, fmt.Errorf("failed to delete API key: %w", err))
-		}
-	}
-
-	// Delete account ID
-	if err := DeleteAccountID(); err != nil {
-		if _, getErr := getCredential(AccountIDKey); getErr == nil {
-			errors = append(errors, fmt.Errorf("failed to delete account ID: %w", err))
-		}
-	}
-
-	// Delete region (only if it was stored)
-	if region, _ := getCredential(RegionKey); region != "" {
-		if err := deleteCredential(RegionKey); err != nil {
-			errors = append(errors, fmt.Errorf("failed to delete region: %w", err))
-		}
-	}
-
-	return errors
-}
-
-// --- Platform-specific implementations ---
-
-func getCredential(key string) (string, error) {
-	if runtime.GOOS == "darwin" {
-		return getFromKeychain(key)
-	}
-	return getFromConfigFile(key)
-}
-
-func setCredential(key, value string) error {
-	if runtime.GOOS == "darwin" {
-		return setInKeychain(key, value)
-	}
-	return setInConfigFile(key, value)
-}
-
-func deleteCredential(key string) error {
-	if runtime.GOOS == "darwin" {
-		return deleteFromKeychain(key)
-	}
-	return deleteFromConfigFile(key)
-}
-
-// --- macOS Keychain ---
-
-func getFromKeychain(account string) (string, error) {
-	cmd := exec.Command("security", "find-generic-password",
-		"-s", serviceName,
-		"-a", account,
-		"-w")
-
-	output, err := cmd.Output()
-	if err != nil {
-		return "", err
-	}
-
-	return strings.TrimSpace(string(output)), nil
-}
-
-func setInKeychain(account, value string) error {
-	// First try to delete any existing item (ignore errors)
-	_ = deleteFromKeychain(account)
-
-	cmd := exec.Command("security", "add-generic-password",
-		"-s", serviceName,
-		"-a", account,
-		"-w", value,
-		"-U") // Update if exists
-
-	return cmd.Run()
-}
-
-func deleteFromKeychain(account string) error {
-	cmd := exec.Command("security", "delete-generic-password",
-		"-s", serviceName,
-		"-a", account)
-
-	return cmd.Run()
-}
-
-// --- Config File (Linux fallback) ---
-
-func getConfigDir() string {
-	if xdgConfig := os.Getenv("XDG_CONFIG_HOME"); xdgConfig != "" {
-		return filepath.Join(xdgConfig, "newrelic-cli")
+// Dir is the cross-platform config directory: $XDG_CONFIG_HOME/newrelic-cli
+// else ~/.config/newrelic-cli. Identical on Linux, macOS, and Windows — this
+// matches the released legacy layout (the legacy code has no %APPDATA%
+// branch), so config.yml sits beside the legacy credentials file it
+// supersedes and migration discovery needs no platform special-casing.
+func Dir() string {
+	if xdg := os.Getenv("XDG_CONFIG_HOME"); xdg != "" {
+		return filepath.Join(xdg, appDirName)
 	}
 	home, _ := os.UserHomeDir()
-	return filepath.Join(home, ".config", "newrelic-cli")
+	return filepath.Join(home, ".config", appDirName)
 }
 
-func getConfigFilePath() string {
-	return filepath.Join(getConfigDir(), "credentials")
-}
+// Path is the config.yml location.
+func Path() string { return filepath.Join(Dir(), configFileName) }
 
-func getFromConfigFile(key string) (string, error) {
-	data, err := os.ReadFile(getConfigFilePath())
+// Load reads config.yml. An absent file is not an error: defaults are applied
+// (CredentialRef = DefaultCredentialRef) and a usable Config is returned.
+func Load() (*Config, error) {
+	c := &Config{}
+	data, err := os.ReadFile(Path())
 	if err != nil {
-		return "", err
-	}
-
-	lines := strings.Split(string(data), "\n")
-	for _, line := range lines {
-		parts := strings.SplitN(line, "=", 2)
-		if len(parts) == 2 && parts[0] == key {
-			return parts[1], nil
+		if os.IsNotExist(err) {
+			c.applyDefaults()
+			return c, nil
 		}
+		return nil, fmt.Errorf("read config %s: %w", Path(), err)
 	}
-
-	return "", fmt.Errorf("key not found")
+	if err := yaml.Unmarshal(data, c); err != nil {
+		return nil, fmt.Errorf("parse config %s: %w", Path(), err)
+	}
+	c.applyDefaults()
+	return c, nil
 }
 
-func setInConfigFile(key, value string) error {
-	configDir := getConfigDir()
-	if err := os.MkdirAll(configDir, 0700); err != nil {
-		return err
+func (c *Config) applyDefaults() {
+	if c.CredentialRef == "" {
+		c.CredentialRef = DefaultCredentialRef
 	}
-
-	configPath := getConfigFilePath()
-
-	// Read existing config
-	existing := make(map[string]string)
-	if data, err := os.ReadFile(configPath); err == nil {
-		lines := strings.Split(string(data), "\n")
-		for _, line := range lines {
-			parts := strings.SplitN(line, "=", 2)
-			if len(parts) == 2 {
-				existing[parts[0]] = parts[1]
-			}
-		}
-	}
-
-	// Update value
-	existing[key] = value
-
-	// Write back
-	var lines []string
-	for k, v := range existing {
-		lines = append(lines, fmt.Sprintf("%s=%s", k, v))
-	}
-
-	return os.WriteFile(configPath, []byte(strings.Join(lines, "\n")+"\n"), 0600)
 }
 
-func deleteFromConfigFile(key string) error {
-	configPath := getConfigFilePath()
-
-	data, err := os.ReadFile(configPath)
+// Save writes config.yml at 0600 under a 0700 directory, ATOMICALLY
+// (write to a temp file in the same dir, then rename). A crash mid-write
+// must not leave a truncated config.yml: it carries credential_ref (§1.3),
+// and a partial file would silently fall back to DefaultCredentialRef on
+// the next Open() — pointing at a different keyring bundle than the user
+// configured. Non-secret, but no reason to be world-readable.
+func (c *Config) Save() error {
+	if err := os.MkdirAll(Dir(), 0o700); err != nil {
+		return fmt.Errorf("create config dir: %w", err)
+	}
+	data, err := yaml.Marshal(c)
 	if err != nil {
-		return err
+		return fmt.Errorf("marshal config: %w", err)
 	}
-
-	var newLines []string
-	lines := strings.Split(string(data), "\n")
-	for _, line := range lines {
-		parts := strings.SplitN(line, "=", 2)
-		if len(parts) == 2 && parts[0] != key {
-			newLines = append(newLines, line)
-		}
+	tmp, err := os.CreateTemp(Dir(), ".config-*.yml.tmp")
+	if err != nil {
+		return fmt.Errorf("create temp config: %w", err)
 	}
-
-	if len(newLines) == 0 {
-		return os.Remove(configPath)
+	tmpName := tmp.Name()
+	defer func() { _ = os.Remove(tmpName) }() // no-op once renamed
+	if err := tmp.Chmod(0o600); err != nil {
+		_ = tmp.Close()
+		return fmt.Errorf("chmod temp config: %w", err)
 	}
+	if _, err := tmp.Write(data); err != nil {
+		_ = tmp.Close()
+		return fmt.Errorf("write temp config: %w", err)
+	}
+	if err := tmp.Close(); err != nil {
+		return fmt.Errorf("close temp config: %w", err)
+	}
+	if err := os.Rename(tmpName, Path()); err != nil {
+		return fmt.Errorf("rename config into place %s: %w", Path(), err)
+	}
+	return nil
+}
 
-	return os.WriteFile(configPath, []byte(strings.Join(newLines, "\n")+"\n"), 0600)
+// LegacyCredentialsPath is the pre-credstore plaintext file location. It is
+// derived from Dir() so it provably tracks the SAME XDG/HOME resolution as
+// config.yml — the old code respected XDG_CONFIG_HOME, and the §1.8
+// migration must look exactly where the old code wrote.
+func LegacyCredentialsPath() string { return filepath.Join(Dir(), "credentials") }
+
+// ResolveAccountID returns the effective account ID and its source.
+// Precedence is env > config.yml (§2.5: non-secret runtime override useful
+// for multi-account scripting). Empty config + no env → ("", SourceUnset).
+func (c *Config) ResolveAccountID() (string, Source) {
+	if v := strings.TrimSpace(os.Getenv(envAccountID)); v != "" {
+		return v, SourceEnv
+	}
+	if c.AccountID != "" {
+		return c.AccountID, SourceConfig
+	}
+	return "", SourceUnset
+}
+
+// ResolveRegion returns the effective region (upper-cased) and its source.
+// Precedence is env > config.yml > built-in "US" default. The default is
+// reported as SourceUnset (neither env nor config supplied it).
+func (c *Config) ResolveRegion() (string, Source) {
+	if v := strings.TrimSpace(os.Getenv(envRegion)); v != "" {
+		return strings.ToUpper(v), SourceEnv
+	}
+	if c.Region != "" {
+		return strings.ToUpper(c.Region), SourceConfig
+	}
+	return DefaultRegion, SourceUnset
 }

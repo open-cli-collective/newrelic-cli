@@ -1,172 +1,203 @@
+// Package initcmd implements `nrq init`, the interactive/scripted first-time
+// setup. Per the Open CLI Collective Secret-Handling Standard §1.5.1 the API
+// key is ingested ONLY via a named env var, single-secret stdin, or an
+// interactive no-echo prompt — never `--api-key=<literal>` and never a
+// plaintext echo. account_id/region are non-secret config.yml fields.
 package initcmd
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
+	"io"
+	"os"
 	"strings"
 
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
+
+	"github.com/open-cli-collective/cli-common/credstore"
 
 	"github.com/open-cli-collective/newrelic-cli/internal/cmd/root"
 	"github.com/open-cli-collective/newrelic-cli/internal/config"
+	"github.com/open-cli-collective/newrelic-cli/internal/keychain"
 	"github.com/open-cli-collective/newrelic-cli/internal/validate"
+	"github.com/open-cli-collective/newrelic-cli/internal/view"
 )
 
 type initOptions struct {
 	*root.Options
-	apiKey    string
-	accountID string
-	region    string
-	noVerify  bool
+	apiKeyEnv   string // --api-key-from-env NAME
+	apiKeyStdin bool   // --api-key-stdin
+	accountID   string // non-secret
+	region      string // non-secret
+	overwrite   bool   // resolve a §1.8 legacy/keyring conflict
+	noVerify    bool
 }
 
-// Register adds the init command to the root command
-func Register(rootCmd *cobra.Command, opts *root.Options) {
-	initOpts := &initOptions{Options: opts}
+func (o *initOptions) secretFromFlags() bool { return o.apiKeyStdin || o.apiKeyEnv != "" }
 
+// Register adds the init command to the root command.
+func Register(rootCmd *cobra.Command, opts *root.Options) {
+	o := &initOptions{Options: opts}
 	cmd := &cobra.Command{
 		Use:   "init",
-		Short: "Interactive setup wizard for New Relic CLI",
-		Long: `Configure the New Relic CLI with your credentials.
-
-This interactive wizard will guide you through setting up:
-  - API key (stored securely in Keychain on macOS, config file on Linux)
-  - Account ID
-  - Region (US or EU)
-
-After configuration, the connection is tested automatically.`,
-		Example: `  # Interactive setup
+		Short: "First-time setup (stores the API key in the OS keyring)",
+		Long: `Configure nrq. The API key is stored in the OS keyring (never on
+disk) and is ingested ONLY via stdin, a named env var, or an interactive
+no-echo prompt — never as a flag/positional literal (§1.5.1). account_id
+and region are non-secret and written to config.yml.`,
+		Example: `  # Interactive (no-echo API key prompt)
   nrq init
 
-  # Non-interactive setup
-  nrq init --api-key NRAK-xxx --account-id 12345 --region US
+  # Scripted ingress
+  op read "op://Vault/New Relic/api key" | nrq init --api-key-stdin --account-id 12345 --region US
+  nrq init --api-key-from-env NEWRELIC_API_KEY --account-id 12345
 
-  # Skip connection verification
-  nrq init --no-verify`,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return runInit(initOpts)
+  # Resolve a one-time migration conflict by forcing the legacy value
+  nrq init --overwrite --api-key-stdin`,
+		Args: cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			return runInit(o)
 		},
 	}
-
-	cmd.Flags().StringVar(&initOpts.apiKey, "api-key", "", "API key (for non-interactive setup)")
-	cmd.Flags().StringVar(&initOpts.accountID, "account-id", "", "Account ID (for non-interactive setup)")
-	cmd.Flags().StringVar(&initOpts.region, "region", "", "Region: US or EU (for non-interactive setup)")
-	cmd.Flags().BoolVar(&initOpts.noVerify, "no-verify", false, "Skip connection verification")
-
+	cmd.Flags().StringVar(&o.apiKeyEnv, "api-key-from-env", "", "Read the API key from this environment variable")
+	cmd.Flags().BoolVar(&o.apiKeyStdin, "api-key-stdin", false, "Read the API key from stdin")
+	cmd.Flags().StringVar(&o.accountID, "account-id", "", "New Relic account ID (non-secret)")
+	cmd.Flags().StringVar(&o.region, "region", "", "New Relic region: US or EU (non-secret)")
+	cmd.Flags().BoolVar(&o.overwrite, "overwrite", false, "Resolve a legacy/keyring migration conflict by forcing the legacy value")
+	cmd.Flags().BoolVar(&o.noVerify, "no-verify", false, "Skip connection verification")
 	rootCmd.AddCommand(cmd)
 }
 
 func runInit(opts *initOptions) error {
 	v := opts.View()
 
-	v.Println("New Relic CLI Setup")
-	v.Println("")
-
-	// Check for existing config
-	status := config.GetCredentialStatus()
-	if status["api_key_stored"] || status["account_id_stored"] {
-		v.Warning("Existing configuration detected.")
-		v.Println("This will overwrite your current settings.")
-		v.Println("")
+	if opts.apiKeyStdin && opts.apiKeyEnv != "" {
+		return errors.New("provide at most one of --api-key-stdin / --api-key-from-env")
 	}
 
-	reader := bufio.NewReader(opts.Stdin)
-
-	// Get API Key
-	apiKey := opts.apiKey
-	if apiKey == "" {
-		fmt.Fprint(opts.Stdout, "API Key (NRAK-...): ")
-		input, err := reader.ReadString('\n')
-		if err != nil {
-			return fmt.Errorf("failed to read input: %w", err)
-		}
-		apiKey = strings.TrimSpace(input)
+	// Open the keyring. This runs the one-time §1.8 migration (legacy
+	// keychain / credentials file → keyring + config.yml). --overwrite forces
+	// a legacy value over an existing keyring entry to resolve a conflict.
+	open := keychain.Open
+	if opts.overwrite {
+		open = keychain.OpenForMigrationOverwrite
 	}
-
-	// Validate API key
-	warning, err := validate.APIKey(apiKey)
+	st, err := open()
 	if err != nil {
-		return err
+		return err // includes the actionable §1.8 conflict error
 	}
-	if warning != "" {
-		v.Warning("Warning: " + warning)
-	}
-
-	// Get Account ID
-	accountID := opts.accountID
-	if accountID == "" {
-		fmt.Fprint(opts.Stdout, "Account ID: ")
-		input, err := reader.ReadString('\n')
-		if err != nil {
-			return fmt.Errorf("failed to read input: %w", err)
+	stClosed := false
+	closeStore := func() {
+		if !stClosed {
+			stClosed = true
+			_ = st.Close()
 		}
-		accountID = strings.TrimSpace(input)
 	}
+	defer closeStore()
 
-	// Validate account ID
-	if accountID != "" {
-		if err := validate.AccountID(accountID); err != nil {
+	// Post-migration the keyring is authoritative (§1.8 ingress-after-
+	// migration): decide presence from the keyring, never by re-reading a
+	// plaintext source the migration may have just scrubbed.
+	hadKey := st.HasAPIKey()
+
+	switch {
+	case opts.secretFromFlags():
+		// No-clobber by default (§1.5/§1.11): a scripted ingress must not
+		// silently replace an existing keyring value — require --overwrite.
+		if hadKey && !opts.overwrite {
+			return errors.New(
+				"an API key is already in the keyring; re-run with --overwrite to " +
+					"replace it, or omit --api-key-stdin/--api-key-from-env to keep it")
+		}
+		secret, err := readSecret(opts)
+		if err != nil {
+			return err
+		}
+		if err := storeSecret(v, st, secret, opts.overwrite); err != nil {
+			return err
+		}
+	case hadKey:
+		v.Println("API key already present in the keyring (kept).")
+	default:
+		// No key anywhere and no scripted ingress. Interactive: no-echo
+		// prompt. Non-interactive: a hard, actionable error (never a
+		// silent empty key).
+		if !isTerminal(opts.Stdin) {
+			return errors.New(
+				"no API key in the keyring and no ingress flag: pass " +
+					"--api-key-stdin or --api-key-from-env NEWRELIC_API_KEY (§1.5.1)")
+		}
+		secret, err := promptSecret(opts, "API key (NRAK-…): ")
+		if err != nil {
+			return err
+		}
+		if err := storeSecret(v, st, secret, false); err != nil {
 			return err
 		}
 	}
 
-	// Get Region
-	region := opts.region
-	if region == "" {
-		fmt.Fprint(opts.Stdout, "Region (US/EU) [US]: ")
-		input, err := reader.ReadString('\n')
-		if err != nil {
-			return fmt.Errorf("failed to read input: %w", err)
-		}
-		region = strings.TrimSpace(input)
-		if region == "" {
-			region = "US"
-		}
-	}
-	region = strings.ToUpper(region)
-
-	// Validate region
-	if err := validate.Region(region); err != nil {
+	// Non-secret account_id / region → config.yml. Load AFTER migration so
+	// any folded legacy values are visible; only overwrite when the user
+	// supplied a value (flag or interactive prompt).
+	cfg, err := config.Load()
+	if err != nil {
 		return err
 	}
-
-	v.Println("")
-
-	// Store credentials
-	if err := config.SetAPIKey(apiKey); err != nil {
-		return fmt.Errorf("failed to store API key: %w", err)
+	accountID := opts.accountID
+	if accountID == "" && isTerminal(opts.Stdin) {
+		accountID = prompt(opts, fmt.Sprintf("Account ID [%s]: ", cfg.AccountID))
 	}
-
 	if accountID != "" {
-		if err := config.SetAccountID(accountID); err != nil {
-			return fmt.Errorf("failed to store account ID: %w", err)
+		if err := validate.AccountID(accountID); err != nil {
+			return err
+		}
+		cfg.AccountID = accountID
+	}
+	region := opts.region
+	if region == "" && isTerminal(opts.Stdin) {
+		def := cfg.Region
+		if def == "" {
+			def = config.DefaultRegion
+		}
+		region = prompt(opts, fmt.Sprintf("Region (US/EU) [%s]: ", def))
+	}
+	if region != "" {
+		region = strings.ToUpper(region)
+		if err := validate.Region(region); err != nil {
+			return err
+		}
+		cfg.Region = region
+	}
+	// Only write config.yml when a non-secret field was actually supplied,
+	// OR config.yml already exists (keep it consistent / persist a folded
+	// migration). A secret-only ingress in a pipeline must not create or
+	// touch config.yml just to restate the default credential_ref.
+	_, statErr := os.Stat(config.Path())
+	if accountID != "" || region != "" || statErr == nil {
+		if err := cfg.Save(); err != nil {
+			return fmt.Errorf("save config: %w", err)
 		}
 	}
 
-	if err := config.SetRegion(region); err != nil {
-		return fmt.Errorf("failed to store region: %w", err)
-	}
-
-	// Verify connection (unless --no-verify)
 	if !opts.noVerify {
-		v.Println("Testing connection...")
-		v.Println("")
-
+		// Release our keyring handle before the verify path opens its own
+		// (opts.APIClient() → keychain.Open()). A strict file-backend lock
+		// could otherwise reject the second concurrent open and fail
+		// verification spuriously after a successful credential write.
+		closeStore()
 		client, err := opts.APIClient()
 		if err != nil {
 			v.Error("Failed to create client: %v", err)
-			v.Println("")
-			v.Println("Configuration saved but connection test failed.")
-			v.Println("You can test again with: nrq config test")
+			v.Println("Configuration saved; test later with: nrq config test")
 			return nil
 		}
-
 		result, err := client.TestConnection()
 		if err != nil {
 			v.Error("Connection test error: %v", err)
 			return nil
 		}
-
 		if result.APIKeyValid {
 			v.Success("API key valid")
 		} else {
@@ -176,26 +207,90 @@ func runInit(opts *initOptions) error {
 			}
 			return nil
 		}
-
-		if accountID != "" {
+		if !client.AccountID.IsEmpty() {
 			if result.AccountAccess {
 				v.Success("Account %d accessible", result.AccountID)
 			} else {
 				v.Error("Account not accessible")
-				if result.ErrorMessage != "" {
-					v.Println("Error: " + result.ErrorMessage)
-				}
 			}
 		}
-
-		v.Println("")
 	}
 
 	v.Success("Configuration saved.")
-	v.Println("")
-	v.Println("Try it out:")
-	v.Println("  nrq apps list")
-	v.Println("  nrq nrql \"SELECT count(*) FROM Transaction\"")
-
+	v.Println("Try:  nrq apps list")
 	return nil
+}
+
+func storeSecret(v *view.View, st *keychain.Store, secret string, overwrite bool) error {
+	if warning, err := validate.APIKey(secret); err != nil {
+		return err
+	} else if warning != "" {
+		v.Warning("%s", warning)
+	}
+	if overwrite {
+		return st.SetAPIKeyOverwrite(secret)
+	}
+	if err := st.SetAPIKey(secret); err != nil {
+		if errors.Is(err, credstore.ErrExists) {
+			// HasAPIKey() said no *usable* key yet a physical entry exists:
+			// it is present-but-empty (corrupted — §APIKey). Repairing an
+			// unusable entry is not a clobber of a real credential, so
+			// overwrite it without demanding --overwrite. A real (non-empty)
+			// key never reaches here in the no-clobber path (HasAPIKey() is
+			// true → guarded in runInit); a TOCTOU race that wrote a genuine
+			// key still surfaces the actionable hint below.
+			if _, apErr := st.APIKey(); errors.Is(apErr, keychain.ErrCorruptedAPIKey) {
+				return st.SetAPIKeyOverwrite(secret)
+			}
+			return errors.New(
+				"an API key is already in the keyring; re-run with --overwrite to replace it")
+		}
+		return err
+	}
+	return nil
+}
+
+func readSecret(o *initOptions) (string, error) {
+	if o.apiKeyStdin {
+		b, err := io.ReadAll(o.Stdin)
+		if err != nil {
+			return "", fmt.Errorf("read API key from stdin: %w", err)
+		}
+		return strings.TrimRight(string(b), "\r\n"), nil
+	}
+	v := os.Getenv(o.apiKeyEnv)
+	if v == "" {
+		return "", fmt.Errorf("--api-key-from-env %s is empty or unset", o.apiKeyEnv)
+	}
+	return v, nil
+}
+
+func promptSecret(o *initOptions, label string) (string, error) {
+	fmt.Fprint(o.Stderr, label)
+	if f, ok := o.Stdin.(*os.File); ok && term.IsTerminal(int(f.Fd())) {
+		b, err := term.ReadPassword(int(f.Fd()))
+		fmt.Fprintln(o.Stderr)
+		if err != nil {
+			return "", fmt.Errorf("read API key: %w", err)
+		}
+		return strings.TrimRight(string(b), "\r\n"), nil
+	}
+	// Non-TTY but interactive() said terminal — defensive fallback (tests
+	// inject a non-*os.File reader): plain read, never echoed by us.
+	line, _ := bufio.NewReader(o.Stdin).ReadString('\n')
+	return strings.TrimSpace(line), nil
+}
+
+func prompt(o *initOptions, label string) string {
+	// Prompts go to stderr (like promptSecret): stdout is the data channel
+	// (`nrq init -o json > out`, CI, 1Password shell plugin) and a prompt
+	// on stdout would corrupt the captured stream.
+	fmt.Fprint(o.Stderr, label)
+	line, _ := bufio.NewReader(o.Stdin).ReadString('\n')
+	return strings.TrimSpace(line)
+}
+
+func isTerminal(r io.Reader) bool {
+	f, ok := r.(*os.File)
+	return ok && term.IsTerminal(int(f.Fd()))
 }

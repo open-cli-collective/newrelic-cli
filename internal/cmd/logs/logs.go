@@ -7,8 +7,8 @@ import (
 
 	"github.com/open-cli-collective/newrelic-cli/api"
 	"github.com/open-cli-collective/newrelic-cli/internal/cmd/root"
-	"github.com/open-cli-collective/newrelic-cli/internal/deeplink"
 	"github.com/open-cli-collective/newrelic-cli/internal/confirm"
+	"github.com/open-cli-collective/newrelic-cli/internal/deeplink"
 	"github.com/open-cli-collective/newrelic-cli/internal/view"
 )
 

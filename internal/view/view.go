@@ -1,7 +1,6 @@
 package view
 
 import (
-	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -9,6 +8,8 @@ import (
 	"text/tabwriter"
 
 	"github.com/fatih/color"
+
+	"github.com/open-cli-collective/newrelic-cli/internal/output"
 )
 
 // Format represents the output format type
@@ -84,11 +85,20 @@ func (v *View) Table(headers []string, rows [][]string) error {
 	return w.Flush()
 }
 
-// JSON renders data as formatted JSON
+// JSON renders data as formatted JSON. If the one-time §1.8 migration ran
+// this invocation it recorded a block in internal/output; that block is
+// spliced in here (consume-once) so it appears in exactly one JSON response
+// and never bleeds into a later one.
 func (v *View) JSON(data interface{}) error {
-	enc := json.NewEncoder(v.Out)
-	enc.SetIndent("", "  ")
-	return enc.Encode(data)
+	b, err := output.MarshalWithMigration(data)
+	if err != nil {
+		return err
+	}
+	if _, err := v.Out.Write(b); err != nil {
+		return err
+	}
+	_, err = v.Out.Write([]byte("\n"))
+	return err
 }
 
 // Plain renders rows as tab-separated values without headers

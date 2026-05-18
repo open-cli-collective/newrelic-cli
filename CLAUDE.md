@@ -4,7 +4,7 @@ This file provides guidance for AI agents working with the newrelic-cli codebase
 
 ## Project Overview
 
-newrelic-cli is a command-line interface for New Relic written in Go. It uses the Cobra framework for commands and provides a public `api/` package that can be imported as a Go library. The CLI supports multiple output formats (table, JSON, plain) and stores credentials securely via macOS Keychain or Linux config files.
+newrelic-cli is a command-line interface for New Relic written in Go. It uses the Cobra framework for commands and provides a public `api/` package that can be imported as a Go library. The CLI supports multiple output formats (table, JSON, plain). The API key is stored only in the OS keyring via the shared `cli-common/credstore` (macOS Keychain / Windows Credential Manager / Linux Secret Service); non-secret `account_id`/`region` live in `~/.config/newrelic-cli/config.yml`. See "Credentials" below.
 
 ## Quick Commands
 
@@ -57,7 +57,7 @@ newrelic-cli/
 │   │   ├── root/root.go        # Root command, Options struct, global flags
 │   │   ├── apps/               # apps list, get, metrics
 │   │   ├── alerts/             # alerts policies list, get
-│   │   ├── configcmd/          # config set-api-key, set-account-id, etc.
+│   │   ├── configcmd/          # config set/show/clear/test + set-credential ingress
 │   │   ├── dashboards/         # dashboards list, get
 │   │   ├── deployments/        # deployments list, create
 │   │   ├── entities/           # entities search
@@ -66,7 +66,9 @@ newrelic-cli/
 │   │   ├── nrql/               # nrql query
 │   │   ├── synthetics/         # synthetics list, get
 │   │   └── users/              # users list, get
-│   ├── config/config.go        # Credential storage (Keychain/file)
+│   ├── config/config.go        # Non-secret config.yml (credential_ref, account_id, region)
+│   ├── keychain/               # cli-common/credstore adapter + §1.8 migration
+│   ├── output/migration.go     # §1.8 _migration signal recorder/splice
 │   ├── version/version.go      # Build-time version injection via ldflags
 │   └── view/view.go            # Output formatting (table, JSON, plain)
 ├── Makefile                    # Build, test, lint targets
@@ -304,13 +306,39 @@ The View struct handles all output formatting. To add a new format:
 2. Add format constant and case in `Render()`
 3. Update `ValidateFormat()`
 
+## Credentials (Secret-Handling Standard §2.5)
+
+The API key is stored **only** in the OS keyring via `cli-common/credstore`
+under ref `newrelic-cli/default`, key `api_key` (one logical credential, one
+key — §1.3). It is **never** on disk and **never** read from the environment
+at runtime. `account_id`/`region` are non-secret and live in
+`~/.config/newrelic-cli/config.yml` alongside `credential_ref` and the
+optional `keyring.backend: file` opt-in.
+
+- **Ingress only** (`init` / `set-credential`): stdin, `--*-from-env <VAR>`,
+  or an interactive no-echo prompt — never a flag/positional literal (§1.5).
+  `nrq config set-api-key` is removed (hard error → migration message).
+- **Runtime resolution:** API key from the keyring only (the single lazy
+  chokepoint is `root.Options.APIClient`, which also runs the one-time §1.8
+  migration). `account_id`/`region`: env > config.yml.
+- **§1.8 migration:** first run moves a legacy macOS Keychain entry (service
+  `newrelic-cli`) and/or the legacy `~/.config/newrelic-cli/credentials` file
+  → api_key to the keyring, account_id/region into config.yml, legacy
+  originals deleted. Divergent legacy secret values fail loudly (never a
+  silent pick; never the value, masked or not). The one-time signal is a
+  stderr line (human) or top-level `_migration` block (JSON).
+- Tests use `internal/testutil` (hermetic file backend, no real keyring) and
+  `internal/noleak` (the §1.12/§1.11 acceptance suite).
+
 ## Environment Variables
 
 | Variable | Description |
 |----------|-------------|
-| `NEWRELIC_API_KEY` | User API key (NRAK-xxx) |
-| `NEWRELIC_ACCOUNT_ID` | Account ID |
-| `NEWRELIC_REGION` | US or EU |
+| `NEWRELIC_API_KEY` | User API key (NRAK-xxx) — **setup ingress only** (`init`/`set-credential` `--from-env`); not read at runtime |
+| `NEWRELIC_ACCOUNT_ID` | Account ID (non-secret runtime override; env > config.yml) |
+| `NEWRELIC_REGION` | US or EU (non-secret runtime override; env > config.yml) |
+| `NEWRELIC_CLI_KEYRING_BACKEND` | `file` to force the encrypted-file backend (§1.4) |
+| `NEWRELIC_CLI_KEYRING_PASSPHRASE` | File-backend passphrase for headless use (§1.4) |
 
 ## Dependencies
 

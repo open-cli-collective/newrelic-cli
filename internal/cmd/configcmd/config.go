@@ -244,7 +244,7 @@ func setAPIKeyRemovedErr() error {
 			"or accepted as a positional/flag/prompted value (§1.5). Ingest it via the keyring instead:\n" +
 			"  nrq set-credential --ref " + config.DefaultCredentialRef + " --key api_key --stdin\n" +
 			"  op read \"op://Vault/New Relic/api key\" | nrq set-credential --key api_key --stdin\n" +
-			"or run `nrq init`.")
+			"  nrq init")
 }
 
 // ---- config show (§2.5 diagnostic; never the secret value) -----------------

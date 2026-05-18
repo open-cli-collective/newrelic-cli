@@ -15,7 +15,7 @@ A command-line interface for interacting with New Relic APIs.
 - **Synthetic Monitors**: List and inspect synthetic monitoring configurations
 - **Users**: List and view user details
 - **Multiple Output Formats**: Table, JSON, and plain (scriptable) output
-- **Secure Credential Storage**: macOS Keychain or encrypted config file
+- **Secure Credential Storage**: API key stored in the OS keyring (macOS Keychain / Windows Credential Manager / Linux Secret Service), never on disk
 
 ## Installation
 
@@ -117,16 +117,13 @@ go install github.com/open-cli-collective/newrelic-cli/cmd/nrq@latest
 ## Quick Start
 
 ```bash
-# 1. Configure your API key (stored securely)
-nrq config set-api-key
+# 1. First-time setup (API key stored in the OS keyring, never on disk)
+nrq init
 
-# 2. Set your account ID
-nrq config set-account-id 12345678
-
-# 3. Verify configuration
+# 2. Verify configuration
 nrq config show
 
-# 4. Start using the CLI
+# 3. Start using the CLI
 nrq apps list
 ```
 
@@ -134,47 +131,61 @@ nrq apps list
 
 ### Environment Variables
 
-| Variable | Description | Required |
-|----------|-------------|----------|
-| `NEWRELIC_API_KEY` | Your New Relic User API key (starts with `NRAK-`) | Yes |
-| `NEWRELIC_ACCOUNT_ID` | Your New Relic account ID | Yes (for most commands) |
-| `NEWRELIC_REGION` | API region: `US` (default) or `EU` | No |
+| Variable | Description | Notes |
+|----------|-------------|-------|
+| `NEWRELIC_API_KEY` | New Relic User API key (`NRAK-`) | **Setup ingress only** — accepted by `nrq init --api-key-from-env` / `nrq set-credential --from-env`; **not** read at runtime |
+| `NEWRELIC_ACCOUNT_ID` | New Relic account ID (non-secret) | Runtime override; precedence **env > config.yml** |
+| `NEWRELIC_REGION` | API region: `US` (default) or `EU` (non-secret) | Runtime override; precedence **env > config.yml** |
 
 ### CLI Configuration Commands
 
 ```bash
-# Set API key (interactive prompt)
-nrq config set-api-key
+# First-time setup (interactive no-echo API key prompt, or scripted ingress)
+nrq init
+op read "op://Vault/New Relic/api key" | nrq init --api-key-stdin --account-id 12345 --region US
 
-# Set API key (inline)
-nrq config set-api-key NRAK-xxxxxxxxxxxxxxxxxxxx
+# Low-level scripted secret ingress (single key, stdin or env — never a flag value)
+nrq set-credential --key api_key --stdin
+nrq set-credential --key api_key --from-env NEWRELIC_API_KEY
 
-# Set account ID
-nrq config set-account-id 12345678
+# Set non-secret config (written to config.yml)
+nrq config set --account-id 12345678 --region EU
 
-# Set region (US or EU)
-nrq config set-region EU
-
-# View current configuration
+# View current configuration (never prints the key value)
 nrq config show
 
-# Delete stored credentials
-nrq config delete-api-key
-nrq config delete-account-id
+# Remove credentials (idempotent, non-interactive)
+nrq config clear          # removes the keyring api_key
+nrq config clear --all    # also removes config.yml
 ```
+
+> `nrq config set-api-key` is **removed** — the API key is no longer stored on
+> disk or accepted as a positional/flag value (§1.5). Use `nrq init` or
+> `nrq set-credential`. `config set-account-id` / `config set-region` are
+> deprecated thin aliases of `config set` (one cycle).
 
 ### Credential Storage
 
-| Platform | Storage Method | Location |
-|----------|----------------|----------|
-| macOS | System Keychain | Secure keychain storage |
-| Linux | Config file | `~/.config/newrelic-cli/credentials` (0600 permissions) |
+The API key lives **only** in the OS keyring via the shared
+`cli-common/credstore`:
+
+| Platform | Backend |
+|----------|---------|
+| macOS | Keychain |
+| Windows | Credential Manager |
+| Linux | Secret Service (encrypted-file fallback when no keyring is available; opt-in via `keyring.backend: file`) |
+
+Non-secret config (`credential_ref`, `account_id`, `region`) lives in
+`~/.config/newrelic-cli/config.yml` (0600). A pre-existing macOS Keychain
+entry or legacy `~/.config/newrelic-cli/credentials` file is auto-migrated on
+first run (one-time; the API key moves to the keyring, account_id/region into
+config.yml, the legacy original is removed). Divergent legacy secret values
+fail loudly rather than silently picking a winner.
 
 ### Configuration Precedence
 
-1. Environment variables (highest priority)
-2. Stored credentials (CLI config)
-3. Default values (lowest priority)
+- **API key:** OS keyring only at runtime (env is setup-ingress only).
+- **account_id / region:** environment variable > `config.yml` > built-in default.
 
 ### Shell Completion
 

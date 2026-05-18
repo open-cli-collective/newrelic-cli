@@ -1,6 +1,6 @@
 module github.com/open-cli-collective/newrelic-cli
 
-go 1.21
+go 1.24
 
 require (
 	github.com/fatih/color v1.18.0

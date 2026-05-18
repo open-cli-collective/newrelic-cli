@@ -24,8 +24,8 @@ import (
 )
 
 func main() {
-	// Register all commands
-	root.RegisterCommands(
+	rootCmd, opts := root.NewRootCmd()
+	root.RegisterAll(rootCmd, opts,
 		alerts.Register,
 		apps.Register,
 		completion.Register,
@@ -42,7 +42,7 @@ func main() {
 		users.Register,
 	)
 
-	if err := root.Execute(); err != nil {
+	if err := rootCmd.Execute(); err != nil {
 		// Map error types to exit codes for shell scripting
 		var apiErr *api.APIError
 		if errors.As(err, &apiErr) {

@@ -7,8 +7,6 @@ import (
 	"io"
 	"net/http"
 	"time"
-
-	"github.com/open-cli-collective/newrelic-cli/internal/config"
 )
 
 // Region represents a New Relic region
@@ -42,25 +40,15 @@ type ClientConfig struct {
 	Stderr    io.Writer
 }
 
-// New creates a new New Relic client using credentials from config/environment
-func New() (*Client, error) {
-	apiKey, err := config.GetAPIKey()
-	if err != nil {
-		return nil, err
-	}
-
-	accountID, _ := config.GetAccountID() // Optional
-	region := config.GetRegion()
-
-	return NewWithConfig(ClientConfig{
-		APIKey:    apiKey,
-		AccountID: accountID,
-		Region:    region,
-		Timeout:   30 * time.Second,
-	}), nil
-}
-
-// NewWithConfig creates a client with explicit configuration
+// NewWithConfig creates a client with explicit configuration.
+//
+// This is the SOLE constructor. The former credential-resolving New() was
+// removed per §2.5 / §1.11: the api/ package must not read the keyring,
+// environment, or config file, nor run the §1.8 migration — those are CLI
+// side-effects and would couple the public library to the command layer
+// (import cycle). The command layer's lazy resolver
+// (root.Options.APIClient) opens the keyring, runs the one-time migration,
+// resolves account_id/region (env > config), and passes them here.
 func NewWithConfig(cfg ClientConfig) *Client {
 	if cfg.Timeout == 0 {
 		cfg.Timeout = 30 * time.Second

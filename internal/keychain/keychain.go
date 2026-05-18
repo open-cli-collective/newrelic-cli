@@ -15,6 +15,7 @@ package keychain
 import (
 	"errors"
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/open-cli-collective/cli-common/credstore"
@@ -200,10 +201,23 @@ func (s *Store) set(v string, overwrite bool) error {
 // DeleteAPIKey removes the key (idempotent: a missing key is not an error —
 // §1.7).
 func (s *Store) DeleteAPIKey() error {
-	if ok, _ := s.cs.Exists(s.profile, KeyAPIKey); !ok {
+	// The Exists() pre-check is load-bearing for cross-backend idempotency:
+	// the file backend's Delete returns a raw os.ErrNotExist (not
+	// credstore.ErrNotFound) for a missing key, so a bare Delete is not
+	// idempotent. Surface the Exists error rather than swallowing it (a
+	// backend failure must not masquerade as "already gone" and skip a
+	// delete that should have been attempted).
+	ok, err := s.cs.Exists(s.profile, KeyAPIKey)
+	if err != nil {
+		return fmt.Errorf("check %s at %s: %w", KeyAPIKey, s.ref, err)
+	}
+	if !ok {
 		return nil
 	}
-	if err := s.cs.Delete(s.profile, KeyAPIKey); err != nil && !errors.Is(err, credstore.ErrNotFound) {
+	// Tolerate a not-found on the delete itself: a concurrent clear could
+	// win the race in the TOCTOU window, which is still idempotent success.
+	if err := s.cs.Delete(s.profile, KeyAPIKey); err != nil &&
+		!errors.Is(err, credstore.ErrNotFound) && !errors.Is(err, os.ErrNotExist) {
 		return fmt.Errorf("delete %s at %s: %w", KeyAPIKey, s.ref, err)
 	}
 	return nil

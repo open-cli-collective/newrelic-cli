@@ -474,6 +474,9 @@ func runClear(o *clearOptions) error {
 			} else {
 				v.Println("would remove: (no config.yml)")
 			}
+			if _, statErr := os.Stat(config.LegacyCredentialsPath()); statErr == nil {
+				v.Println("would remove: " + config.LegacyCredentialsPath() + " (legacy plaintext)")
+			}
 		}
 		return nil
 	}
@@ -496,6 +499,19 @@ func runClear(o *clearOptions) error {
 			v.Println("No config.yml to remove (already clear)")
 		} else {
 			v.Success("Removed %s", config.Path())
+		}
+		// Also scrub the legacy plaintext credentials file. Without this a
+		// `clear --all` on a workstation that never ran the §1.8 migration
+		// leaves the legacy secret on disk, and the next Open() re-migrates
+		// it back into the keyring — silently undoing the wipe.
+		if lp := config.LegacyCredentialsPath(); lp != "" {
+			if err := os.Remove(lp); err != nil {
+				if !os.IsNotExist(err) {
+					return fmt.Errorf("remove %s: %w", lp, err)
+				}
+			} else {
+				v.Success("Removed %s (legacy plaintext)", lp)
+			}
 		}
 	}
 	return nil

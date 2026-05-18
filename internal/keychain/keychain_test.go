@@ -68,9 +68,12 @@ func TestOpen_UnknownBackend_FailsClosed(t *testing.T) {
 	c := &config.Config{CredentialRef: "newrelic-cli/default"}
 	c.Keyring.Backend = "bogus"
 	require.NoError(t, c.Save())
-	// Drop the test env backend so config.yml's bogus value is what's tested.
+	// Neutralize the test env backend so config.yml's bogus value is what's
+	// exercised. Empty is equivalent to unset for backend selection (both
+	// defer to config.yml); t.Setenv restores it deterministically at
+	// teardown, so no manual os.Unsetenv (which would contradict the
+	// t.Setenv-registered cleanup) is needed.
 	t.Setenv("NEWRELIC_CLI_KEYRING_BACKEND", "")
-	_ = os.Unsetenv("NEWRELIC_CLI_KEYRING_BACKEND")
 
 	_, err := keychain.OpenNoMigrate()
 	require.Error(t, err)

@@ -247,6 +247,44 @@ func TestAPIKey_EmptyStored_DistinctFromMissing(t *testing.T) {
 	assert.False(t, st.HasAPIKey(), "HasAPIKey must be false for an empty entry (so init can repair it)")
 }
 
+// The init/set-credential repair path (storeSecret) relies on this exact
+// contract for a present-but-empty (corrupted) entry: the no-overwrite
+// SetAPIKey fails ErrExists, APIKey() reports ErrCorruptedAPIKey (so the
+// caller can tell "corrupt, safe to repair" from "real key, do not clobber"),
+// and SetAPIKeyOverwrite then repairs it. If any link breaks, init silently
+// fails to fix a corrupted keyring while `config show` says "not set". #7.
+func TestRepairContract_EmptyEntry_OverwriteRepairs(t *testing.T) {
+	tmp := t.TempDir()
+	t.Setenv("HOME", tmp)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(tmp, "xdg"))
+	t.Setenv("NEWRELIC_CLI_KEYRING_BACKEND", "file")
+	t.Setenv("NEWRELIC_CLI_KEYRING_PASSPHRASE", "test-pass")
+	t.Setenv(legacyKeychainScanDisabledEnv, "1")
+
+	cfg := &config.Config{CredentialRef: "newrelic-cli/default"}
+	st, err := openWith(cfg, false, false)
+	require.NoError(t, err)
+	defer func() { _ = st.Close() }()
+
+	// Plant an empty (corrupt) entry, bypassing the write-time guard.
+	require.NoError(t, st.cs.Set(st.profile, KeyAPIKey, "", credstore.WithOverwrite()))
+
+	require.False(t, st.HasAPIKey(), "empty entry must not look usable")
+
+	err = st.SetAPIKey("NRAK-repaired-value-x")
+	require.Error(t, err, "no-overwrite write over a physical entry must fail")
+	assert.True(t, errors.Is(err, credstore.ErrExists))
+
+	_, apErr := st.APIKey()
+	assert.True(t, errors.Is(apErr, ErrCorruptedAPIKey),
+		"caller distinguishes corrupt (repairable) from a real key (clobber)")
+
+	require.NoError(t, st.SetAPIKeyOverwrite("NRAK-repaired-value-x"))
+	got, err := st.APIKey()
+	require.NoError(t, err)
+	assert.Equal(t, "NRAK-repaired-value-x", got, "repair must leave a usable key")
+}
+
 func TestConflictErr_NoValueLeak(t *testing.T) {
 	err := secretConflictErr(svc, prof, ref, []secretCandidate{
 		{location: "file:/p#api_key", value: "SUPER-SECRET"},

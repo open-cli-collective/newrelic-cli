@@ -88,7 +88,14 @@ func runInit(opts *initOptions) error {
 	if err != nil {
 		return err // includes the actionable §1.8 conflict error
 	}
-	defer func() { _ = st.Close() }()
+	stClosed := false
+	closeStore := func() {
+		if !stClosed {
+			stClosed = true
+			_ = st.Close()
+		}
+	}
+	defer closeStore()
 
 	// Post-migration the keyring is authoritative (§1.8 ingress-after-
 	// migration): decide presence from the keyring, never by re-reading a
@@ -175,6 +182,11 @@ func runInit(opts *initOptions) error {
 	}
 
 	if !opts.noVerify {
+		// Release our keyring handle before the verify path opens its own
+		// (opts.APIClient() → keychain.Open()). A strict file-backend lock
+		// could otherwise reject the second concurrent open and fail
+		// verification spuriously after a successful credential write.
+		closeStore()
 		client, err := opts.APIClient()
 		if err != nil {
 			v.Error("Failed to create client: %v", err)
@@ -219,10 +231,17 @@ func storeSecret(v *view.View, st *keychain.Store, secret string, overwrite bool
 		return st.SetAPIKeyOverwrite(secret)
 	}
 	if err := st.SetAPIKey(secret); err != nil {
-		// A concurrent `nrq init` could win the keyring write between the
-		// HasAPIKey() pre-check and here (TOCTOU): map the raw ErrExists to
-		// the same actionable message set-credential gives.
 		if errors.Is(err, credstore.ErrExists) {
+			// HasAPIKey() said no *usable* key yet a physical entry exists:
+			// it is present-but-empty (corrupted — §APIKey). Repairing an
+			// unusable entry is not a clobber of a real credential, so
+			// overwrite it without demanding --overwrite. A real (non-empty)
+			// key never reaches here in the no-clobber path (HasAPIKey() is
+			// true → guarded in runInit); a TOCTOU race that wrote a genuine
+			// key still surfaces the actionable hint below.
+			if _, apErr := st.APIKey(); errors.Is(apErr, keychain.ErrCorruptedAPIKey) {
+				return st.SetAPIKeyOverwrite(secret)
+			}
 			return errors.New(
 				"an API key is already in the keyring; re-run with --overwrite to replace it")
 		}

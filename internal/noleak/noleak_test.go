@@ -391,6 +391,31 @@ func TestConfigClear_DryRunAndAll(t *testing.T) {
 	assert.NoError(t, err, "clear is idempotent")
 }
 
+// §1.7/§1.8: `clear --all` must also scrub the legacy plaintext credentials
+// file. Otherwise a workstation decommission that never ran the one-time
+// migration leaves the secret on disk and the very next Open() re-migrates
+// it back into the keyring, silently undoing the wipe. #11.
+func TestConfigClear_All_ScrubsLegacyFile(t *testing.T) {
+	tmp := testutil.Setup(t)
+	plantLegacyFile(t, tmp) // legacy credentials file present, migration NOT yet run
+	legacy := config.LegacyCredentialsPath()
+	_, statErr := os.Stat(legacy)
+	require.NoError(t, statErr, "precondition: legacy file exists")
+
+	_, _, err := run(t, "config", "clear", "--all")
+	require.NoError(t, err)
+
+	_, statErr = os.Stat(legacy)
+	assert.True(t, os.IsNotExist(statErr), "clear --all must scrub the legacy plaintext file")
+
+	// The decisive check: a subsequent migrating Open() must NOT resurrect
+	// the wiped credential from a surviving legacy file.
+	st, err := keychain.Open()
+	require.NoError(t, err)
+	defer func() { _ = st.Close() }()
+	assert.False(t, st.HasAPIKey(), "wipe must survive the next migrating Open()")
+}
+
 // L1: `config show -o json` reports api_key presence as a bool and never the
 // value (secret-absence pinned for the JSON surface).
 func TestConfigShow_JSON_NoSecretValue(t *testing.T) {

@@ -2,6 +2,7 @@ package keychain
 
 import (
 	"bufio"
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -9,6 +10,7 @@ import (
 	"runtime"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/open-cli-collective/cli-common/credstore"
 
@@ -416,8 +418,15 @@ func readLegacyFile(path string) map[string]string {
 	return m
 }
 
+// securityTimeout bounds each `security` shell-out: a hung subprocess (a
+// Keychain unlock prompt, SIP/MDM stall) must fail the one-time migration
+// with a clear error rather than block the CLI's first run indefinitely.
+const securityTimeout = 5 * time.Second
+
 func keychainRead(service, account string) (string, bool) {
-	out, err := exec.Command("security", "find-generic-password",
+	ctx, cancel := context.WithTimeout(context.Background(), securityTimeout)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, "security", "find-generic-password",
 		"-s", service, "-a", account, "-w").Output() //nolint:gosec // darwin-only migration probe of nrq's own legacy items
 	if err != nil {
 		return "", false
@@ -435,7 +444,9 @@ func keychainRead(service, account string) (string, bool) {
 const securityErrItemNotFound = 44
 
 func keychainDelete(service, account string) error {
-	err := exec.Command("security", "delete-generic-password",
+	ctx, cancel := context.WithTimeout(context.Background(), securityTimeout)
+	defer cancel()
+	err := exec.CommandContext(ctx, "security", "delete-generic-password",
 		"-s", service, "-a", account).Run() //nolint:gosec // darwin-only migration cleanup of nrq's own legacy items
 	if err == nil {
 		return nil

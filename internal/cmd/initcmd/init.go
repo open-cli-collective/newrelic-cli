@@ -27,12 +27,14 @@ import (
 
 type initOptions struct {
 	*root.Options
-	apiKeyEnv   string // --api-key-from-env NAME
-	apiKeyStdin bool   // --api-key-stdin
-	accountID   string // non-secret
-	region      string // non-secret
-	overwrite   bool   // resolve a §1.8 legacy/keyring conflict
-	noVerify    bool
+	apiKeyEnv      string // --api-key-from-env NAME
+	apiKeyStdin    bool   // --api-key-stdin
+	accountID      string // --account-id (non-secret literal)
+	accountIDEnv   string // --account-id-from-env NAME (non-secret env-bridge)
+	region         string // non-secret
+	overwrite      bool   // resolve a §1.8 legacy/keyring conflict
+	nonInteractive bool   // fail loud instead of prompting (installer; §1.3)
+	noVerify       bool
 }
 
 func (o *initOptions) secretFromFlags() bool { return o.apiKeyStdin || o.apiKeyEnv != "" }
@@ -54,6 +56,10 @@ var, or an interactive no-echo prompt — never as a flag/positional literal
   op read "op://Vault/New Relic/api key" | nrq init --api-key-stdin --account-id 12345 --region US
   nrq init --api-key-from-env NEWRELIC_API_KEY --account-id 12345
 
+  # Fully non-interactive (central installer: op -> env -> --*-from-env)
+  nrq init --region US --api-key-from-env NEWRELIC_API_KEY \
+    --account-id-from-env NEWRELIC_ACCOUNT_ID --non-interactive
+
   # Resolve a one-time migration conflict by forcing the legacy value
   # (no ingress flag — stdin/env would replace the forced legacy value)
   nrq init --overwrite`,
@@ -65,8 +71,10 @@ var, or an interactive no-echo prompt — never as a flag/positional literal
 	cmd.Flags().StringVar(&o.apiKeyEnv, "api-key-from-env", "", "Read the API key from this environment variable")
 	cmd.Flags().BoolVar(&o.apiKeyStdin, "api-key-stdin", false, "Read the API key from stdin")
 	cmd.Flags().StringVar(&o.accountID, "account-id", "", "New Relic account ID (non-secret)")
+	cmd.Flags().StringVar(&o.accountIDEnv, "account-id-from-env", "", "Read the (non-secret) account ID from this environment variable")
 	cmd.Flags().StringVar(&o.region, "region", "", "New Relic region: US or EU (non-secret)")
 	cmd.Flags().BoolVar(&o.overwrite, "overwrite", false, "Resolve a legacy/keyring migration conflict by forcing the legacy value")
+	cmd.Flags().BoolVar(&o.nonInteractive, "non-interactive", false, "Never prompt; fail loudly if a required value is missing (for scripted/installer use)")
 	cmd.Flags().BoolVar(&o.noVerify, "no-verify", false, "Skip connection verification")
 	rootCmd.AddCommand(cmd)
 }
@@ -77,17 +85,23 @@ func runInit(opts *initOptions) error {
 	if opts.apiKeyStdin && opts.apiKeyEnv != "" {
 		return errors.New("provide at most one of --api-key-stdin / --api-key-from-env")
 	}
+	if opts.accountID != "" && opts.accountIDEnv != "" {
+		return errors.New("provide at most one of --account-id / --account-id-from-env")
+	}
+
+	// wantPrompt gates every interactive fallback. --non-interactive forces
+	// fail-loud (cli-deployment-manifest §1.3) so the central installer's
+	// `nrq init` is deterministic regardless of TTY.
+	wantPrompt := !opts.nonInteractive && isTerminal(opts.Stdin)
 
 	// Open the keyring. This runs the one-time §1.8 migration (legacy
 	// keychain / credentials file → keyring + config.yml). --overwrite forces
 	// a legacy value over an existing keyring entry to resolve a conflict.
-	open := keychain.Open
-	if opts.overwrite {
-		open = keychain.OpenForMigrationOverwrite
-	}
-	st, err := open()
+	// The non-interactive policy is plumbed in so the file backend never
+	// prompts for a passphrase on a TTY under --non-interactive.
+	st, err := keychain.OpenForInit(opts.overwrite, opts.nonInteractive)
 	if err != nil {
-		return err // includes the actionable §1.8 conflict error
+		return err // includes the actionable §1.8 conflict / passphrase error
 	}
 	stClosed := false
 	closeStore := func() {
@@ -123,9 +137,9 @@ func runInit(opts *initOptions) error {
 		v.Println("API key already present in the keyring (kept).")
 	default:
 		// No key anywhere and no scripted ingress. Interactive: no-echo
-		// prompt. Non-interactive: a hard, actionable error (never a
-		// silent empty key).
-		if !isTerminal(opts.Stdin) {
+		// prompt. Non-interactive (or non-TTY): a hard, actionable error
+		// (never a silent empty key).
+		if !wantPrompt {
 			return errors.New(
 				"no API key in the keyring and no ingress flag: pass " +
 					"--api-key-stdin or --api-key-from-env NEWRELIC_API_KEY (§1.5.1)")
@@ -146,8 +160,19 @@ func runInit(opts *initOptions) error {
 	if err != nil {
 		return err
 	}
+	// account_id is non-secret: --account-id-from-env reads it from the
+	// named env var (the same op→env→--*-from-env channel the installer
+	// uses for the secret, §1.5.1 shape) but the resolved value goes to
+	// config.yml, NEVER the keyring (§2.5). Empty/unset env is a hard
+	// error, mirroring readSecret's env path.
 	accountID := opts.accountID
-	if accountID == "" && isTerminal(opts.Stdin) {
+	if opts.accountIDEnv != "" {
+		accountID = os.Getenv(opts.accountIDEnv)
+		if accountID == "" {
+			return fmt.Errorf("--account-id-from-env %s is empty or unset", opts.accountIDEnv)
+		}
+	}
+	if accountID == "" && wantPrompt {
 		accountID = prompt(opts, fmt.Sprintf("Account ID [%s]: ", cfg.AccountID))
 	}
 	if accountID != "" {
@@ -157,7 +182,7 @@ func runInit(opts *initOptions) error {
 		cfg.AccountID = accountID
 	}
 	region := opts.region
-	if region == "" && isTerminal(opts.Stdin) {
+	if region == "" && wantPrompt {
 		def := cfg.Region
 		if def == "" {
 			def = config.DefaultRegion

@@ -260,7 +260,7 @@ func TestAPIKey_EmptyStored_DistinctFromMissing(t *testing.T) {
 	t.Setenv(legacyKeychainScanDisabledEnv, "1")
 
 	cfg := &config.Config{CredentialRef: "newrelic-cli/default"}
-	st, err := openWith(cfg, false, false)
+	st, err := openWith(cfg, false, false, false)
 	require.NoError(t, err)
 	defer func() { _ = st.Close() }()
 
@@ -291,7 +291,7 @@ func TestRepairContract_EmptyEntry_OverwriteRepairs(t *testing.T) {
 	t.Setenv(legacyKeychainScanDisabledEnv, "1")
 
 	cfg := &config.Config{CredentialRef: "newrelic-cli/default"}
-	st, err := openWith(cfg, false, false)
+	st, err := openWith(cfg, false, false, false)
 	require.NoError(t, err)
 	defer func() { _ = st.Close() }()
 
@@ -380,6 +380,18 @@ func TestScrubLegacyKeychain_AttemptsAllAccounts(t *testing.T) {
 	require.Error(t, err)
 	assert.ElementsMatch(t, append([]string{secretField}, nonSecretFields...), deleted,
 		"a failure on one account must not strand the others")
+}
+
+// INT-444 S2 (Codex blocker): under --non-interactive the file-backend
+// passphrase callback must NEVER prompt — even on a TTY — and instead fail
+// loud naming the env var. The keychain opens before runInit's own prompt
+// guards, so this policy must live here.
+func TestPassphraseFunc_NonInteractive_NeverPrompts(t *testing.T) {
+	f := passphraseFunc("newrelic-cli", true)
+	_, err := f()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "NEWRELIC_CLI_KEYRING_PASSPHRASE")
+	assert.Contains(t, err.Error(), "non-interactive")
 }
 
 func TestConflictErr_NoValueLeak(t *testing.T) {

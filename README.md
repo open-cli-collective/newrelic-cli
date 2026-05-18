@@ -144,6 +144,16 @@ nrq apps list
 nrq init
 op read "op://Vault/New Relic/api key" | nrq init --api-key-stdin --account-id 12345 --region US
 
+# Fully non-interactive (central installer: op resolves refs into env vars)
+nrq init --region US \
+  --api-key-from-env NEWRELIC_API_KEY \
+  --account-id-from-env NEWRELIC_ACCOUNT_ID \
+  --non-interactive
+
+# Verify the resolved credential / account (exits non-zero if broken)
+nrq me
+nrq me -o json
+
 # Low-level scripted secret ingress (single key, stdin or env — never a flag value)
 nrq set-credential --key api_key --stdin
 nrq set-credential --key api_key --from-env NEWRELIC_API_KEY
@@ -163,6 +173,15 @@ nrq config clear --all    # also removes config.yml
 > disk or accepted as a positional/flag value (§1.5). Use `nrq init` or
 > `nrq set-credential`. `config set-account-id` / `config set-region` are
 > deprecated thin aliases of `config set` (one cycle).
+
+> **Installer / non-interactive `init`:** `--api-key-from-env <VAR>` ingests
+> the secret into the keyring; `--account-id-from-env <VAR>` ingests the
+> **non-secret** account ID into `config.yml` (same `op→env→--*-from-env`
+> channel, never the keyring). `--non-interactive` makes `init` fail loudly
+> instead of prompting for any missing value — including the file-backend
+> passphrase. `nrq me` resolves the credential and prints the authenticated
+> user/account, exiting non-zero if the key is invalid or the configured
+> account is inaccessible (scripted health check / installer `verify`).
 
 ### Credential Storage
 

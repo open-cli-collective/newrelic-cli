@@ -22,12 +22,21 @@ func passphraseEnvVar(service string) string {
 // a no-echo TTY prompt. Headless with no env var set is a hard, actionable
 // error — never a silent empty passphrase (that would create an
 // effectively-unencrypted keyring).
-func passphraseFunc(service string) func() (string, error) {
+//
+// When nonInteractive is set (`nrq init --non-interactive`) the prompt is
+// suppressed even on a TTY: the passphrase must come from the env var or
+// the call fails loud, so the installer's non-interactive init is
+// deterministic (cli-deployment-manifest §1.3).
+func passphraseFunc(service string, nonInteractive bool) func() (string, error) {
 	return func() (string, error) {
-		if !term.IsTerminal(int(os.Stdin.Fd())) {
+		if nonInteractive || !term.IsTerminal(int(os.Stdin.Fd())) {
+			hint := ", or run interactively"
+			if nonInteractive {
+				hint = " (required with --non-interactive)"
+			}
 			return "", fmt.Errorf(
-				"file keyring backend needs a passphrase: set %s, or run interactively",
-				passphraseEnvVar(service))
+				"file keyring backend needs a passphrase: set %s%s",
+				passphraseEnvVar(service), hint)
 		}
 		fmt.Fprintf(os.Stderr, "Passphrase for the %s file keyring: ", service)
 		b, err := term.ReadPassword(int(os.Stdin.Fd()))

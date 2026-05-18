@@ -533,3 +533,81 @@ func TestInit_NoSecretInConfigYML(t *testing.T) {
 	assert.NotContains(t, string(raw), sentinel)
 	assert.Contains(t, string(raw), "account_id: \"42\"")
 }
+
+// INT-444 S1: --account-id-from-env reads the NON-secret account_id from a
+// named env var (installer op→env→--*-from-env channel) and writes it to
+// config.yml — never the keyring. End-to-end installer invocation.
+func TestInit_AccountIDFromEnv_InstallerInvocation(t *testing.T) {
+	testutil.Setup(t)
+	t.Setenv("NRQ_INSTALLER_KEY", sentinel)
+	t.Setenv("NRQ_INSTALLER_ACCT", "98765")
+	rootCmd, opts := root.NewRootCmd()
+	var o, e bytes.Buffer
+	opts.Stdout, opts.Stderr = &o, &e
+	root.RegisterAll(rootCmd, opts, initcmd.Register)
+	rootCmd.SetArgs([]string{"init", "--region", "US",
+		"--api-key-from-env", "NRQ_INSTALLER_KEY",
+		"--account-id-from-env", "NRQ_INSTALLER_ACCT",
+		"--non-interactive", "--no-verify"})
+	require.NoError(t, rootCmd.Execute())
+	assert.NotContains(t, o.String()+e.String(), sentinel)
+
+	raw, err := os.ReadFile(config.Path())
+	require.NoError(t, err)
+	assert.NotContains(t, string(raw), sentinel, "secret never in config.yml")
+	assert.Contains(t, string(raw), "account_id: \"98765\"")
+	assert.Contains(t, string(raw), "region: US")
+
+	st, err := keychain.OpenNoMigrate()
+	require.NoError(t, err)
+	defer func() { _ = st.Close() }()
+	got, _ := st.APIKey()
+	assert.Equal(t, sentinel, got, "api_key in keyring")
+}
+
+// INT-444 S1: an empty/unset --account-id-from-env var is a hard error
+// (mirrors --api-key-from-env), and the two account flags are mutually
+// exclusive.
+func TestInit_AccountIDFromEnv_Errors(t *testing.T) {
+	t.Run("empty/unset env", func(t *testing.T) {
+		testutil.Setup(t)
+		t.Setenv("NRQ_K", sentinel)
+		rootCmd, opts := root.NewRootCmd()
+		var o, e bytes.Buffer
+		opts.Stdout, opts.Stderr = &o, &e
+		root.RegisterAll(rootCmd, opts, initcmd.Register)
+		rootCmd.SetArgs([]string{"init", "--api-key-from-env", "NRQ_K",
+			"--account-id-from-env", "NRQ_DEFINITELY_UNSET", "--non-interactive", "--no-verify"})
+		err := rootCmd.Execute()
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "is empty or unset")
+	})
+	t.Run("mutually exclusive with --account-id", func(t *testing.T) {
+		testutil.Setup(t)
+		t.Setenv("NRQ_K", sentinel)
+		t.Setenv("NRQ_A", "42")
+		rootCmd, opts := root.NewRootCmd()
+		var o, e bytes.Buffer
+		opts.Stdout, opts.Stderr = &o, &e
+		root.RegisterAll(rootCmd, opts, initcmd.Register)
+		rootCmd.SetArgs([]string{"init", "--api-key-from-env", "NRQ_K",
+			"--account-id", "1", "--account-id-from-env", "NRQ_A", "--no-verify"})
+		err := rootCmd.Execute()
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "at most one of --account-id")
+	})
+}
+
+// INT-444 S2: --non-interactive with no key and no ingress flag fails loud
+// (never hangs on a prompt), naming the ingress flags.
+func TestInit_NonInteractive_NoKeyNoIngress_FailsLoud(t *testing.T) {
+	testutil.Setup(t)
+	rootCmd, opts := root.NewRootCmd()
+	var o, e bytes.Buffer
+	opts.Stdout, opts.Stderr = &o, &e
+	root.RegisterAll(rootCmd, opts, initcmd.Register)
+	rootCmd.SetArgs([]string{"init", "--non-interactive", "--no-verify"})
+	err := rootCmd.Execute()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "no API key in the keyring and no ingress flag")
+}

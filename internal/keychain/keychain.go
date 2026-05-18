@@ -47,25 +47,36 @@ type Store struct {
 // The returned Store reads/writes the OS keyring only. A legacy-vs-keyring
 // conflict surfaces here as a §1.8 error; `nrq init --overwrite` calls
 // OpenForMigrationOverwrite to force the legacy value instead.
-func Open() (*Store, error) { return open(false, true) }
+func Open() (*Store, error) { return open(false, true, false) }
 
 // OpenForMigrationOverwrite is Open with the §1.8 `--overwrite` resolution:
 // a legacy value is forced over an existing keyring entry. It still cannot
 // resolve a legacy-vs-legacy disagreement (the user must pick).
-func OpenForMigrationOverwrite() (*Store, error) { return open(true, true) }
+func OpenForMigrationOverwrite() (*Store, error) { return open(true, true, false) }
+
+// OpenForInit is the `nrq init` entry point. It runs the one-time migration
+// like Open (with the §1.8 `--overwrite` resolution when overwrite is set)
+// but additionally carries a non-interactive policy: when nonInteractive,
+// the file-backend passphrase is resolved from the env var only — never an
+// interactive prompt, even on a TTY (cli-deployment-manifest §1.3, so the
+// central installer's `nrq init --non-interactive` is deterministic). Other
+// callers' Open* entry points are unchanged.
+func OpenForInit(overwrite, nonInteractive bool) (*Store, error) {
+	return open(overwrite, true, nonInteractive)
+}
 
 // OpenNoMigrate opens the store WITHOUT running the one-time migration. It
 // exists so `config clear` can perform the §1.8 conflict remediation it
 // advertises: if migration ran first it would return the conflict error
 // before clear could delete the keyring entry, leaving the user no way out.
-func OpenNoMigrate() (*Store, error) { return open(false, false) }
+func OpenNoMigrate() (*Store, error) { return open(false, false, false) }
 
-func open(overwrite, runMigration bool) (*Store, error) {
+func open(overwrite, runMigration, nonInteractive bool) (*Store, error) {
 	cfg, err := config.Load()
 	if err != nil {
 		return nil, err
 	}
-	return openWith(cfg, overwrite, runMigration)
+	return openWith(cfg, overwrite, runMigration, nonInteractive)
 }
 
 // OpenRef opens a store against an explicit ref instead of config.yml's
@@ -82,13 +93,13 @@ func OpenRef(ref string) (*Store, error) {
 	if ref != "" {
 		cfg.CredentialRef = ref
 	}
-	return openWith(cfg, false, false)
+	return openWith(cfg, false, false, false)
 }
 
 // openWith is the seam unit tests drive with an injected config (e.g. a
 // file-backend opt-in via Keyring.Backend) so they never touch a real
 // keyring (§1.12 test obligation, and hermeticity).
-func openWith(cfg *config.Config, overwrite, runMigration bool) (*Store, error) {
+func openWith(cfg *config.Config, overwrite, runMigration, nonInteractive bool) (*Store, error) {
 	service, profile, err := credstore.ParseRef(cfg.CredentialRef)
 	if err != nil {
 		return nil, fmt.Errorf("invalid credential_ref %q: %w", cfg.CredentialRef, err)
@@ -105,7 +116,7 @@ func openWith(cfg *config.Config, overwrite, runMigration bool) (*Store, error) 
 		// auto-selection and store credentials somewhere unintended.
 		return nil, fmt.Errorf("invalid keyring.backend %q in config (only \"file\" is supported)", b)
 	}
-	opts.FilePassphrase = passphraseFunc(service)
+	opts.FilePassphrase = passphraseFunc(service, nonInteractive)
 
 	cs, err := credstore.Open(service, opts)
 	if err != nil {

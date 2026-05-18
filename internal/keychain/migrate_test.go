@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -52,6 +53,33 @@ func TestPlanMigration_EqualMultiSource_Idempotent(t *testing.T) {
 	assert.False(t, p.writeSecret)
 	assert.False(t, p.movedSecret)
 	assert.Empty(t, p.changes)
+}
+
+// When the keyring already holds the (equal) secret but legacy originals
+// still exist and will be scrubbed, that scrub IS a one-time migration side
+// effect: planMigration must flag scrubbedOnly and record a change so the
+// signal fires once (§1.8). No deleters → genuinely nothing to signal. #M2.
+func TestPlanMigration_EqualButLegacyPresent_SignalsScrub(t *testing.T) {
+	d := discovered{
+		secrets:  []secretCandidate{{location: "file:/p#api_key", value: "NRAK-X"}},
+		deleters: []labeledDeleter{{label: "file /p", del: func() error { return nil }}},
+	}
+	p, err := planMigration(svc, prof, ref, &config.Config{}, d, target("NRAK-X"), false)
+	require.NoError(t, err)
+	assert.False(t, p.writeSecret, "value already present — no write")
+	assert.False(t, p.movedSecret)
+	assert.True(t, p.scrubbedOnly, "scrubbing legacy originals is a one-time side effect")
+	require.Len(t, p.changes, 1)
+	assert.Equal(t, "api_key", p.changes[0].Field)
+	assert.Contains(t, p.changes[0].To, "legacy copies removed")
+
+	// No deleters present → truly nothing happened → no signal.
+	p2, err := planMigration(svc, prof, ref, &config.Config{},
+		discovered{secrets: []secretCandidate{{location: "file:/p#api_key", value: "NRAK-X"}}},
+		target("NRAK-X"), false)
+	require.NoError(t, err)
+	assert.False(t, p2.scrubbedOnly)
+	assert.Empty(t, p2.changes)
 }
 
 func TestPlanMigration_SecretDivergence_KeychainVsFile_FailsNamingAll(t *testing.T) {
@@ -206,7 +234,8 @@ func TestDiscover_LabelsLegacyFileSource(t *testing.T) {
 	require.NoError(t, os.MkdirAll(legacyDir, 0o700))
 	require.NoError(t, os.WriteFile(filepath.Join(legacyDir, "credentials"),
 		[]byte("api_key=NRAK-x\n"), 0o600))
-	d := discover()
+	d, err := discover()
+	require.NoError(t, err)
 	require.NotEmpty(t, d.deleters)
 	var found bool
 	for _, ld := range d.deleters {
@@ -283,6 +312,74 @@ func TestRepairContract_EmptyEntry_OverwriteRepairs(t *testing.T) {
 	got, err := st.APIKey()
 	require.NoError(t, err)
 	assert.Equal(t, "NRAK-repaired-value-x", got, "repair must leave a usable key")
+}
+
+// keychainRead must be tri-state: a definitive not-found is absent (no
+// error), but a denial / non-zero / timeout MUST fail loud so §1.8 never
+// migrates on a partial view that could miss a divergence. #B1.2 / audit-M2.
+func TestKeychainRead_TriState(t *testing.T) {
+	orig := securityRun
+	defer func() { securityRun = orig }()
+
+	securityRun = func(...string) ([]byte, int, bool, error) { return []byte("NRAK-present\n"), 0, false, nil }
+	v, ok, err := keychainRead("svc", "acct")
+	require.NoError(t, err)
+	assert.True(t, ok)
+	assert.Equal(t, "NRAK-present", v)
+
+	securityRun = func(...string) ([]byte, int, bool, error) { return nil, securityErrItemNotFound, false, nil }
+	_, ok, err = keychainRead("svc", "acct")
+	require.NoError(t, err, "errSecItemNotFound is definitive absence, not an error")
+	assert.False(t, ok)
+
+	securityRun = func(...string) ([]byte, int, bool, error) { return nil, 51, false, nil }
+	_, _, err = keychainRead("svc", "acct")
+	require.Error(t, err, "a non-not-found exit (denied/locked) must fail loud")
+
+	securityRun = func(...string) ([]byte, int, bool, error) { return nil, -1, true, nil }
+	_, _, err = keychainRead("svc", "acct")
+	require.Error(t, err, "a timeout must fail loud")
+	assert.Contains(t, err.Error(), "timed out")
+
+	securityRun = func(...string) ([]byte, int, bool, error) { return []byte("\n"), 0, false, nil }
+	_, ok, err = keychainRead("svc", "acct")
+	require.NoError(t, err)
+	assert.False(t, ok, "present-but-empty is nothing to migrate")
+}
+
+// ScrubLegacyKeychain must attempt EVERY legacy account (not stop at the
+// first), and a not-found is idempotent success. audit-M1.
+func TestScrubLegacyKeychain_AttemptsAllAccounts(t *testing.T) {
+	if runtime.GOOS != "darwin" {
+		t.Skip("ScrubLegacyKeychain is darwin-only")
+	}
+	orig := securityRun
+	defer func() { securityRun = orig }()
+	t.Setenv(legacyKeychainScanDisabledEnv, "") // enable the darwin path
+
+	var deleted []string
+	securityRun = func(args ...string) ([]byte, int, bool, error) {
+		deleted = append(deleted, args[len(args)-1]) // trailing -a <account>
+		return nil, securityErrItemNotFound, false, nil
+	}
+	require.NoError(t, ScrubLegacyKeychain(), "all-absent is idempotent success")
+	assert.ElementsMatch(t, append([]string{secretField}, nonSecretFields...), deleted)
+
+	// One account hard-fails: the others are still attempted and the error
+	// is surfaced (best-effort across all, joined).
+	deleted = nil
+	securityRun = func(args ...string) ([]byte, int, bool, error) {
+		acct := args[len(args)-1]
+		deleted = append(deleted, acct)
+		if acct == secretField {
+			return nil, 51, false, nil // access denied
+		}
+		return nil, securityErrItemNotFound, false, nil
+	}
+	err := ScrubLegacyKeychain()
+	require.Error(t, err)
+	assert.ElementsMatch(t, append([]string{secretField}, nonSecretFields...), deleted,
+		"a failure on one account must not strand the others")
 }
 
 func TestConflictErr_NoValueLeak(t *testing.T) {

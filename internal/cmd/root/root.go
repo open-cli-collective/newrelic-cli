@@ -1,6 +1,7 @@
 package root
 
 import (
+	"errors"
 	"io"
 	"os"
 
@@ -86,7 +87,7 @@ const rootLong = `nrq is a command-line interface for New Relic.
 It provides commands for managing applications, dashboards, alerts,
 users, and other New Relic resources.
 
-First-time setup (stores the API key in the OS keyring, never on disk):
+First-time setup (API key in the OS keyring — never plaintext, never in config.yml):
   nrq init
 
 Non-interactive credential ingress:
@@ -150,3 +151,21 @@ func RegisterAll(cmd *cobra.Command, opts *Options, fns ...RegisterFunc) {
 		fn(cmd, opts)
 	}
 }
+
+// NoPositionalArgs is a cobra Args validator for the secret-ingress commands
+// (init, set-credential). cobra.NoArgs formats its error as
+// `unknown command %q for %q`, quoting args[0] — so `nrq init NRAK-xxx`
+// would echo the fat-fingered API key to stderr and any logs (§1.12). This
+// rejects positional args with a STATIC message that never contains the
+// argument value.
+func NoPositionalArgs(_ *cobra.Command, args []string) error {
+	if len(args) > 0 {
+		return errNoPositionalArgs
+	}
+	return nil
+}
+
+var errNoPositionalArgs = errors.New(
+	"this command takes no positional arguments; a secret must be provided " +
+		"via stdin, a named environment variable, or an interactive prompt — " +
+		"never as a command-line argument (see --help; §1.5.1)")

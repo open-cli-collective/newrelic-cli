@@ -15,7 +15,7 @@ A command-line interface for interacting with New Relic APIs.
 - **Synthetic Monitors**: List and inspect synthetic monitoring configurations
 - **Users**: List and view user details
 - **Multiple Output Formats**: Table, JSON, and plain (scriptable) output
-- **Secure Credential Storage**: API key stored in the OS keyring (macOS Keychain / Windows Credential Manager / Linux Secret Service), never on disk
+- **Secure Credential Storage**: API key stored in the OS keyring (macOS Keychain / Windows Credential Manager / Linux Secret Service), or an encrypted file with the explicit file-backend opt-in — never in plaintext and never in `config.yml`
 
 ## Installation
 
@@ -117,7 +117,7 @@ go install github.com/open-cli-collective/newrelic-cli/cmd/nrq@latest
 ## Quick Start
 
 ```bash
-# 1. First-time setup (API key stored in the OS keyring, never on disk)
+# 1. First-time setup (API key stored in the OS keyring — never in plaintext, never in config.yml)
 nrq init
 
 # 2. Verify configuration

@@ -15,6 +15,7 @@ import (
 	"github.com/open-cli-collective/newrelic-cli/internal/cmd/initcmd"
 	"github.com/open-cli-collective/newrelic-cli/internal/cmd/keys"
 	"github.com/open-cli-collective/newrelic-cli/internal/cmd/logs"
+	"github.com/open-cli-collective/newrelic-cli/internal/cmd/me"
 	"github.com/open-cli-collective/newrelic-cli/internal/cmd/nerdgraph"
 	"github.com/open-cli-collective/newrelic-cli/internal/cmd/nrql"
 	"github.com/open-cli-collective/newrelic-cli/internal/cmd/root"
@@ -37,6 +38,7 @@ func main() {
 		initcmd.Register,
 		keys.Register,
 		logs.Register,
+		me.Register,
 		nerdgraph.Register,
 		nrql.Register,
 		synthetics.Register,

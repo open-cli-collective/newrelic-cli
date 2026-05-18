@@ -62,6 +62,7 @@ newrelic-cli/
 │   │   ├── deployments/        # deployments list, create
 │   │   ├── entities/           # entities search
 │   │   ├── logs/               # logs rules list, create, delete
+│   │   ├── me/                 # me — identity/access check (verifies the key)
 │   │   ├── nerdgraph/          # nerdgraph query
 │   │   ├── nrql/               # nrql query
 │   │   ├── synthetics/         # synthetics list, get
@@ -320,6 +321,14 @@ optional `keyring.backend: file` opt-in.
 - **Ingress only** (`init` / `set-credential`): stdin, `--*-from-env <VAR>`,
   or an interactive no-echo prompt — never a flag/positional literal (§1.5).
   `nrq config set-api-key` is removed (hard error → migration message).
+- **Installer / non-interactive:** `nrq init --non-interactive` (init-only)
+  fails loud instead of prompting for any missing value, incl. the
+  file-backend passphrase (policy threaded via `keychain.OpenForInit`).
+  `--account-id-from-env <VAR>` is the non-secret twin of
+  `--api-key-from-env` — same `op→env→--*-from-env` channel, but resolves
+  into `config.yml`, never the keyring (§2.5). `nrq me` is the scripted
+  verify (`opts.APIClient()` → `TestConnection`; non-zero on bad key /
+  inaccessible configured account; never prints the key).
 - **Runtime resolution:** API key from the keyring only (the single lazy
   chokepoint is `root.Options.APIClient`, which also runs the one-time §1.8
   migration). `account_id`/`region`: env > config.yml.
@@ -337,7 +346,7 @@ optional `keyring.backend: file` opt-in.
 | Variable | Description |
 |----------|-------------|
 | `NEWRELIC_API_KEY` | User API key (NRAK-xxx) — **setup ingress only** (`init`/`set-credential` `--from-env`); not read at runtime |
-| `NEWRELIC_ACCOUNT_ID` | Account ID (non-secret runtime override; env > config.yml) |
+| `NEWRELIC_ACCOUNT_ID` | Account ID — non-secret runtime override (env > config.yml); also the installer ingress target for `nrq init --account-id-from-env NEWRELIC_ACCOUNT_ID` (resolved into `config.yml`, never the keyring) |
 | `NEWRELIC_REGION` | US or EU (non-secret runtime override; env > config.yml) |
 | `NEWRELIC_CLI_KEYRING_BACKEND` | `file` to force the encrypted-file backend (§1.4) |
 | `NEWRELIC_CLI_KEYRING_PASSPHRASE` | File-backend passphrase for headless use (§1.4) |

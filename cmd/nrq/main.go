@@ -21,6 +21,7 @@ import (
 	"github.com/open-cli-collective/newrelic-cli/internal/cmd/synthetics"
 	"github.com/open-cli-collective/newrelic-cli/internal/cmd/users"
 	"github.com/open-cli-collective/newrelic-cli/internal/exitcode"
+	"github.com/open-cli-collective/newrelic-cli/internal/output"
 )
 
 func main() {
@@ -43,6 +44,14 @@ func main() {
 	)
 
 	if err := rootCmd.Execute(); err != nil {
+		// §1.8/§1.11.6: a one-time migration that succeeded before the
+		// command failed must still surface. The success path already
+		// spliced it via View.JSON; on a non-zero exit flush any pending
+		// block to stdout before mapping the exit code (text-mode emits
+		// the stderr line synchronously during migration, so it is
+		// already out).
+		output.FlushMigrationJSONOnError(os.Stdout)
+
 		// Map error types to exit codes for shell scripting
 		var apiErr *api.APIError
 		if errors.As(err, &apiErr) {

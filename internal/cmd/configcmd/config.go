@@ -46,10 +46,11 @@ func Register(rootCmd *cobra.Command, opts *root.Options) {
 
 type setCredentialOptions struct {
 	*root.Options
-	ref     string
-	key     string
-	stdin   bool
-	fromEnv string
+	ref       string
+	key       string
+	stdin     bool
+	fromEnv   string
+	overwrite bool
 }
 
 func newSetCredentialCmd(opts *root.Options) *cobra.Command {
@@ -75,6 +76,7 @@ Examples:
 	cmd.Flags().StringVar(&o.key, "key", "", "Bundle key to set (only \"api_key\" is allowed)")
 	cmd.Flags().BoolVar(&o.stdin, "stdin", false, "Read the secret value from stdin")
 	cmd.Flags().StringVar(&o.fromEnv, "from-env", "", "Read the secret value from this environment variable")
+	cmd.Flags().BoolVar(&o.overwrite, "overwrite", false, "Replace an existing keyring value (refuses by default)")
 	return cmd
 }
 
@@ -125,7 +127,20 @@ func runSetCredential(o *setCredentialOptions) error {
 	}
 	defer func() { _ = st.Close() }()
 
-	if err := st.SetAPIKey(secret); err != nil {
+	// No-clobber by default (§1.5/§1.11): an existing keyring value is never
+	// silently replaced — the user must pass --overwrite.
+	if st.HasAPIKey() && !o.overwrite {
+		return fmt.Errorf("%s already set at %s; pass --overwrite to replace it", o.key, st.Ref())
+	}
+	if o.overwrite {
+		err = st.SetAPIKeyOverwrite(secret)
+	} else {
+		err = st.SetAPIKey(secret)
+	}
+	if err != nil {
+		if errors.Is(err, credstore.ErrExists) {
+			return fmt.Errorf("%s already set at %s; pass --overwrite to replace it", o.key, st.Ref())
+		}
 		return err
 	}
 	v.Success("Stored %s in the OS keyring at %s", o.key, st.Ref())

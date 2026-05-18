@@ -155,10 +155,27 @@ func (s *Store) APIKey() (string, error) {
 	return v, nil
 }
 
-// SetAPIKey is an ingress-only write (called from init / set-credential after
-// the value arrived via stdin/env per §1.5).
-func (s *Store) SetAPIKey(v string) error {
-	if err := s.cs.Set(s.profile, KeyAPIKey, v, credstore.WithOverwrite()); err != nil {
+// SetAPIKey is the default ingress write: it FAILS (credstore.ErrExists) if
+// an api_key already exists under the ref. §1.5/§1.11 posture — an existing
+// keyring entry is never silently clobbered; the caller must obtain explicit
+// user intent (`--overwrite`) and use SetAPIKeyOverwrite.
+func (s *Store) SetAPIKey(v string) error { return s.set(v, false) }
+
+// SetAPIKeyOverwrite replaces an existing api_key. Only reached after the
+// command layer has an explicit `--overwrite`.
+func (s *Store) SetAPIKeyOverwrite(v string) error { return s.set(v, true) }
+
+func (s *Store) set(v string, overwrite bool) error {
+	var opts []credstore.SetOpt
+	if overwrite {
+		opts = append(opts, credstore.WithOverwrite())
+	}
+	if err := s.cs.Set(s.profile, KeyAPIKey, v, opts...); err != nil {
+		// ErrExists is propagated verbatim (errors.Is-matchable) so the
+		// command layer can turn it into the actionable --overwrite hint.
+		if errors.Is(err, credstore.ErrExists) {
+			return err
+		}
 		return fmt.Errorf("store %s at %s: %w", KeyAPIKey, s.ref, err)
 	}
 	return nil

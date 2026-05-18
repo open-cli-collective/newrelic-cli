@@ -7,6 +7,7 @@ package noleak_test
 
 import (
 	"bytes"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -21,26 +22,39 @@ import (
 	"github.com/open-cli-collective/newrelic-cli/internal/cmd/root"
 	"github.com/open-cli-collective/newrelic-cli/internal/config"
 	"github.com/open-cli-collective/newrelic-cli/internal/keychain"
+	"github.com/open-cli-collective/newrelic-cli/internal/output"
 	"github.com/open-cli-collective/newrelic-cli/internal/testutil"
 )
 
 const sentinel = "NRAK-SUPERSECRETSENTINEL-do-not-leak"
 
-// probeRegister adds a hidden `__probe` command that triggers the §1.8
-// migration (keychain.Open) and then emits JSON through the real view — the
-// minimal stand-in for an API command, so the §1.11.6 test exercises the
-// real entrypoint + migration + JSON splice without a network call.
+// probeRegister adds hidden commands that go through the REAL lazy
+// chokepoint `opts.APIClient()` (which opens the keyring and runs the §1.8
+// migration) — exactly what an API command does, minus the network call. So
+// these exercise the single-chokepoint architecture, not a bypass.
+//
+//	__probe      success path: resolve client, emit JSON via the real view.
+//	__probefail  resolve client (migration runs), then return a non-zero
+//	             error — the §1.11.6 "signal survives a non-zero exit" case.
 func probeRegister(rootCmd *cobra.Command, opts *root.Options) {
 	rootCmd.AddCommand(&cobra.Command{
 		Use:    "__probe",
 		Hidden: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			st, err := keychain.Open()
-			if err != nil {
+			if _, err := opts.APIClient(); err != nil {
 				return err
 			}
-			_ = st.Close()
 			return opts.View().JSON(map[string]string{"ok": "true"})
+		},
+	})
+	rootCmd.AddCommand(&cobra.Command{
+		Use:    "__probefail",
+		Hidden: true,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			if _, err := opts.APIClient(); err != nil {
+				return err
+			}
+			return errors.New("boom: command failed after a successful migration")
 		},
 	})
 }
@@ -63,6 +77,12 @@ func run(t *testing.T, args ...string) (string, string, error) {
 	r, w, _ := os.Pipe()
 	os.Stderr = w
 	err := rootCmd.Execute()
+	// Mirror cmd/nrq/main.go EXACTLY: on a non-zero exit, flush any pending
+	// §1.8 block before the process would os.Exit. This is the real
+	// entrypoint contract under test (§1.11.6).
+	if err != nil {
+		output.FlushMigrationJSONOnError(&out)
+	}
 	_ = w.Close()
 	os.Stderr = origStderr
 	var pipeBuf bytes.Buffer
@@ -128,16 +148,98 @@ func TestMigrationSignal_TextStderr(t *testing.T) {
 	assert.NotContains(t, errOut, sentinel)
 }
 
-// §1.11 item 2: runtime resolution is keyring-only — NEWRELIC_API_KEY is not
-// read at runtime (it is ingress-only).
-func TestRuntime_IgnoresAPIKeyEnv(t *testing.T) {
+// §1.11 item 2 (real chokepoint): a runtime API command resolves through
+// opts.APIClient(). With NEWRELIC_API_KEY set in the environment but nothing
+// in the keyring, resolution MUST fail (the env var is not a credential
+// source) — proving runtime is keyring-only.
+func TestRuntime_APIClient_IgnoresAPIKeyEnv(t *testing.T) {
 	testutil.Setup(t)
-	t.Setenv("NEWRELIC_API_KEY", sentinel) // present in env, but not ingested
-	out, errOut, err := run(t, "config", "show")
-	require.NoError(t, err)
-	assert.Contains(t, out, "API key:        not set",
-		"runtime must not treat NEWRELIC_API_KEY as a credential source")
+	t.Setenv("NEWRELIC_API_KEY", sentinel) // present in env, never ingested
+	out, errOut, err := run(t, "__probe")
+	require.Error(t, err, "APIClient must not accept NEWRELIC_API_KEY as a source")
+	assert.True(t, errors.Is(err, keychain.ErrMissingAPIKey))
 	assert.NotContains(t, out+errOut, sentinel)
+}
+
+// §1.11.6: the one-time signal SURVIVES a non-zero exit. Migration succeeds
+// inside opts.APIClient(); the command then fails. The real entrypoint must
+// still emit _migration (flushed on the error path) — and never the value.
+func TestMigrationSignal_SurvivesNonZeroExit(t *testing.T) {
+	tmp := testutil.Setup(t)
+	plantLegacyFile(t, tmp)
+	out, _, err := run(t, "__probefail", "-o", "json")
+	require.Error(t, err, "__probefail must exit non-zero")
+	assert.Contains(t, out, `"_migration"`, "signal must survive a non-zero exit")
+	assert.Contains(t, out, `"api_key"`)
+	assert.NotContains(t, out, sentinel)
+}
+
+// §1.5/§1.11 (Blocker): an existing keyring value is never silently
+// clobbered. Second set-credential without --overwrite fails; with
+// --overwrite it replaces.
+func TestSetCredential_NoClobberByDefault(t *testing.T) {
+	testutil.Setup(t)
+	setCred := func(val string, extra ...string) (string, error) {
+		rootCmd, opts := root.NewRootCmd()
+		var o, e bytes.Buffer
+		opts.Stdout, opts.Stderr = &o, &e
+		opts.Stdin = strings.NewReader(val + "\n")
+		root.RegisterAll(rootCmd, opts, configcmd.Register)
+		rootCmd.SetArgs(append([]string{"set-credential", "--ref", "newrelic-cli/default", "--key", "api_key", "--stdin"}, extra...))
+		return o.String() + e.String(), rootCmd.Execute()
+	}
+	const k1, k2, k3 = "NRAK-first-0000000001", "NRAK-second-000000002", "NRAK-third-0000000003"
+	_, err := setCred(k1)
+	require.NoError(t, err)
+
+	out, err := setCred(k2)
+	require.Error(t, err, "second set without --overwrite must refuse")
+	assert.Contains(t, out+errStr(err), "overwrite")
+	assert.NotContains(t, out, k2)
+
+	_, err = setCred(k3, "--overwrite")
+	require.NoError(t, err, "--overwrite must replace")
+
+	st, err := keychain.OpenNoMigrate()
+	require.NoError(t, err)
+	defer func() { _ = st.Close() }()
+	got, err := st.APIKey()
+	require.NoError(t, err)
+	assert.Equal(t, k3, got)
+}
+
+func errStr(e error) string {
+	if e == nil {
+		return ""
+	}
+	return e.Error()
+}
+
+// §1.8/§2.5 (Blocker): if a legacy original cannot be removed, the migration
+// returns an error, emits NO signal, and leaves the legacy file in place for
+// a retry — it must never claim "one-time operation" with plaintext still on
+// disk.
+func TestMigration_CleanupFailure_NoSignal_FileRetained(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root bypasses directory write perms")
+	}
+	tmp := testutil.Setup(t)
+	dir := filepath.Join(tmp, ".config", "newrelic-cli")
+	require.NoError(t, os.MkdirAll(dir, 0o700))
+	legacy := filepath.Join(dir, "credentials")
+	require.NoError(t, os.WriteFile(legacy, []byte("api_key="+sentinel+"\n"), 0o600))
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(tmp, ".config"))
+	// Make the containing dir non-writable so os.Remove(legacy) fails.
+	require.NoError(t, os.Chmod(dir, 0o500))
+	t.Cleanup(func() { _ = os.Chmod(dir, 0o700) })
+
+	out, errOut, err := run(t, "__probe", "-o", "json")
+	require.Error(t, err, "migration must fail when a legacy original cannot be removed")
+	assert.NotContains(t, out, `"_migration"`, "no signal on incomplete migration")
+	assert.NotContains(t, errOut, "one-time operation")
+	assert.NotContains(t, out+errOut, sentinel)
+	_, statErr := os.Stat(legacy)
+	assert.NoError(t, statErr, "legacy file must remain for a retry")
 }
 
 // §1.5 / §2.5: `config set-api-key` accepts no value by ANY path — positional,

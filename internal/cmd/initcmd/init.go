@@ -95,11 +95,18 @@ func runInit(opts *initOptions) error {
 
 	switch {
 	case opts.secretFromFlags():
+		// No-clobber by default (§1.5/§1.11): a scripted ingress must not
+		// silently replace an existing keyring value — require --overwrite.
+		if hadKey && !opts.overwrite {
+			return errors.New(
+				"an API key is already in the keyring; re-run with --overwrite to " +
+					"replace it, or omit --api-key-stdin/--api-key-from-env to keep it")
+		}
 		secret, err := readSecret(opts)
 		if err != nil {
 			return err
 		}
-		if err := storeSecret(v, st, secret); err != nil {
+		if err := storeSecret(v, st, secret, opts.overwrite); err != nil {
 			return err
 		}
 	case hadKey:
@@ -117,7 +124,7 @@ func runInit(opts *initOptions) error {
 		if err != nil {
 			return err
 		}
-		if err := storeSecret(v, st, secret); err != nil {
+		if err := storeSecret(v, st, secret, false); err != nil {
 			return err
 		}
 	}
@@ -193,11 +200,14 @@ func runInit(opts *initOptions) error {
 	return nil
 }
 
-func storeSecret(v *view.View, st *keychain.Store, secret string) error {
+func storeSecret(v *view.View, st *keychain.Store, secret string, overwrite bool) error {
 	if warning, err := validate.APIKey(secret); err != nil {
 		return err
 	} else if warning != "" {
 		v.Warning("%s", warning)
+	}
+	if overwrite {
+		return st.SetAPIKeyOverwrite(secret)
 	}
 	return st.SetAPIKey(secret)
 }

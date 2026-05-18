@@ -9,6 +9,7 @@ package output
 import (
 	"bytes"
 	"encoding/json"
+	"io"
 	"sync"
 )
 
@@ -78,6 +79,23 @@ func MarshalWithMigration(data interface{}) ([]byte, error) {
 		return nil, err
 	}
 	return buf.Bytes(), nil
+}
+
+// FlushMigrationJSONOnError writes the standalone {"_migration":{…}} object
+// to w iff the run is JSON and a block is still pending (consume-once). The
+// real entrypoint calls this on a non-zero exit so a migration that
+// succeeded before the command failed is still surfaced — §1.8/§1.11.6: the
+// one-time signal must survive a non-zero exit. On the success path
+// View.JSON already consumed the block, so this is a no-op there.
+func FlushMigrationJSONOnError(w io.Writer) {
+	if !IsJSON() {
+		return
+	}
+	mig := takeMigration()
+	if mig == nil {
+		return
+	}
+	_, _ = w.Write([]byte(`{"_migration":` + string(mig) + "}\n"))
 }
 
 // spliceMigration applies the object-merge / non-object-wrap policy to an

@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"runtime"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -67,7 +68,7 @@ Examples:
   op read "op://Vault/New Relic/api key" | nrq set-credential --key api_key --stdin
   nrq set-credential --key api_key --from-env NEWRELIC_API_KEY
   nrq set-credential --ref newrelic-cli/default --key api_key --stdin`,
-		Args: cobra.NoArgs,
+		Args: root.NoPositionalArgs, // never echo a fat-fingered secret (§1.12)
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return runSetCredential(o)
 		},
@@ -477,6 +478,9 @@ func runClear(o *clearOptions) error {
 			if _, statErr := os.Stat(config.LegacyCredentialsPath()); statErr == nil {
 				v.Println("would remove: " + config.LegacyCredentialsPath() + " (legacy plaintext)")
 			}
+			if runtime.GOOS == "darwin" {
+				v.Println("would remove: legacy macOS Keychain accounts for service \"newrelic-cli\" (if present)")
+			}
 		}
 		return nil
 	}
@@ -512,6 +516,12 @@ func runClear(o *clearOptions) error {
 			} else {
 				v.Success("Removed %s (legacy plaintext)", lp)
 			}
+		}
+		// Also scrub the legacy macOS Keychain accounts: otherwise a
+		// pre-migration `clear --all` on macOS is silently undone by the
+		// next Open() re-migrating the surviving Keychain item.
+		if err := keychain.ScrubLegacyKeychain(); err != nil {
+			return fmt.Errorf("remove legacy macOS Keychain accounts: %w", err)
 		}
 	}
 	return nil

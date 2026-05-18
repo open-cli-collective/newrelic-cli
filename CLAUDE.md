@@ -4,7 +4,7 @@ This file provides guidance for AI agents working with the newrelic-cli codebase
 
 ## Project Overview
 
-newrelic-cli is a command-line interface for New Relic written in Go. It uses the Cobra framework for commands and provides a public `api/` package that can be imported as a Go library. The CLI supports multiple output formats (table, JSON, plain). The API key is stored only in the OS keyring via the shared `cli-common/credstore` (macOS Keychain / Windows Credential Manager / Linux Secret Service); non-secret `account_id`/`region` live in `~/.config/newrelic-cli/config.yml`. See "Credentials" below.
+newrelic-cli is a command-line interface for New Relic written in Go. It uses the Cobra framework for commands and provides a public `api/` package that can be imported as a Go library. The CLI supports multiple output formats (table, JSON, plain). The API key is stored in the OS keyring via the shared `cli-common/credstore` (macOS Keychain / Windows Credential Manager / Linux Secret Service), or an encrypted file with the explicit file-backend opt-in — never in plaintext and never in `config.yml`; non-secret `account_id`/`region` live in `~/.config/newrelic-cli/config.yml`. See "Credentials" below.
 
 ## Quick Commands
 
@@ -308,10 +308,12 @@ The View struct handles all output formatting. To add a new format:
 
 ## Credentials (Secret-Handling Standard §2.5)
 
-The API key is stored **only** in the OS keyring via `cli-common/credstore`
-under ref `newrelic-cli/default`, key `api_key` (one logical credential, one
-key — §1.3). It is **never** on disk and **never** read from the environment
-at runtime. `account_id`/`region` are non-secret and live in
+The API key is stored in the OS keyring via `cli-common/credstore` under ref
+`newrelic-cli/default`, key `api_key` (one logical credential, one key —
+§1.3), or — with the explicit `keyring.backend: file` opt-in — an encrypted
+file. It is **never** stored in plaintext, **never** in `config.yml`, and
+**never** read from the environment at runtime. `account_id`/`region` are
+non-secret and live in
 `~/.config/newrelic-cli/config.yml` alongside `credential_ref` and the
 optional `keyring.backend: file` opt-in.
 

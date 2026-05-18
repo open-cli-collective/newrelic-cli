@@ -3,11 +3,32 @@ package api
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"time"
 )
+
+// ErrNewRemoved is returned by the deprecated New shim. It exists so an
+// external importer of this pre-1.0 package gets an actionable runtime
+// error instead of a bare compile break, and so the credential-resolution
+// move is self-documenting at the old call site.
+var ErrNewRemoved = errors.New(
+	"api.New() has been removed: the API key now resolves from the OS keyring " +
+		"via `nrq init` / `nrq set-credential`, not from this package. " +
+		"Construct the client with api.NewWithConfig(api.ClientConfig{...}) " +
+		"using values you resolve yourself")
+
+// New is deprecated and non-functional.
+//
+// Deprecated: New previously resolved credentials from the environment and
+// config file. Per Secret-Handling Standard §2.5/§1.11 the api/ package no
+// longer reads the keyring, environment, or config, nor runs the §1.8
+// migration (that is a command-layer side effect — see NewWithConfig). This
+// shim only returns ErrNewRemoved so existing importers fail clearly. Use
+// NewWithConfig.
+func New() (*Client, error) { return nil, ErrNewRemoved }
 
 // Region represents a New Relic region
 type Region string

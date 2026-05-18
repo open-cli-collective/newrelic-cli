@@ -391,6 +391,29 @@ func TestConfigClear_DryRunAndAll(t *testing.T) {
 	assert.NoError(t, err, "clear is idempotent")
 }
 
+// §1.12: a fat-fingered API key passed as a POSITIONAL argument must never
+// be echoed back. cobra.NoArgs quotes args[0] in its error; the custom
+// root.NoPositionalArgs validator must reject with a static message that
+// contains neither the value nor any quoted arg. Both secret-ingress
+// commands (init, set-credential). #B1.
+func TestNoLeak_PositionalArgRejected_NoEcho(t *testing.T) {
+	cases := [][]string{
+		{"init", sentinel},
+		{"set-credential", "--key", "api_key", sentinel},
+	}
+	for _, args := range cases {
+		t.Run(args[0], func(t *testing.T) {
+			testutil.Setup(t)
+			out, errOut, err := run(t, args...)
+			require.Error(t, err, "a positional arg must be rejected")
+			assert.NotContains(t, out, sentinel, "stdout must not echo the arg")
+			assert.NotContains(t, errOut, sentinel, "stderr must not echo the arg")
+			assert.NotContains(t, err.Error(), sentinel, "error must not contain the value")
+			assert.Contains(t, err.Error(), "no positional arguments")
+		})
+	}
+}
+
 // §1.7/§1.8: `clear --all` must also scrub the legacy plaintext credentials
 // file. Otherwise a workstation decommission that never ran the one-time
 // migration leaves the secret on disk and the very next Open() re-migrates

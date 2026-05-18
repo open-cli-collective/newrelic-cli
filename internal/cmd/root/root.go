@@ -1,6 +1,7 @@
 package root
 
 import (
+	"errors"
 	"io"
 	"os"
 
@@ -150,3 +151,21 @@ func RegisterAll(cmd *cobra.Command, opts *Options, fns ...RegisterFunc) {
 		fn(cmd, opts)
 	}
 }
+
+// NoPositionalArgs is a cobra Args validator for the secret-ingress commands
+// (init, set-credential). cobra.NoArgs formats its error as
+// `unknown command %q for %q`, quoting args[0] — so `nrq init NRAK-xxx`
+// would echo the fat-fingered API key to stderr and any logs (§1.12). This
+// rejects positional args with a STATIC message that never contains the
+// argument value.
+func NoPositionalArgs(_ *cobra.Command, args []string) error {
+	if len(args) > 0 {
+		return errNoPositionalArgs
+	}
+	return nil
+}
+
+var errNoPositionalArgs = errors.New(
+	"this command takes no positional arguments; the API key must be provided " +
+		"via --api-key-stdin, --api-key-from-env, or an interactive prompt — " +
+		"never as a command-line argument (§1.5.1)")

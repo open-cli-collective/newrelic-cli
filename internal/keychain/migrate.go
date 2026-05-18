@@ -82,7 +82,13 @@ type discovered struct {
 // `--overwrite` path) forces a legacy api_key over an existing keyring entry;
 // it cannot resolve a legacy-vs-legacy disagreement — the user must pick.
 func migrateLegacyOverwrite(s *Store, cfg *config.Config, overwrite bool) error {
-	d := discover()
+	d, err := discover()
+	if err != nil {
+		// A legacy source could not be read definitively (locked/denied/
+		// timed-out Keychain). Fail loud (§1.8): never migrate on a partial
+		// view that could miss a divergence or strand the original.
+		return err
+	}
 	if len(d.secrets) == 0 && len(d.nonSecrets) == 0 {
 		return nil // nothing legacy anywhere — the steady state
 	}
@@ -156,6 +162,11 @@ func migrateLegacyOverwrite(s *Store, cfg *config.Config, overwrite bool) error 
 		} else {
 			if plan.movedSecret {
 				credstore.EmitMigrationStderr(secretField, s.ref)
+			} else if plan.scrubbedOnly {
+				fmt.Fprintf(os.Stderr,
+					"removed legacy %s credential source(s) for %s "+
+						"(the keyring already held it); this is a one-time operation\n",
+					secretField, s.ref)
 			}
 			for _, f := range plan.movedNonSecret {
 				// Distinct human line: non-secret moves go to config.yml,
@@ -181,6 +192,12 @@ type migrationPlan struct {
 	// replacedExisting: --overwrite forced a legacy value over a DIFFERENT
 	// pre-existing keyring value (destructive — warn the user).
 	replacedExisting bool
+	// scrubbedOnly: the keyring already held the (equal) secret so nothing
+	// was written, but legacy originals existed and are being deleted. That
+	// removal is itself a one-time migration side effect and must be
+	// signaled once (§1.8 — a silent scrub of the user's plaintext file or
+	// legacy Keychain item is still a migration the user should learn of).
+	scrubbedOnly bool
 }
 
 // planMigration is the pure §1.8 resolver. It performs NO I/O (`current`
@@ -209,8 +226,21 @@ func planMigration(service, profile, ref string, cfg *config.Config, d discovere
 		case hasTarget && !overwrite && secretDisagrees(distinct, target):
 			return migrationPlan{}, secretConflictErr(service, profile, ref, d.secrets, hasTarget)
 		case hasTarget && !secretDisagrees(distinct, target):
-			// Already migrated (values match): no write, no signal. The
-			// leftover originals are still cleaned up by the deleters.
+			// Already migrated (values match): no write. But if legacy
+			// originals still exist they are about to be scrubbed by the
+			// deleters — that IS a one-time migration side effect, so
+			// record it and signal once (§1.8).
+			if len(d.deleters) > 0 {
+				p.scrubbedOnly = true
+				locs := make([]string, 0, len(d.secrets))
+				for _, c := range d.secrets {
+					locs = append(locs, c.location)
+				}
+				p.changes = append(p.changes, credstore.MigrationJSONEntry(
+					secretField, strings.Join(locs, ", "),
+					fmt.Sprintf("keyring:%s/%s/%s (already present; legacy copies removed)",
+						service, profile, KeyAPIKey)))
+			}
 		default:
 			p.writeSecret = true
 			p.secretValue = d.secrets[0].value
@@ -308,12 +338,16 @@ func secretConflictErr(service, profile, ref string, group []secretCandidate, ha
 // file path is the released layout — $XDG_CONFIG_HOME/newrelic-cli/credentials
 // else ~/.config/newrelic-cli/credentials — on Linux AND Windows alike (the
 // legacy code has no %APPDATA% branch, so no speculative Windows path).
-func discover() discovered {
+func discover() (discovered, error) {
 	var d discovered
 
 	if runtime.GOOS == "darwin" && os.Getenv(legacyKeychainScanDisabledEnv) == "" {
 		var kcAccounts []string
-		if v, ok := keychainRead(legacyKeychainService, secretField); ok {
+		v, ok, err := keychainRead(legacyKeychainService, secretField)
+		if err != nil {
+			return discovered{}, err
+		}
+		if ok {
 			d.secrets = append(d.secrets, secretCandidate{
 				location: fmt.Sprintf("keychain:%s/%s", legacyKeychainService, secretField),
 				value:    v,
@@ -321,7 +355,11 @@ func discover() discovered {
 			kcAccounts = append(kcAccounts, secretField)
 		}
 		for _, field := range nonSecretFields {
-			if v, ok := keychainRead(legacyKeychainService, field); ok {
+			v, ok, err := keychainRead(legacyKeychainService, field)
+			if err != nil {
+				return discovered{}, err
+			}
+			if ok {
 				d.nonSecrets = append(d.nonSecrets, nonSecretCandidate{
 					field:    field,
 					value:    v,
@@ -390,7 +428,28 @@ func discover() discovered {
 			})
 		}
 	}
-	return d
+	return d, nil
+}
+
+// ScrubLegacyKeychain best-effort deletes nrq's legacy macOS Keychain
+// accounts (service "newrelic-cli": api_key/account_id/region). It is a
+// no-op on non-darwin and when the test seam disables the scan. `config
+// clear --all` calls it so a pre-migration wipe is not silently undone by
+// the next Open() re-migrating a surviving legacy Keychain item — the same
+// restore-on-next-Open() gap the plaintext-file scrub closes. keychainDelete
+// already maps errSecItemNotFound to nil, so an absent account is success;
+// every account is attempted and the full failure set is returned.
+func ScrubLegacyKeychain() error {
+	if runtime.GOOS != "darwin" || os.Getenv(legacyKeychainScanDisabledEnv) != "" {
+		return nil
+	}
+	var errs []error
+	for _, a := range append([]string{secretField}, nonSecretFields...) {
+		if err := keychainDelete(legacyKeychainService, a); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	return errors.Join(errs...)
 }
 
 // legacyCredentialsPath delegates to config.LegacyCredentialsPath so the
@@ -423,19 +482,35 @@ func readLegacyFile(path string) map[string]string {
 // with a clear error rather than block the CLI's first run indefinitely.
 const securityTimeout = 5 * time.Second
 
-func keychainRead(service, account string) (string, bool) {
+// keychainRead is tri-state: (value, true, nil) when present; ("", false,
+// nil) ONLY when `security` definitively reports the item absent
+// (errSecItemNotFound) or it is present-but-empty; ("", false, err) for any
+// other failure — timeout, locked Keychain, access denial, SIP/MDM. A
+// non-not-found failure must NOT be folded into "absent": that would let
+// §1.8 silently skip a real legacy secret, miss a divergence with the file
+// or keyring, and leave the original behind.
+func keychainRead(service, account string) (string, bool, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), securityTimeout)
 	defer cancel()
 	out, err := exec.CommandContext(ctx, "security", "find-generic-password",
 		"-s", service, "-a", account, "-w").Output() //nolint:gosec // darwin-only migration probe of nrq's own legacy items
 	if err != nil {
-		return "", false
+		var ee *exec.ExitError
+		if errors.As(err, &ee) && ee.ExitCode() == securityErrItemNotFound {
+			return "", false, nil // definitively absent — not an error
+		}
+		if ctx.Err() != nil {
+			return "", false, fmt.Errorf(
+				"read legacy keychain item %s/%s timed out after %s (locked Keychain or unlock prompt?): %w",
+				service, account, securityTimeout, ctx.Err())
+		}
+		return "", false, fmt.Errorf("read legacy keychain item %s/%s: %w", service, account, err)
 	}
 	v := strings.TrimRight(string(out), "\r\n")
 	if v == "" {
-		return "", false
+		return "", false, nil // present-but-empty: nothing to migrate
 	}
-	return v, true
+	return v, true, nil
 }
 
 // securityErrItemNotFound is `security`'s exit status when the item is absent

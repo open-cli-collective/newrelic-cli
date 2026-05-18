@@ -55,8 +55,9 @@ and region are non-secret and written to config.yml.`,
   nrq init --api-key-from-env NEWRELIC_API_KEY --account-id 12345
 
   # Resolve a one-time migration conflict by forcing the legacy value
-  nrq init --overwrite --api-key-stdin`,
-		Args: cobra.NoArgs,
+  # (no ingress flag — stdin/env would replace the forced legacy value)
+  nrq init --overwrite`,
+		Args: root.NoPositionalArgs, // never echo a fat-fingered API key (§1.12)
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return runInit(o)
 		},

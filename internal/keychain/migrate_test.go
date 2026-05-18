@@ -54,6 +54,33 @@ func TestPlanMigration_EqualMultiSource_Idempotent(t *testing.T) {
 	assert.Empty(t, p.changes)
 }
 
+// When the keyring already holds the (equal) secret but legacy originals
+// still exist and will be scrubbed, that scrub IS a one-time migration side
+// effect: planMigration must flag scrubbedOnly and record a change so the
+// signal fires once (§1.8). No deleters → genuinely nothing to signal. #M2.
+func TestPlanMigration_EqualButLegacyPresent_SignalsScrub(t *testing.T) {
+	d := discovered{
+		secrets:  []secretCandidate{{location: "file:/p#api_key", value: "NRAK-X"}},
+		deleters: []labeledDeleter{{label: "file /p", del: func() error { return nil }}},
+	}
+	p, err := planMigration(svc, prof, ref, &config.Config{}, d, target("NRAK-X"), false)
+	require.NoError(t, err)
+	assert.False(t, p.writeSecret, "value already present — no write")
+	assert.False(t, p.movedSecret)
+	assert.True(t, p.scrubbedOnly, "scrubbing legacy originals is a one-time side effect")
+	require.Len(t, p.changes, 1)
+	assert.Equal(t, "api_key", p.changes[0].Field)
+	assert.Contains(t, p.changes[0].To, "legacy copies removed")
+
+	// No deleters present → truly nothing happened → no signal.
+	p2, err := planMigration(svc, prof, ref, &config.Config{},
+		discovered{secrets: []secretCandidate{{location: "file:/p#api_key", value: "NRAK-X"}}},
+		target("NRAK-X"), false)
+	require.NoError(t, err)
+	assert.False(t, p2.scrubbedOnly)
+	assert.Empty(t, p2.changes)
+}
+
 func TestPlanMigration_SecretDivergence_KeychainVsFile_FailsNamingAll(t *testing.T) {
 	d := discovered{secrets: []secretCandidate{
 		{location: "keychain:newrelic-cli/api_key", value: "NRAK-A"},
@@ -206,7 +233,8 @@ func TestDiscover_LabelsLegacyFileSource(t *testing.T) {
 	require.NoError(t, os.MkdirAll(legacyDir, 0o700))
 	require.NoError(t, os.WriteFile(filepath.Join(legacyDir, "credentials"),
 		[]byte("api_key=NRAK-x\n"), 0o600))
-	d := discover()
+	d, err := discover()
+	require.NoError(t, err)
 	require.NotEmpty(t, d.deleters)
 	var found bool
 	for _, ld := range d.deleters {

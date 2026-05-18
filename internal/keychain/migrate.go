@@ -482,6 +482,34 @@ func readLegacyFile(path string) map[string]string {
 // with a clear error rather than block the CLI's first run indefinitely.
 const securityTimeout = 5 * time.Second
 
+// securityErrItemNotFound is `security`'s exit status when the item is absent
+// (errSecItemNotFound). Only this is idempotent success — a denial/locked
+// failure must surface so we don't leave a legacy secret behind.
+const securityErrItemNotFound = 44
+
+// securityRun executes `security` with args under securityTimeout and
+// classifies the outcome: exitCode 0 on success or the clean non-zero exit
+// code; timedOut=true if the deadline fired; err only for a non-exit failure
+// (binary missing, etc.). It is a package var so tests can drive the
+// not-found / denied / timeout classification in keychainRead and
+// ScrubLegacyKeychain without shelling out (the highest-risk §1.8 paths).
+var securityRun = func(args ...string) (out []byte, exitCode int, timedOut bool, err error) {
+	ctx, cancel := context.WithTimeout(context.Background(), securityTimeout)
+	defer cancel()
+	o, e := exec.CommandContext(ctx, "security", args...).Output() //nolint:gosec // darwin-only migration on nrq's own legacy items
+	if ctx.Err() != nil {
+		return nil, -1, true, nil
+	}
+	if e != nil {
+		var ee *exec.ExitError
+		if errors.As(e, &ee) {
+			return nil, ee.ExitCode(), false, nil
+		}
+		return nil, -1, false, e
+	}
+	return o, 0, false, nil
+}
+
 // keychainRead is tri-state: (value, true, nil) when present; ("", false,
 // nil) ONLY when `security` definitively reports the item absent
 // (errSecItemNotFound) or it is present-but-empty; ("", false, err) for any
@@ -490,21 +518,22 @@ const securityTimeout = 5 * time.Second
 // §1.8 silently skip a real legacy secret, miss a divergence with the file
 // or keyring, and leave the original behind.
 func keychainRead(service, account string) (string, bool, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), securityTimeout)
-	defer cancel()
-	out, err := exec.CommandContext(ctx, "security", "find-generic-password",
-		"-s", service, "-a", account, "-w").Output() //nolint:gosec // darwin-only migration probe of nrq's own legacy items
+	out, code, timedOut, err := securityRun("find-generic-password", "-s", service, "-a", account, "-w")
+	if timedOut {
+		return "", false, fmt.Errorf(
+			"read legacy keychain item %s/%s timed out after %s (locked Keychain or unlock prompt?)",
+			service, account, securityTimeout)
+	}
 	if err != nil {
-		var ee *exec.ExitError
-		if errors.As(err, &ee) && ee.ExitCode() == securityErrItemNotFound {
-			return "", false, nil // definitively absent — not an error
-		}
-		if ctx.Err() != nil {
-			return "", false, fmt.Errorf(
-				"read legacy keychain item %s/%s timed out after %s (locked Keychain or unlock prompt?): %w",
-				service, account, securityTimeout, ctx.Err())
-		}
 		return "", false, fmt.Errorf("read legacy keychain item %s/%s: %w", service, account, err)
+	}
+	if code == securityErrItemNotFound {
+		return "", false, nil // definitively absent — not an error
+	}
+	if code != 0 {
+		return "", false, fmt.Errorf(
+			"read legacy keychain item %s/%s: security exited %d (access denied or locked Keychain?)",
+			service, account, code)
 	}
 	v := strings.TrimRight(string(out), "\r\n")
 	if v == "" {
@@ -513,22 +542,16 @@ func keychainRead(service, account string) (string, bool, error) {
 	return v, true, nil
 }
 
-// securityErrItemNotFound is `security`'s exit status when the item is absent
-// (errSecItemNotFound). Only this is idempotent success — a denial/locked
-// failure must surface so we don't leave a legacy secret behind.
-const securityErrItemNotFound = 44
-
 func keychainDelete(service, account string) error {
-	ctx, cancel := context.WithTimeout(context.Background(), securityTimeout)
-	defer cancel()
-	err := exec.CommandContext(ctx, "security", "delete-generic-password",
-		"-s", service, "-a", account).Run() //nolint:gosec // darwin-only migration cleanup of nrq's own legacy items
-	if err == nil {
-		return nil
+	_, code, timedOut, err := securityRun("delete-generic-password", "-s", service, "-a", account)
+	if timedOut {
+		return fmt.Errorf("remove legacy keychain item %s/%s timed out after %s", service, account, securityTimeout)
 	}
-	var ee *exec.ExitError
-	if errors.As(err, &ee) && ee.ExitCode() == securityErrItemNotFound {
-		return nil // already absent — fine for idempotent cleanup
+	if err != nil {
+		return fmt.Errorf("remove legacy keychain item %s/%s: %w", service, account, err)
 	}
-	return fmt.Errorf("remove legacy keychain item %s/%s: %w", service, account, err)
+	if code == 0 || code == securityErrItemNotFound {
+		return nil // removed, or already absent — idempotent cleanup
+	}
+	return fmt.Errorf("remove legacy keychain item %s/%s: security exited %d", service, account, code)
 }

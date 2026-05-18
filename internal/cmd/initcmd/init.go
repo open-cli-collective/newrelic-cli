@@ -43,10 +43,10 @@ func Register(rootCmd *cobra.Command, opts *root.Options) {
 	cmd := &cobra.Command{
 		Use:   "init",
 		Short: "First-time setup (stores the API key in the OS keyring)",
-		Long: `Configure nrq. The API key is stored in the OS keyring (never on
-disk) and is ingested ONLY via stdin, a named env var, or an interactive
-no-echo prompt — never as a flag/positional literal (§1.5.1). account_id
-and region are non-secret and written to config.yml.`,
+		Long: `Configure nrq. The API key is stored in the OS keyring (never in
+plaintext, never in config.yml) and is ingested ONLY via stdin, a named env
+var, or an interactive no-echo prompt — never as a flag/positional literal
+(§1.5.1). account_id and region are non-secret and written to config.yml.`,
 		Example: `  # Interactive (no-echo API key prompt)
   nrq init
 

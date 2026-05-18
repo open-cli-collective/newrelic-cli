@@ -87,7 +87,7 @@ const rootLong = `nrq is a command-line interface for New Relic.
 It provides commands for managing applications, dashboards, alerts,
 users, and other New Relic resources.
 
-First-time setup (stores the API key in the OS keyring, never on disk):
+First-time setup (API key in the OS keyring — never plaintext, never in config.yml):
   nrq init
 
 Non-interactive credential ingress:
@@ -166,6 +166,6 @@ func NoPositionalArgs(_ *cobra.Command, args []string) error {
 }
 
 var errNoPositionalArgs = errors.New(
-	"this command takes no positional arguments; the API key must be provided " +
-		"via --api-key-stdin, --api-key-from-env, or an interactive prompt — " +
-		"never as a command-line argument (§1.5.1)")
+	"this command takes no positional arguments; a secret must be provided " +
+		"via stdin, a named environment variable, or an interactive prompt — " +
+		"never as a command-line argument (see --help; §1.5.1)")

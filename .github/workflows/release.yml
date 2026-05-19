@@ -10,7 +10,12 @@ permissions:
 
 jobs:
   goreleaser:
-    runs-on: ubuntu-latest
+    # INT-448: darwin must build with cgo (Keychain backend). cgo+darwin
+    # cannot cross-compile from Linux, so this job runs on macOS. Pinned
+    # image (not the moving macos-latest label) for a reproducible release.
+    # The Homebrew tap step is inlined here (not a separate job) because it
+    # needs the dist/ artifacts produced in this job.
+    runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
         with:
@@ -18,22 +23,97 @@ jobs:
 
       - uses: actions/setup-go@v5
         with:
-          go-version: "1.21"
+          go-version: "1.24"
 
-      - name: Run GoReleaser
+      - name: Install GoReleaser
         uses: goreleaser/goreleaser-action@v6
         with:
           version: "~> v2"
-          args: release --clean
+          install-only: true
+
+      - name: GoReleaser check
+        run: goreleaser check
+
+      - name: Build (snapshot, no publish)
+        run: goreleaser release --snapshot --clean
+
+      # INT-448 pre-publish gate: prove the darwin binaries actually carry
+      # the Keychain backend BEFORE anything is published. A CGO_ENABLED=0
+      # darwin build links no Security.framework and fails closed at
+      # runtime; this gate makes that impossible to ship silently.
+      - name: Pre-publish gate — darwin Keychain backend present
+        run: |
+          set -euo pipefail
+          art=dist/artifacts.json
+          arm_bin=$(jq -r '.[]|select(.type=="Binary" and .goos=="darwin" and .goarch=="arm64")|.path' "$art")
+          amd_bin=$(jq -r '.[]|select(.type=="Binary" and .goos=="darwin" and .goarch=="amd64")|.path' "$art")
+          [ -n "$arm_bin" ] && [ -n "$amd_bin" ] || { echo "missing a darwin binary in artifacts.json"; exit 1; }
+          # darwin archives: exactly one per arch, no duplicate names
+          tot=$(jq '[.[]|select(.type=="Archive" and .goos=="darwin")|.name]|length' "$art")
+          uniq=$(jq '[.[]|select(.type=="Archive" and .goos=="darwin")|.name]|unique|length' "$art")
+          [ "$tot" = "$uniq" ] || { echo "duplicate darwin archive names"; exit 1; }
+          [ "$(jq '[.[]|select(.type=="Archive" and .goos=="darwin" and .goarch=="arm64")]|length' "$art")" = 1 ] || { echo "expected exactly one darwin/arm64 archive"; exit 1; }
+          [ "$(jq '[.[]|select(.type=="Archive" and .goos=="darwin" and .goarch=="amd64")]|length' "$art")" = 1 ] || { echo "expected exactly one darwin/amd64 archive"; exit 1; }
+          # Mach-O arch sanity (both slices)
+          file "$arm_bin" | grep -q 'arm64'  || { echo "arm64 binary is not arm64 Mach-O";  exit 1; }
+          file "$amd_bin" | grep -q 'x86_64' || { echo "amd64 binary is not x86_64 Mach-O"; exit 1; }
+          lipo -archs "$arm_bin" | grep -qw arm64  || { echo "lipo: arm64 slice missing";  exit 1; }
+          lipo -archs "$amd_bin" | grep -qw x86_64 || { echo "lipo: x86_64 slice missing"; exit 1; }
+          # amd64 cannot run on the arm64 runner: assert Security.framework
+          # is linked. CGO_ENABLED=0 omits it entirely, so its presence is a
+          # sound *necessary* cgo signal for the slice we can't execute.
+          otool -L "$amd_bin" | grep -q '/System/Library/Frameworks/Security.framework' \
+            || { echo "amd64 binary not linked against Security.framework (cgo missing)"; exit 1; }
+          # arm64 authoritative functional check: with no backend override
+          # and a seeded config, credstore must auto-select the Keychain.
+          tmp=$(mktemp -d)
+          mkdir -p "$tmp/xdg/newrelic-cli"
+          printf 'credential_ref: newrelic-cli/default\n' > "$tmp/xdg/newrelic-cli/config.yml"
+          out=$(env -u NEWRELIC_CLI_KEYRING_BACKEND HOME="$tmp" XDG_CONFIG_HOME="$tmp/xdg" "$arm_bin" --output json config show)
+          echo "$out"
+          b=$(echo "$out" | jq -r '.backend'); s=$(echo "$out" | jq -r '.backend_source'); r=$(echo "$out" | jq -r '.credential_ref')
+          [ "$b" = "keychain" ] && [ "$s" = "auto" ] && [ "$r" = "newrelic-cli/default" ] \
+            || { echo "GATE FAIL: backend=$b source=$s ref=$r (want keychain/auto/newrelic-cli/default)"; exit 1; }
+          echo "GATE OK: darwin/arm64 backend=keychain source=auto; darwin/amd64 Security.framework linked"
+
+      - name: Release notes
+        run: |
+          set -euo pipefail
+          cat > "$RUNNER_TEMP/release-notes.md" <<'EOF'
+          ### macOS Keychain storage restored
+
+          Builds since the credential-store migration were compiled without
+          cgo and failed closed on macOS (no Keychain backend). This release
+          builds the darwin binaries with cgo enabled, restoring native
+          macOS Keychain storage. Upgrade and re-run your normal commands;
+          no other action is required.
+          EOF
+
+      - name: Release (publish)
+        run: goreleaser release --clean --release-notes="$RUNNER_TEMP/release-notes.md"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Verify release notes published
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          body=$(gh release view "${{ github.ref_name }}" --repo "$GITHUB_REPOSITORY" --json body -q .body)
+          if ! printf '%s' "$body" | grep -q 'macOS Keychain'; then
+            gh release edit "${{ github.ref_name }}" --repo "$GITHUB_REPOSITORY" --notes-file "$RUNNER_TEMP/release-notes.md"
+          fi
+
       # TAP_GITHUB_TOKEN (a PAT) is required to push to the open-cli-collective/homebrew-tap
       # repository. The default GITHUB_TOKEN only has access to this repository.
+      # INT-448: this step runs on macos-15 (moved with the goreleaser job).
+      # BSD sed (macOS) requires a backup-suffix with -i; use perl -pi -e
+      # instead of sed -i for cross-platform compatibility.
       - name: Update Homebrew Tap
         env:
           TAP_GITHUB_TOKEN: ${{ secrets.TAP_GITHUB_TOKEN }}
         run: |
+          set -euo pipefail
           VERSION="${{ github.ref_name }}"
           VERSION_NUM="${VERSION#v}"
 
@@ -41,6 +121,15 @@ jobs:
           DARWIN_AMD64_SHA=$(grep "_darwin_amd64.tar.gz" dist/checksums.txt | cut -d' ' -f1)
           LINUX_ARM64_SHA=$(grep "_linux_arm64.tar.gz" dist/checksums.txt | cut -d' ' -f1)
           LINUX_AMD64_SHA=$(grep "_linux_amd64.tar.gz" dist/checksums.txt | cut -d' ' -f1)
+
+          # Fail loudly rather than write cask/formula files with empty sha256 if
+          # an archive was renamed/missing (INT-448: blast radius of the build split).
+          for pair in \
+            "darwin_arm64:$DARWIN_ARM64_SHA" "darwin_amd64:$DARWIN_AMD64_SHA" \
+            "linux_arm64:$LINUX_ARM64_SHA" "linux_amd64:$LINUX_AMD64_SHA"; do
+            name="${pair%%:*}"; sha="${pair#*:}"
+            if [ -z "$sha" ]; then echo "empty checksum for ${name} archive"; exit 1; fi
+          done
 
           git clone https://x-access-token:${TAP_GITHUB_TOKEN}@github.com/open-cli-collective/homebrew-tap.git
           cd homebrew-tap
@@ -88,9 +177,9 @@ jobs:
           end
           FORMULAEOF
 
-          sed -i "s/VERSION_PLACEHOLDER/${VERSION_NUM}/g" Formula/newrelic-cli.rb
-          sed -i "s/DARWIN_ARM64_PLACEHOLDER/${DARWIN_ARM64_SHA}/g" Formula/newrelic-cli.rb
-          sed -i "s/DARWIN_AMD64_PLACEHOLDER/${DARWIN_AMD64_SHA}/g" Formula/newrelic-cli.rb
+          perl -pi -e "s/VERSION_PLACEHOLDER/${VERSION_NUM}/g" Formula/newrelic-cli.rb
+          perl -pi -e "s/DARWIN_ARM64_PLACEHOLDER/${DARWIN_ARM64_SHA}/g" Formula/newrelic-cli.rb
+          perl -pi -e "s/DARWIN_AMD64_PLACEHOLDER/${DARWIN_AMD64_SHA}/g" Formula/newrelic-cli.rb
 
           # Also update the nrq cask (alias for users who install via `brew install nrq`)
           cat > Casks/nrq.rb << 'CASKEOF'
@@ -142,11 +231,11 @@ jobs:
           end
           CASKEOF
 
-          sed -i "s/VERSION_PLACEHOLDER/${VERSION_NUM}/g" Casks/nrq.rb
-          sed -i "s/DARWIN_ARM64_PLACEHOLDER/${DARWIN_ARM64_SHA}/g" Casks/nrq.rb
-          sed -i "s/DARWIN_AMD64_PLACEHOLDER/${DARWIN_AMD64_SHA}/g" Casks/nrq.rb
-          sed -i "s/LINUX_ARM64_PLACEHOLDER/${LINUX_ARM64_SHA}/g" Casks/nrq.rb
-          sed -i "s/LINUX_AMD64_PLACEHOLDER/${LINUX_AMD64_SHA}/g" Casks/nrq.rb
+          perl -pi -e "s/VERSION_PLACEHOLDER/${VERSION_NUM}/g" Casks/nrq.rb
+          perl -pi -e "s/DARWIN_ARM64_PLACEHOLDER/${DARWIN_ARM64_SHA}/g" Casks/nrq.rb
+          perl -pi -e "s/DARWIN_AMD64_PLACEHOLDER/${DARWIN_AMD64_SHA}/g" Casks/nrq.rb
+          perl -pi -e "s/LINUX_ARM64_PLACEHOLDER/${LINUX_ARM64_SHA}/g" Casks/nrq.rb
+          perl -pi -e "s/LINUX_AMD64_PLACEHOLDER/${LINUX_AMD64_SHA}/g" Casks/nrq.rb
 
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
@@ -306,7 +395,7 @@ jobs:
     needs: goreleaser
     runs-on: ubuntu-latest
     env:
-      TAG: ${{ github.ref_name || inputs.tag }}
+      TAG: ${{ github.ref_name }}
     steps:
       - uses: actions/checkout@v4
         with:

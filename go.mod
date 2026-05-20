@@ -4,7 +4,7 @@ go 1.24.0
 
 require (
 	github.com/fatih/color v1.18.0
-	github.com/open-cli-collective/cli-common v0.0.0-20260519134256-e67b2fc81f9d
+	github.com/open-cli-collective/cli-common v0.1.0
 	github.com/spf13/cobra v1.8.0
 	github.com/stretchr/testify v1.11.1
 	golang.org/x/term v0.27.0

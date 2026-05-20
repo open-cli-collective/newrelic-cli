@@ -17,19 +17,26 @@ import (
 	"github.com/open-cli-collective/cli-common/statedirtest"
 )
 
+// setupRelocPair gives the relocation tests two GUARANTEED-DISTINCT dirs even
+// on Linux (where statedir's resolver collapses old==new). The unexported
+// seams (detectRelocation/loadFromNewDir) accept newDir as a parameter, so
+// we can synthesize an "alternate canonical" dir under the hermetic root and
+// exercise the macOS/Windows divergent layout on Linux CI. Without this,
+// every relocation row would skip on the cheapest CI lane.
 func setupRelocPair(t *testing.T) (oldDir, newDir string) {
 	t.Helper()
-	statedirtest.Hermetic(t)
+	tmp := statedirtest.Hermetic(t)
 	old, err := oldHandRolledConfigDir()
 	require.NoError(t, err)
-	cfgScope := configScope.Name
-	_ = cfgScope
-	osCfg, err := os.UserConfigDir()
-	require.NoError(t, err)
-	new := filepath.Join(osCfg, "newrelic-cli")
-	// Pre-create both dirs so tests can write fixtures.
+
+	// Synthetic distinct new-dir — anywhere outside oldDir. Using a sibling
+	// of the hermetic root prevents accidental old-vs-new ambiguity.
+	new := filepath.Join(tmp, "synthetic-statedir", "newrelic-cli")
 	require.NoError(t, os.MkdirAll(old, 0o700))
 	require.NoError(t, os.MkdirAll(new, 0o700))
+	if old == new {
+		t.Fatalf("setupRelocPair: synthetic newDir collided with oldDir: %s", old)
+	}
 	return old, new
 }
 
@@ -40,10 +47,7 @@ func writeYAML(t *testing.T, path, body string) {
 
 // Row 1: new-only.
 func TestRelocate_NewOnly_NoOp(t *testing.T) {
-	old, new := setupRelocPair(t)
-	if old == new {
-		t.Skip("Linux: old==new; row not applicable")
-	}
+	_, new := setupRelocPair(t)
 	writeYAML(t, filepath.Join(new, configFileName), "credential_ref: newrelic-cli/default\n")
 
 	got, err := detectRelocation(new)
@@ -59,9 +63,6 @@ func TestRelocate_NewOnly_NoOp(t *testing.T) {
 // Row 2: old-only well-formed.
 func TestRelocate_OldOnly_CopyNeeded(t *testing.T) {
 	old, new := setupRelocPair(t)
-	if old == new {
-		t.Skip("Linux: old==new")
-	}
 	writeYAML(t, filepath.Join(old, configFileName), "credential_ref: newrelic-cli/legacy\naccount_id: \"42\"\n")
 
 	got, err := detectRelocation(new)
@@ -82,9 +83,6 @@ func TestRelocate_OldOnly_CopyNeeded(t *testing.T) {
 // Row 3: old-only malformed (must fail loud BEFORE CopyNeeded — MON-5371).
 func TestRelocate_OldOnly_Malformed_FailsLoud(t *testing.T) {
 	old, new := setupRelocPair(t)
-	if old == new {
-		t.Skip("Linux: old==new")
-	}
 	writeYAML(t, filepath.Join(old, configFileName), "[unclosed_array: yes\n")
 
 	got, err := detectRelocation(new)
@@ -97,9 +95,6 @@ func TestRelocate_OldOnly_Malformed_FailsLoud(t *testing.T) {
 // Row 4: both materially equal (defaults-applied).
 func TestRelocate_BothEqual_DefaultOmittedVsExplicit_IsEqual(t *testing.T) {
 	old, new := setupRelocPair(t)
-	if old == new {
-		t.Skip("Linux: old==new")
-	}
 	// Old omits credential_ref (defaults to DefaultCredentialRef); new is explicit.
 	writeYAML(t, filepath.Join(old, configFileName), "account_id: \"42\"\n")
 	writeYAML(t, filepath.Join(new, configFileName), "credential_ref: newrelic-cli/default\naccount_id: \"42\"\n")
@@ -113,9 +108,6 @@ func TestRelocate_BothEqual_DefaultOmittedVsExplicit_IsEqual(t *testing.T) {
 // Row 5: both, divergent → ErrRelocationConflict.
 func TestRelocate_BothDivergent_Conflict(t *testing.T) {
 	old, new := setupRelocPair(t)
-	if old == new {
-		t.Skip("Linux: old==new")
-	}
 	writeYAML(t, filepath.Join(old, configFileName), "credential_ref: newrelic-cli/old\n")
 	writeYAML(t, filepath.Join(new, configFileName), "credential_ref: newrelic-cli/new\n")
 
@@ -128,9 +120,6 @@ func TestRelocate_BothDivergent_Conflict(t *testing.T) {
 // Row 6: both, malformed-new — canonical unreadable; runtime hard-fail.
 func TestRelocate_MalformedNew_HardFail(t *testing.T) {
 	old, new := setupRelocPair(t)
-	if old == new {
-		t.Skip("Linux: old==new")
-	}
 	writeYAML(t, filepath.Join(old, configFileName), "credential_ref: newrelic-cli/old\n")
 	writeYAML(t, filepath.Join(new, configFileName), "[unclosed_array: yes\n")
 
@@ -143,9 +132,6 @@ func TestRelocate_MalformedNew_HardFail(t *testing.T) {
 // Row 7: both, malformed-old.
 func TestRelocate_MalformedOld_Conflict(t *testing.T) {
 	old, new := setupRelocPair(t)
-	if old == new {
-		t.Skip("Linux: old==new")
-	}
 	writeYAML(t, filepath.Join(old, configFileName), "[unclosed_array: yes\n")
 	writeYAML(t, filepath.Join(new, configFileName), "credential_ref: newrelic-cli/default\n")
 
@@ -172,9 +158,6 @@ func TestRelocate_Neither_Defaults(t *testing.T) {
 // swaps CredentialRef to default.
 func TestLoadForRuntime_DivergentReadableCanonical_SoftDegrade(t *testing.T) {
 	old, new := setupRelocPair(t)
-	if old == new {
-		t.Skip("Linux: old==new")
-	}
 	writeYAML(t, filepath.Join(old, configFileName), "credential_ref: newrelic-cli/old\n")
 	writeYAML(t, filepath.Join(new, configFileName), "credential_ref: newrelic-cli/canonical\n")
 	// Reset the once gate so this test gets the warning side-effect deterministic
@@ -190,9 +173,6 @@ func TestLoadForRuntime_DivergentReadableCanonical_SoftDegrade(t *testing.T) {
 // hard-fail (no warn-and-default — that would mask corruption).
 func TestLoadForRuntime_DivergentMalformedCanonical_HardFail(t *testing.T) {
 	old, new := setupRelocPair(t)
-	if old == new {
-		t.Skip("Linux: old==new")
-	}
 	writeYAML(t, filepath.Join(old, configFileName), "credential_ref: newrelic-cli/old\n")
 	writeYAML(t, filepath.Join(new, configFileName), "[unclosed_array: yes\n")
 	reloConflictOnce = resetOnce()

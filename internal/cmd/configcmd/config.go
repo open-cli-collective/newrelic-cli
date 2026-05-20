@@ -201,7 +201,10 @@ func runSet(opts *root.Options, accountID, region string) error {
 	if err := cfg.Save(); err != nil {
 		return fmt.Errorf("save config: %w", err)
 	}
-	cfgPath, _ := config.Path()
+	cfgPath, err := config.Path()
+	if err != nil {
+		return err
+	}
 	if accountID != "" {
 		v.Success("account_id set to %s in %s", accountID, cfgPath)
 	}
@@ -291,7 +294,11 @@ func newShowCmd(opts *root.Options) *cobra.Command {
 
 func runShow(opts *root.Options) error {
 	v := opts.View()
-	cfg, err := config.Load()
+	// `config show` is a pure-read diagnostic and must remain usable during
+	// an unresolved §1.8 / MON-5373 relocation conflict — LoadForRuntime
+	// soft-degrades (canonical wins, one-shot stderr warning) when both old
+	// and new diverge, instead of refusing to display anything.
+	cfg, err := config.LoadForRuntime()
 	if err != nil {
 		return err
 	}

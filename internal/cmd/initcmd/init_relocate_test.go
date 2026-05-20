@@ -90,11 +90,19 @@ func TestRunInit_RelocationGate_DivergentAbortsBeforeMutation(t *testing.T) {
 		"--api-key-stdin", "--no-verify", "--non-interactive")
 	require.Error(t, err, "init must abort on a relocation conflict")
 
-	// The decisive assertion: the legacy credentials file is UNTOUCHED, so
-	// the gate ran BEFORE migration could scrub it.
+	// Two-part proof the GATE (not keychain.OpenForInit) rejected:
+	//   (1) error message identifies the gate wrapper from runInit (Codex
+	//       PR-r1 catch: a strict-Load failure inside OpenForInit would
+	//       carry a different message — keychain.OpenForInit doesn't wrap
+	//       with "detecting config relocation").
+	//   (2) the legacy credentials file is UNTOUCHED — if the gate had run
+	//       AFTER OpenForInit, the §1.8 migration would have scrubbed it
+	//       (and the absent file would be visible here).
+	assert.Contains(t, err.Error(), "detecting config relocation",
+		"error must come from runInit's gate wrapper, not a downstream strict-Load failure")
 	_, statErr := os.Stat(legacyFile)
 	assert.NoError(t, statErr,
-		"legacy credentials file must still exist — proves gate ran ahead of §1.8 migration")
+		"legacy credentials file must still exist — proves the gate ran before §1.8 migration scrub")
 }
 
 // runInitStdin is runInit with a piped stdin string for --api-key-stdin.

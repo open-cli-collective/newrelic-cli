@@ -168,10 +168,13 @@ func migrateLegacyOverwrite(s *Store, cfg *config.Config, overwrite bool) error 
 						"(the keyring already held it); this is a one-time operation\n",
 					secretField, s.ref)
 			}
+			cfgPath, perr := config.Path()
+			if perr != nil {
+				return perr
+			}
 			for _, f := range plan.movedNonSecret {
 				// Distinct human line: non-secret moves go to config.yml,
 				// NOT the keyring — do not reuse the keyring wording.
-				cfgPath, _ := config.Path()
 				fmt.Fprintf(os.Stderr,
 					"migrated %s to config %s; this is a one-time operation\n",
 					f, cfgPath)
@@ -285,7 +288,10 @@ func planMigration(service, profile, ref string, cfg *config.Config, d discovere
 			p.foldRegion = c.value
 		}
 		p.movedNonSecret = append(p.movedNonSecret, field)
-		cfgPath, _ := config.Path()
+		cfgPath, perr := config.Path()
+		if perr != nil {
+			return migrationPlan{}, perr
+		}
 		p.changes = append(p.changes, credstore.MigrationJSONEntry(
 			field, c.location, fmt.Sprintf("config:%s#%s", cfgPath, field)))
 	}
@@ -398,8 +404,9 @@ func discover() (discovered, error) {
 	// The file lives in the same dir as config.yml, so the resolver switch
 	// relocates it on macOS/Windows — without dual-probe a workstation
 	// upgraded across the port would silently retain a plaintext secret in
-	// the old dir.
-	paths, err := config.CredentialFileCandidates()
+	// the old dir. The resolver is a package var so unit tests can exercise
+	// the dual-path matrix on Linux CI (where statedir collapses old≡new).
+	paths, err := credentialFileCandidates()
 	if err != nil {
 		return discovered{}, err
 	}
@@ -493,11 +500,11 @@ func ScrubLegacyKeychain() error {
 	return errors.Join(errs...)
 }
 
-// (Legacy single-path helper removed in favor of config.CredentialFileCandidates()
-// — see discover() above. The post-MON-5373 file lives in the same dir as
-// config.yml, which is OS-native via cli-common/statedir; the old hand-rolled
-// $XDG_CONFIG_HOME/$HOME/.config location is also probed during the one-time
-// migration so an upgrade across the port doesn't strand a plaintext secret.)
+// credentialFileCandidates is the package-level seam for credentials-file
+// discovery. Production routes through config.CredentialFileCandidates;
+// tests can override to exercise the §1.8 dual-probe matrix on Linux CI
+// where statedir's resolver collapses old≡new (Codex PR-r1 portability fix).
+var credentialFileCandidates = config.CredentialFileCandidates
 
 // readLegacyFile parses the legacy flat key=value credentials file (NOT an
 // INI; no [sections]). Missing file → nil (the steady state, not an error).

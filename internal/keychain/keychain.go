@@ -72,7 +72,16 @@ func OpenForInit(overwrite, nonInteractive bool) (*Store, error) {
 func OpenNoMigrate() (*Store, error) { return open(false, false, false) }
 
 func open(overwrite, runMigration, nonInteractive bool) (*Store, error) {
-	cfg, err := config.Load()
+	// MON-5373 contract: mutating Open paths (migration=true) MUST strict-load
+	// — a divergent old/new config under unresolved conflict cannot be
+	// allowed to scrub legacy + write canonical. Non-migrating Open paths
+	// (clear-conflict-remediation, OpenRef ingress) soft-degrade via
+	// LoadForRuntime so cleanup is not blocked by an unresolved conflict.
+	loadCfg := config.Load
+	if !runMigration {
+		loadCfg = config.LoadForRuntime
+	}
+	cfg, err := loadCfg()
 	if err != nil {
 		return nil, err
 	}
@@ -86,7 +95,9 @@ func open(overwrite, runMigration, nonInteractive bool) (*Store, error) {
 // configured ref. set-credential is pure ingress; migration still runs on the
 // next init / first API call via the default Open path.
 func OpenRef(ref string) (*Store, error) {
-	cfg, err := config.Load()
+	// Pure ingress; migration does not run here. Soft-degrade on relocation
+	// conflict so set-credential can complete during a transitional state.
+	cfg, err := config.LoadForRuntime()
 	if err != nil {
 		return nil, err
 	}

@@ -201,11 +201,15 @@ func runSet(opts *root.Options, accountID, region string) error {
 	if err := cfg.Save(); err != nil {
 		return fmt.Errorf("save config: %w", err)
 	}
+	cfgPath, err := config.Path()
+	if err != nil {
+		return err
+	}
 	if accountID != "" {
-		v.Success("account_id set to %s in %s", accountID, config.Path())
+		v.Success("account_id set to %s in %s", accountID, cfgPath)
 	}
 	if region != "" {
-		v.Success("region set to %s in %s", strings.ToUpper(region), config.Path())
+		v.Success("region set to %s in %s", strings.ToUpper(region), cfgPath)
 	}
 	return nil
 }
@@ -290,7 +294,11 @@ func newShowCmd(opts *root.Options) *cobra.Command {
 
 func runShow(opts *root.Options) error {
 	v := opts.View()
-	cfg, err := config.Load()
+	// `config show` is a pure-read diagnostic and must remain usable during
+	// an unresolved §1.8 / MON-5373 relocation conflict — LoadForRuntime
+	// soft-degrades (canonical wins, one-shot stderr warning) when both old
+	// and new diverge, instead of refusing to display anything.
+	cfg, err := config.LoadForRuntime()
 	if err != nil {
 		return err
 	}
@@ -454,29 +462,59 @@ config.yml}.`,
 
 func runClear(o *clearOptions) error {
 	v := o.View()
-	// OpenNoMigrate: clear is the advertised §1.8 conflict remediation; if
-	// migration ran first it would fail with the conflict error before clear
-	// could delete the keyring entry, leaving the user no way out.
+
+	// `clear --all` is cleanup/conflict-remediation — it must work even when
+	// config.yml is unparseable, credential_ref is invalid, or keyring.backend
+	// is unrecognized. Resolve paths up front (no Load() call) so file scrub
+	// is unconditional; treat store-open as best-effort under --all so an
+	// unrecoverable config can't block the very command meant to wipe it.
+	configPaths, perr := configPathsForClear()
+	if perr != nil {
+		return perr
+	}
+	credPaths, cerr := config.CredentialFileCandidates()
+	if cerr != nil {
+		return cerr
+	}
+
 	st, err := keychain.OpenNoMigrate()
 	if err != nil {
-		return err
+		if !o.all {
+			return err
+		}
+		// --all: report and proceed — file scrub still runs and is the
+		// recovery path. Without --all the user just asked to clear the
+		// keyring, so surface the error.
+		v.Warning("could not open keyring (%v) — proceeding with file scrub only", err)
+		st = nil
+	} else {
+		defer func() { _ = st.Close() }()
 	}
-	defer func() { _ = st.Close() }()
 
 	if o.dryRun {
-		if st.HasAPIKey() {
+		switch {
+		case st == nil:
+			v.Println("would remove: (keyring inaccessible; --all file scrub only)")
+		case st.HasAPIKey():
 			v.Println("would remove: api_key from keyring " + st.Ref())
-		} else {
+		default:
 			v.Println("would remove: (no api_key in keyring)")
 		}
 		if o.all {
-			if _, statErr := os.Stat(config.Path()); statErr == nil {
-				v.Println("would remove: " + config.Path())
-			} else {
+			anyConfig := false
+			for _, p := range configPaths {
+				if _, statErr := os.Stat(p); statErr == nil {
+					v.Println("would remove: " + p)
+					anyConfig = true
+				}
+			}
+			if !anyConfig {
 				v.Println("would remove: (no config.yml)")
 			}
-			if _, statErr := os.Stat(config.LegacyCredentialsPath()); statErr == nil {
-				v.Println("would remove: " + config.LegacyCredentialsPath() + " (legacy plaintext)")
+			for _, p := range credPaths {
+				if _, statErr := os.Stat(p); statErr == nil {
+					v.Println("would remove: " + p + " (legacy plaintext)")
+				}
 			}
 			if runtime.GOOS == "darwin" {
 				v.Println("would remove: legacy macOS Keychain accounts for service \"newrelic-cli\" (if present)")
@@ -485,37 +523,47 @@ func runClear(o *clearOptions) error {
 		return nil
 	}
 
-	removed, err := st.Clear()
-	if err != nil {
-		return fmt.Errorf("clear keyring bundle: %w", err)
-	}
-	if len(removed) > 0 {
-		v.Success("Removed %d key(s) from keyring %s", len(removed), st.Ref())
-	} else {
-		v.Println("No keyring keys to remove (already clear)")
+	if st != nil {
+		removed, err := st.Clear()
+		if err != nil {
+			return fmt.Errorf("clear keyring bundle: %w", err)
+		}
+		if len(removed) > 0 {
+			v.Success("Removed %d key(s) from keyring %s", len(removed), st.Ref())
+		} else {
+			v.Println("No keyring keys to remove (already clear)")
+		}
 	}
 
 	if o.all {
-		if err := os.Remove(config.Path()); err != nil {
-			if !os.IsNotExist(err) {
-				return fmt.Errorf("remove %s: %w", config.Path(), err)
+		anyConfig := false
+		for _, p := range configPaths {
+			if err := os.Remove(p); err != nil {
+				if !os.IsNotExist(err) {
+					return fmt.Errorf("remove %s: %w", p, err)
+				}
+				continue
 			}
-			v.Println("No config.yml to remove (already clear)")
-		} else {
-			v.Success("Removed %s", config.Path())
+			v.Success("Removed %s", p)
+			anyConfig = true
 		}
-		// Also scrub the legacy plaintext credentials file. Without this a
+		if !anyConfig {
+			v.Println("No config.yml to remove (already clear)")
+		}
+		// Also scrub the plaintext credentials file(s). Without this a
 		// `clear --all` on a workstation that never ran the §1.8 migration
 		// leaves the legacy secret on disk, and the next Open() re-migrates
-		// it back into the keyring — silently undoing the wipe.
-		if lp := config.LegacyCredentialsPath(); lp != "" {
+		// it back into the keyring — silently undoing the wipe. Dual-path:
+		// both the post-MON-5373 canonical location and the pre-port hand-
+		// rolled location.
+		for _, lp := range credPaths {
 			if err := os.Remove(lp); err != nil {
 				if !os.IsNotExist(err) {
 					return fmt.Errorf("remove %s: %w", lp, err)
 				}
-			} else {
-				v.Success("Removed %s (legacy plaintext)", lp)
+				continue
 			}
+			v.Success("Removed %s (legacy plaintext)", lp)
 		}
 		// Also scrub the legacy macOS Keychain accounts: otherwise a
 		// pre-migration `clear --all` on macOS is silently undone by the
@@ -525,4 +573,19 @@ func runClear(o *clearOptions) error {
 		}
 	}
 	return nil
+}
+
+// configPathsForClear returns the deduped set of config.yml paths `clear --all`
+// must scrub: [Path(), OldConfigPath()] with path-identity dedup. Linux
+// collapses to one path (statedir ≡ old hand-rolled location).
+func configPathsForClear() ([]string, error) {
+	canonical, err := config.Path()
+	if err != nil {
+		return nil, err
+	}
+	old, oerr := config.OldConfigPath()
+	if oerr == nil && old != canonical {
+		return []string{canonical, old}, nil
+	}
+	return []string{canonical}, nil
 }

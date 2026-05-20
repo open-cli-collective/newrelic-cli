@@ -3,7 +3,6 @@ package keychain_test
 import (
 	"errors"
 	"os"
-	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -92,15 +91,14 @@ func TestOpenRef_OverridesConfiguredRef(t *testing.T) {
 // to the keyring, account_id/region folded into config.yml, the legacy file
 // scrubbed — on the first Open().
 func TestMigration_LegacyFile_EndToEnd(t *testing.T) {
-	tmp := testutil.Setup(t)
-	legacyDir := filepath.Join(tmp, ".config", "newrelic-cli")
-	require.NoError(t, os.MkdirAll(legacyDir, 0o700))
-	legacy := filepath.Join(legacyDir, "credentials")
+	testutil.Setup(t)
+	// Use the testutil helper that resolves under the hermetic envs — do NOT
+	// hand-build the path or rewrite XDG_CONFIG_HOME after Setup, which
+	// would break the statedirtest 7-var layout post-MON-5373 (Codex PR-r2
+	// minor).
+	legacy := testutil.LegacyCredentialsPath(t)
 	require.NoError(t, os.WriteFile(legacy,
 		[]byte("api_key=NRAK-legacy\naccount_id=42\nregion=EU\n"), 0o600))
-	// discover() uses ~/.config (HOME), not XDG; point XDG at HOME so
-	// config.yml lands beside it deterministically for the assertion.
-	t.Setenv("XDG_CONFIG_HOME", filepath.Join(tmp, ".config"))
 
 	st, err := keychain.Open() // runs the one-time migration
 	require.NoError(t, err)
@@ -118,7 +116,9 @@ func TestMigration_LegacyFile_EndToEnd(t *testing.T) {
 	_, statErr := os.Stat(legacy)
 	assert.True(t, os.IsNotExist(statErr), "legacy file must be scrubbed after migration")
 
-	raw, err := os.ReadFile(config.Path())
+	cfgPath, err := config.Path()
+	require.NoError(t, err)
+	raw, err := os.ReadFile(cfgPath)
 	require.NoError(t, err)
 	assert.NotContains(t, string(raw), "NRAK-legacy", "secret must never land in config.yml")
 

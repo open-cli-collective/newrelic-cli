@@ -10,6 +10,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -28,6 +29,16 @@ import (
 )
 
 const sentinel = "NRAK-SUPERSECRETSENTINEL-do-not-leak"
+
+// mustConfigPath resolves the canonical config.yml path under the hermetic
+// harness; tests fail-fast on the §1.1 relative-XDG error (would never occur
+// under Setup).
+func mustConfigPath(t *testing.T) string {
+	t.Helper()
+	p, err := config.Path()
+	require.NoError(t, err)
+	return p
+}
 
 // probeRegister adds hidden commands that go through the REAL lazy
 // chokepoint `opts.APIClient()` (which opens the keyring and runs the §1.8
@@ -92,13 +103,14 @@ func run(t *testing.T, args ...string) (string, string, error) {
 	return out.String(), errb.String() + pipeBuf.String(), err
 }
 
-func plantLegacyFile(t *testing.T, tmp string) {
+func plantLegacyFile(t *testing.T, _ string) {
 	t.Helper()
-	dir := filepath.Join(tmp, ".config", "newrelic-cli")
-	require.NoError(t, os.MkdirAll(dir, 0o700))
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "credentials"),
+	// Use the testutil helper that resolves under the existing hermetic envs
+	// — do NOT hand-build $TMP/.config/newrelic-cli and rewrite
+	// XDG_CONFIG_HOME, which would break the 7-var statedirtest layout.
+	path := testutil.LegacyCredentialsPath(t)
+	require.NoError(t, os.WriteFile(path,
 		[]byte("api_key="+sentinel+"\naccount_id=42\nregion=EU\n"), 0o600))
-	t.Setenv("XDG_CONFIG_HOME", filepath.Join(tmp, ".config"))
 }
 
 // §1.12: the secret never appears in any human-facing surface or config.yml.
@@ -115,7 +127,7 @@ func TestNoLeak_ShowAndConfigFile(t *testing.T) {
 	assert.NotContains(t, out, sentinel)
 	assert.NotContains(t, errOut, sentinel)
 
-	raw, _ := os.ReadFile(config.Path())
+	raw, _ := os.ReadFile(mustConfigPath(t))
 	assert.NotContains(t, string(raw), sentinel, "secret must never be in config.yml")
 }
 
@@ -321,7 +333,7 @@ func TestInit_FromEnvIngress(t *testing.T) {
 	rootCmd.SetArgs([]string{"init", "--api-key-from-env", "NRQ_INGRESS_VAR", "--account-id", "42", "--no-verify"})
 	require.NoError(t, rootCmd.Execute())
 	assert.NotContains(t, o.String()+e.String(), sentinel)
-	raw, _ := os.ReadFile(config.Path())
+	raw, _ := os.ReadFile(mustConfigPath(t))
 	assert.NotContains(t, string(raw), sentinel)
 
 	st, err := keychain.OpenNoMigrate()
@@ -375,7 +387,7 @@ func TestConfigClear_DryRunAndAll(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(t, st.HasAPIKey(), "dry-run must not delete")
 	_ = st.Close()
-	_, statErr := os.Stat(config.Path())
+	_, statErr := os.Stat(mustConfigPath(t))
 	require.NoError(t, statErr, "dry-run must not remove config.yml")
 
 	_, _, err = run(t, "config", "clear", "--all")
@@ -384,7 +396,7 @@ func TestConfigClear_DryRunAndAll(t *testing.T) {
 	require.NoError(t, err)
 	assert.False(t, st2.HasAPIKey())
 	_ = st2.Close()
-	_, statErr = os.Stat(config.Path())
+	_, statErr = os.Stat(mustConfigPath(t))
 	assert.True(t, os.IsNotExist(statErr), "--all removes config.yml")
 
 	// Idempotent: a second clear --all still exits 0.
@@ -422,7 +434,7 @@ func TestNoLeak_PositionalArgRejected_NoEcho(t *testing.T) {
 func TestConfigClear_All_ScrubsLegacyFile(t *testing.T) {
 	tmp := testutil.Setup(t)
 	plantLegacyFile(t, tmp) // legacy credentials file present, migration NOT yet run
-	legacy := config.LegacyCredentialsPath()
+	legacy := testutil.LegacyCredentialsPath(t)
 	_, statErr := os.Stat(legacy)
 	require.NoError(t, statErr, "precondition: legacy file exists")
 
@@ -455,12 +467,73 @@ func TestConfigShow_JSON_NoSecretValue(t *testing.T) {
 	assert.NotContains(t, out, sentinel, "config show JSON must never contain the value")
 }
 
+// MON-5373: `clear --all` must scrub BOTH config.yml paths (canonical AND
+// old hand-rolled) AND BOTH plaintext credentials paths. Without this, a
+// stale file at the old hand-rolled location would silently resurrect on the
+// next runtime fallback Load() (or, for credentials, re-migrate). Skipped on
+// Linux where the two paths collapse to one.
+func TestConfigClear_All_ScrubsBothConfigAndLegacyPaths(t *testing.T) {
+	if runtime.GOOS == "linux" {
+		t.Skip("Linux: old==new (statedir ≡ $XDG_CONFIG_HOME); paths collapse")
+	}
+	testutil.Setup(t)
+
+	// Seed BOTH config paths AND BOTH credentials paths.
+	canonicalDir := testutil.ConfigDir(t)
+	canonicalConfig := filepath.Join(canonicalDir, "config.yml")
+	require.NoError(t, os.WriteFile(canonicalConfig,
+		[]byte("credential_ref: newrelic-cli/default\n"), 0o600))
+
+	oldConfig, err := config.OldConfigPath()
+	require.NoError(t, err)
+	require.NoError(t, os.MkdirAll(filepath.Dir(oldConfig), 0o700))
+	require.NoError(t, os.WriteFile(oldConfig,
+		[]byte("credential_ref: newrelic-cli/default\n"), 0o600))
+
+	oldCreds := testutil.LegacyCredentialsPath(t)
+	require.NoError(t, os.WriteFile(oldCreds, []byte("api_key=NRAK-old\n"), 0o600))
+
+	canonicalCreds, err := config.CanonicalCredentialsPath()
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(canonicalCreds, []byte("api_key=NRAK-new\n"), 0o600))
+
+	_, _, err = run(t, "config", "clear", "--all")
+	require.NoError(t, err)
+
+	for _, p := range []string{canonicalConfig, oldConfig, oldCreds, canonicalCreds} {
+		_, statErr := os.Stat(p)
+		assert.True(t, os.IsNotExist(statErr), "clear --all must remove %s", p)
+	}
+}
+
+// MON-5373: `clear --all` must remain the recovery path even when config.yml
+// is unparseable. OpenNoMigrate would fail on parse error; --all must still
+// scrub files (the whole purpose of --all is "wipe this broken state").
+// Codex PR-r2 Major.
+func TestConfigClear_All_MalformedConfig_StillScrubsFiles(t *testing.T) {
+	testutil.Setup(t)
+	canonicalDir := testutil.ConfigDir(t)
+	canonicalConfig := filepath.Join(canonicalDir, "config.yml")
+	require.NoError(t, os.WriteFile(canonicalConfig,
+		[]byte("[unclosed_array: yes\n"), 0o600))
+	legacyCreds := testutil.LegacyCredentialsPath(t)
+	require.NoError(t, os.WriteFile(legacyCreds, []byte("api_key=NRAK-stale\n"), 0o600))
+
+	_, _, err := run(t, "config", "clear", "--all")
+	require.NoError(t, err, "clear --all must succeed against malformed config")
+
+	_, statErr := os.Stat(canonicalConfig)
+	assert.True(t, os.IsNotExist(statErr), "malformed config.yml must be removed")
+	_, statErr = os.Stat(legacyCreds)
+	assert.True(t, os.IsNotExist(statErr), "legacy credentials must be scrubbed")
+}
+
 // §1.10 fresh-install automation primitive: on a box with NO config.yml,
 // `nrq set-credential --key api_key --stdin` (no --ref) must work, falling
 // back to the default ref — not error demanding --ref.
 func TestSetCredential_FreshInstall_NoRefNoConfig(t *testing.T) {
 	testutil.Setup(t)
-	_, statErr := os.Stat(config.Path())
+	_, statErr := os.Stat(mustConfigPath(t))
 	require.True(t, os.IsNotExist(statErr), "precondition: no config.yml")
 
 	rootCmd, opts := root.NewRootCmd()
@@ -508,7 +581,7 @@ func TestInit_SecretOnly_NoConfigYMLCreated(t *testing.T) {
 	rootCmd.SetArgs([]string{"init", "--api-key-stdin", "--no-verify"})
 	require.NoError(t, rootCmd.Execute())
 
-	_, statErr := os.Stat(config.Path())
+	_, statErr := os.Stat(mustConfigPath(t))
 	assert.True(t, os.IsNotExist(statErr),
 		"secret-only init must not create config.yml")
 	st, err := keychain.OpenNoMigrate()
@@ -529,7 +602,7 @@ func TestInit_NoSecretInConfigYML(t *testing.T) {
 	rootCmd.SetArgs([]string{"init", "--api-key-stdin", "--account-id", "42", "--region", "US", "--no-verify"})
 	require.NoError(t, rootCmd.Execute())
 
-	raw, err := os.ReadFile(config.Path())
+	raw, err := os.ReadFile(mustConfigPath(t))
 	require.NoError(t, err)
 	assert.NotContains(t, string(raw), sentinel)
 	assert.Contains(t, string(raw), "account_id: \"42\"")
@@ -553,7 +626,7 @@ func TestInit_AccountIDFromEnv_InstallerInvocation(t *testing.T) {
 	require.NoError(t, rootCmd.Execute())
 	assert.NotContains(t, o.String()+e.String(), sentinel)
 
-	raw, err := os.ReadFile(config.Path())
+	raw, err := os.ReadFile(mustConfigPath(t))
 	require.NoError(t, err)
 	assert.NotContains(t, string(raw), sentinel, "secret never in config.yml")
 	assert.Contains(t, string(raw), "account_id: \"98765\"")

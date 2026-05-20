@@ -506,6 +506,28 @@ func TestConfigClear_All_ScrubsBothConfigAndLegacyPaths(t *testing.T) {
 	}
 }
 
+// MON-5373: `clear --all` must remain the recovery path even when config.yml
+// is unparseable. OpenNoMigrate would fail on parse error; --all must still
+// scrub files (the whole purpose of --all is "wipe this broken state").
+// Codex PR-r2 Major.
+func TestConfigClear_All_MalformedConfig_StillScrubsFiles(t *testing.T) {
+	testutil.Setup(t)
+	canonicalDir := testutil.ConfigDir(t)
+	canonicalConfig := filepath.Join(canonicalDir, "config.yml")
+	require.NoError(t, os.WriteFile(canonicalConfig,
+		[]byte("[unclosed_array: yes\n"), 0o600))
+	legacyCreds := testutil.LegacyCredentialsPath(t)
+	require.NoError(t, os.WriteFile(legacyCreds, []byte("api_key=NRAK-stale\n"), 0o600))
+
+	_, _, err := run(t, "config", "clear", "--all")
+	require.NoError(t, err, "clear --all must succeed against malformed config")
+
+	_, statErr := os.Stat(canonicalConfig)
+	assert.True(t, os.IsNotExist(statErr), "malformed config.yml must be removed")
+	_, statErr = os.Stat(legacyCreds)
+	assert.True(t, os.IsNotExist(statErr), "legacy credentials must be scrubbed")
+}
+
 // §1.10 fresh-install automation primitive: on a box with NO config.yml,
 // `nrq set-credential --key api_key --stdin` (no --ref) must work, falling
 // back to the default ref — not error demanding --ref.

@@ -462,19 +462,12 @@ config.yml}.`,
 
 func runClear(o *clearOptions) error {
 	v := o.View()
-	// OpenNoMigrate: clear is the advertised §1.8 conflict remediation; if
-	// migration ran first it would fail with the conflict error before clear
-	// could delete the keyring entry, leaving the user no way out.
-	st, err := keychain.OpenNoMigrate()
-	if err != nil {
-		return err
-	}
-	defer func() { _ = st.Close() }()
 
-	// `clear --all` is cleanup/conflict-remediation — it must work even under
-	// a relocation conflict. Resolve config + credential-file paths directly
-	// via the canonical/old helpers (no Load() call) so a divergent old↔new
-	// pair cannot block the very command that exists to scrub both sides.
+	// `clear --all` is cleanup/conflict-remediation — it must work even when
+	// config.yml is unparseable, credential_ref is invalid, or keyring.backend
+	// is unrecognized. Resolve paths up front (no Load() call) so file scrub
+	// is unconditional; treat store-open as best-effort under --all so an
+	// unrecoverable config can't block the very command meant to wipe it.
 	configPaths, perr := configPathsForClear()
 	if perr != nil {
 		return perr
@@ -484,10 +477,27 @@ func runClear(o *clearOptions) error {
 		return cerr
 	}
 
+	st, err := keychain.OpenNoMigrate()
+	if err != nil {
+		if !o.all {
+			return err
+		}
+		// --all: report and proceed — file scrub still runs and is the
+		// recovery path. Without --all the user just asked to clear the
+		// keyring, so surface the error.
+		v.Warning("could not open keyring (%v) — proceeding with file scrub only", err)
+		st = nil
+	} else {
+		defer func() { _ = st.Close() }()
+	}
+
 	if o.dryRun {
-		if st.HasAPIKey() {
+		switch {
+		case st == nil:
+			v.Println("would remove: (keyring inaccessible; --all file scrub only)")
+		case st.HasAPIKey():
 			v.Println("would remove: api_key from keyring " + st.Ref())
-		} else {
+		default:
 			v.Println("would remove: (no api_key in keyring)")
 		}
 		if o.all {
@@ -513,14 +523,16 @@ func runClear(o *clearOptions) error {
 		return nil
 	}
 
-	removed, err := st.Clear()
-	if err != nil {
-		return fmt.Errorf("clear keyring bundle: %w", err)
-	}
-	if len(removed) > 0 {
-		v.Success("Removed %d key(s) from keyring %s", len(removed), st.Ref())
-	} else {
-		v.Println("No keyring keys to remove (already clear)")
+	if st != nil {
+		removed, err := st.Clear()
+		if err != nil {
+			return fmt.Errorf("clear keyring bundle: %w", err)
+		}
+		if len(removed) > 0 {
+			v.Success("Removed %d key(s) from keyring %s", len(removed), st.Ref())
+		} else {
+			v.Println("No keyring keys to remove (already clear)")
+		}
 	}
 
 	if o.all {

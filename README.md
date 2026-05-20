@@ -796,34 +796,36 @@ nrq users get 12345
 
 Configure nrq credentials.
 
-#### config set-api-key
+#### Setting the API key
 
-Set the New Relic API key.
-
-```bash
-# Interactive (recommended)
-nrq config set-api-key
-
-# Inline (less secure - visible in shell history)
-nrq config set-api-key NRAK-xxxxxxxxxxxxxxxxxxxx
-```
-
-#### config set-account-id
-
-Set the New Relic account ID.
+The API key is stored in the OS keyring and is **never** taken as a
+flag/positional literal (§1.5). Use `nrq init` (the standard setup
+path) or `nrq set-credential` for non-interactive ingress:
 
 ```bash
-nrq config set-account-id 12345678
+# Interactive setup (no-echo prompt)
+nrq init
+
+# Scripted ingress (op → env → --from-env, or stdin)
+op read "op://Vault/New Relic/api key" | nrq set-credential --key api_key --stdin
+nrq set-credential --key api_key --from-env NEWRELIC_API_KEY
 ```
 
-#### config set-region
+`nrq config set-api-key` was removed; a stub remains that prints the
+migration message above. See also the §1.5 note further up.
 
-Set the New Relic region.
+#### config set
+
+Set non-secret fields (`account_id`, `region`) in `config.yml`:
 
 ```bash
-nrq config set-region US   # Default
-nrq config set-region EU   # European datacenter
+nrq config set --account-id 12345678
+nrq config set --region US      # or EU
+nrq config set --account-id 12345678 --region EU   # combined
 ```
+
+`nrq config set-account-id <id>` and `nrq config set-region <r>` remain
+as thin deprecating aliases of `config set` (one cycle).
 
 #### config show
 

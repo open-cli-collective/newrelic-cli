@@ -89,6 +89,19 @@ func runInit(opts *initOptions) error {
 		return errors.New("provide at most one of --account-id / --account-id-from-env")
 	}
 
+	// MON-5373 relocation gate: runs BEFORE keychain.OpenForInit so a
+	// divergent old↔new config aborts BEFORE the §1.8 migration could scrub
+	// the legacy plaintext file or write the canonical config. On an
+	// old-only-readable surface we copy old→new (leave-old) so subsequent
+	// loads see the canonical location.
+	if reloc, err := config.DetectConfigRelocation(); err != nil {
+		return fmt.Errorf("detecting config relocation: %w", err)
+	} else if reloc.CopyNeeded {
+		if err := config.ApplyConfigRelocation(reloc); err != nil {
+			return fmt.Errorf("relocating config from %s to %s: %w", reloc.OldPath, reloc.NewPath, err)
+		}
+	}
+
 	// wantPrompt gates every interactive fallback. --non-interactive forces
 	// fail-loud (cli-deployment-manifest §1.3) so the central installer's
 	// `nrq init` is deterministic regardless of TTY.
@@ -200,7 +213,11 @@ func runInit(opts *initOptions) error {
 	// OR config.yml already exists (keep it consistent / persist a folded
 	// migration). A secret-only ingress in a pipeline must not create or
 	// touch config.yml just to restate the default credential_ref.
-	_, statErr := os.Stat(config.Path())
+	cfgPath, perr := config.Path()
+	if perr != nil {
+		return perr
+	}
+	_, statErr := os.Stat(cfgPath)
 	if accountID != "" || region != "" || statErr == nil {
 		if err := cfg.Save(); err != nil {
 			return fmt.Errorf("save config: %w", err)

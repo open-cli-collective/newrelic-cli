@@ -171,9 +171,10 @@ func migrateLegacyOverwrite(s *Store, cfg *config.Config, overwrite bool) error 
 			for _, f := range plan.movedNonSecret {
 				// Distinct human line: non-secret moves go to config.yml,
 				// NOT the keyring — do not reuse the keyring wording.
+				cfgPath, _ := config.Path()
 				fmt.Fprintf(os.Stderr,
 					"migrated %s to config %s; this is a one-time operation\n",
-					f, config.Path())
+					f, cfgPath)
 			}
 		}
 	}
@@ -284,8 +285,9 @@ func planMigration(service, profile, ref string, cfg *config.Config, d discovere
 			p.foldRegion = c.value
 		}
 		p.movedNonSecret = append(p.movedNonSecret, field)
+		cfgPath, _ := config.Path()
 		p.changes = append(p.changes, credstore.MigrationJSONEntry(
-			field, c.location, fmt.Sprintf("config:%s#%s", config.Path(), field)))
+			field, c.location, fmt.Sprintf("config:%s#%s", cfgPath, field)))
 	}
 	sort.Strings(p.movedNonSecret)
 	return p, nil
@@ -391,11 +393,50 @@ func discover() (discovered, error) {
 		}
 	}
 
-	path := legacyCredentialsPath()
-	fileVals := readLegacyFile(path)
-	if len(fileVals) > 0 {
-		// One file, one idempotent deleter shared by every field it
-		// contributed (the first cleanup removes it; the rest are no-ops).
+	// Plaintext credentials file: enumerate BOTH the old hand-rolled location
+	// AND the new canonical (post-MON-5373) location, path-identity deduped.
+	// The file lives in the same dir as config.yml, so the resolver switch
+	// relocates it on macOS/Windows — without dual-probe a workstation
+	// upgraded across the port would silently retain a plaintext secret in
+	// the old dir.
+	paths, err := config.CredentialFileCandidates()
+	if err != nil {
+		return discovered{}, err
+	}
+	type pathVals struct {
+		path string
+		vals map[string]string
+	}
+	var present []pathVals
+	for _, p := range paths {
+		v := readLegacyFile(p)
+		if len(v) > 0 {
+			present = append(present, pathVals{path: p, vals: v})
+		}
+	}
+
+	// Conflict semantics on the parsed/effective projection (api_key /
+	// account_id / region). Byte-equal would false-conflict on harmless
+	// ordering or trailing-newline differences (Codex r2 catch).
+	if len(present) > 1 {
+		fields := append([]string{secretField}, nonSecretFields...)
+		for _, f := range fields {
+			a, ok1 := present[0].vals[f]
+			b, ok2 := present[1].vals[f]
+			if ok1 && ok2 && a != b {
+				return discovered{}, fmt.Errorf(
+					"legacy credentials diverge between %s and %s on field %q; reconcile (delete one) before re-running",
+					present[0].path, present[1].path, f)
+			}
+		}
+	}
+
+	// Per-path enumeration: each path contributes its own location string and
+	// its own deleter. On Linux the dedup above collapses to one path; on
+	// macOS/Windows BOTH paths are reported and BOTH are scrubbed on success.
+	for _, pv := range present {
+		path := pv.path
+		fileVals := pv.vals
 		fileDeleter := func() error {
 			if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
 				return err
@@ -452,11 +493,11 @@ func ScrubLegacyKeychain() error {
 	return errors.Join(errs...)
 }
 
-// legacyCredentialsPath delegates to config.LegacyCredentialsPath so the
-// §1.8 discovery looks at exactly the same XDG/HOME-resolved location the
-// old code wrote to and the new config.yml uses (single source of truth —
-// no XDG-divergence gap for users who ran the old nrq with XDG_CONFIG_HOME).
-func legacyCredentialsPath() string { return config.LegacyCredentialsPath() }
+// (Legacy single-path helper removed in favor of config.CredentialFileCandidates()
+// — see discover() above. The post-MON-5373 file lives in the same dir as
+// config.yml, which is OS-native via cli-common/statedir; the old hand-rolled
+// $XDG_CONFIG_HOME/$HOME/.config location is also probed during the one-time
+// migration so an upgrade across the port doesn't strand a plaintext secret.)
 
 // readLegacyFile parses the legacy flat key=value credentials file (NOT an
 // INI; no [sections]). Missing file → nil (the steady state, not an error).

@@ -201,11 +201,12 @@ func runSet(opts *root.Options, accountID, region string) error {
 	if err := cfg.Save(); err != nil {
 		return fmt.Errorf("save config: %w", err)
 	}
+	cfgPath, _ := config.Path()
 	if accountID != "" {
-		v.Success("account_id set to %s in %s", accountID, config.Path())
+		v.Success("account_id set to %s in %s", accountID, cfgPath)
 	}
 	if region != "" {
-		v.Success("region set to %s in %s", strings.ToUpper(region), config.Path())
+		v.Success("region set to %s in %s", strings.ToUpper(region), cfgPath)
 	}
 	return nil
 }
@@ -463,6 +464,19 @@ func runClear(o *clearOptions) error {
 	}
 	defer func() { _ = st.Close() }()
 
+	// `clear --all` is cleanup/conflict-remediation — it must work even under
+	// a relocation conflict. Resolve config + credential-file paths directly
+	// via the canonical/old helpers (no Load() call) so a divergent old↔new
+	// pair cannot block the very command that exists to scrub both sides.
+	configPaths, perr := configPathsForClear()
+	if perr != nil {
+		return perr
+	}
+	credPaths, cerr := config.CredentialFileCandidates()
+	if cerr != nil {
+		return cerr
+	}
+
 	if o.dryRun {
 		if st.HasAPIKey() {
 			v.Println("would remove: api_key from keyring " + st.Ref())
@@ -470,13 +484,20 @@ func runClear(o *clearOptions) error {
 			v.Println("would remove: (no api_key in keyring)")
 		}
 		if o.all {
-			if _, statErr := os.Stat(config.Path()); statErr == nil {
-				v.Println("would remove: " + config.Path())
-			} else {
+			anyConfig := false
+			for _, p := range configPaths {
+				if _, statErr := os.Stat(p); statErr == nil {
+					v.Println("would remove: " + p)
+					anyConfig = true
+				}
+			}
+			if !anyConfig {
 				v.Println("would remove: (no config.yml)")
 			}
-			if _, statErr := os.Stat(config.LegacyCredentialsPath()); statErr == nil {
-				v.Println("would remove: " + config.LegacyCredentialsPath() + " (legacy plaintext)")
+			for _, p := range credPaths {
+				if _, statErr := os.Stat(p); statErr == nil {
+					v.Println("would remove: " + p + " (legacy plaintext)")
+				}
 			}
 			if runtime.GOOS == "darwin" {
 				v.Println("would remove: legacy macOS Keychain accounts for service \"newrelic-cli\" (if present)")
@@ -496,26 +517,34 @@ func runClear(o *clearOptions) error {
 	}
 
 	if o.all {
-		if err := os.Remove(config.Path()); err != nil {
-			if !os.IsNotExist(err) {
-				return fmt.Errorf("remove %s: %w", config.Path(), err)
+		anyConfig := false
+		for _, p := range configPaths {
+			if err := os.Remove(p); err != nil {
+				if !os.IsNotExist(err) {
+					return fmt.Errorf("remove %s: %w", p, err)
+				}
+				continue
 			}
-			v.Println("No config.yml to remove (already clear)")
-		} else {
-			v.Success("Removed %s", config.Path())
+			v.Success("Removed %s", p)
+			anyConfig = true
 		}
-		// Also scrub the legacy plaintext credentials file. Without this a
+		if !anyConfig {
+			v.Println("No config.yml to remove (already clear)")
+		}
+		// Also scrub the plaintext credentials file(s). Without this a
 		// `clear --all` on a workstation that never ran the §1.8 migration
 		// leaves the legacy secret on disk, and the next Open() re-migrates
-		// it back into the keyring — silently undoing the wipe.
-		if lp := config.LegacyCredentialsPath(); lp != "" {
+		// it back into the keyring — silently undoing the wipe. Dual-path:
+		// both the post-MON-5373 canonical location and the pre-port hand-
+		// rolled location.
+		for _, lp := range credPaths {
 			if err := os.Remove(lp); err != nil {
 				if !os.IsNotExist(err) {
 					return fmt.Errorf("remove %s: %w", lp, err)
 				}
-			} else {
-				v.Success("Removed %s (legacy plaintext)", lp)
+				continue
 			}
+			v.Success("Removed %s (legacy plaintext)", lp)
 		}
 		// Also scrub the legacy macOS Keychain accounts: otherwise a
 		// pre-migration `clear --all` on macOS is silently undone by the
@@ -525,4 +554,19 @@ func runClear(o *clearOptions) error {
 		}
 	}
 	return nil
+}
+
+// configPathsForClear returns the deduped set of config.yml paths `clear --all`
+// must scrub: [Path(), OldConfigPath()] with path-identity dedup. Linux
+// collapses to one path (statedir ≡ old hand-rolled location).
+func configPathsForClear() ([]string, error) {
+	canonical, err := config.Path()
+	if err != nil {
+		return nil, err
+	}
+	old, oerr := config.OldConfigPath()
+	if oerr == nil && old != canonical {
+		return []string{canonical, old}, nil
+	}
+	return []string{canonical}, nil
 }

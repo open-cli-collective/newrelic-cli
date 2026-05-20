@@ -118,7 +118,9 @@ func TestMigration_LegacyFile_EndToEnd(t *testing.T) {
 	_, statErr := os.Stat(legacy)
 	assert.True(t, os.IsNotExist(statErr), "legacy file must be scrubbed after migration")
 
-	raw, err := os.ReadFile(config.Path())
+	cfgPath, err := config.Path()
+	require.NoError(t, err)
+	raw, err := os.ReadFile(cfgPath)
 	require.NoError(t, err)
 	assert.NotContains(t, string(raw), "NRAK-legacy", "secret must never land in config.yml")
 

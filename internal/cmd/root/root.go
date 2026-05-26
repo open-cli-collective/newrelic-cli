@@ -2,10 +2,13 @@ package root
 
 import (
 	"errors"
+	"fmt"
 	"io"
 	"os"
 
 	"github.com/spf13/cobra"
+
+	cccredstore "github.com/open-cli-collective/cli-common/credstore"
 
 	"github.com/open-cli-collective/newrelic-cli/api"
 	"github.com/open-cli-collective/newrelic-cli/internal/config"
@@ -128,7 +131,7 @@ func NewRootCmd() (*cobra.Command, *Options) {
 				opts.Output = "json"
 			}
 			output.OutputFormat = format
-			return nil
+			return WireBackendSelection(cmd)
 		},
 	}
 
@@ -140,8 +143,32 @@ func NewRootCmd() (*cobra.Command, *Options) {
 		"Enable verbose output (shows API requests)")
 	cmd.PersistentFlags().Bool("json", false, "Output in JSON format (deprecated: use -o json)")
 	_ = cmd.PersistentFlags().MarkDeprecated("json", "use --output json instead")
+	cmd.PersistentFlags().String(cccredstore.BackendFlagName, "", cccredstore.BackendFlagUsage())
 
 	return cmd, opts
+}
+
+// WireBackendSelection validates the --backend flag and records it for
+// the next keychain.Open* call. Cobra-layer only: it does NOT load
+// config; openWith binds the flag pair against cfg.Keyring.Backend at
+// the single credstore.Open call site.
+//
+// Exported so any subcommand that defines its own PersistentPreRunE
+// can call it explicitly — cobra does NOT chain PersistentPreRunE, so a
+// shadower silently loses the wiring without this hook. nrq has no
+// shadowers today; the regression test guards the pattern.
+func WireBackendSelection(cmd *cobra.Command) error {
+	var value string
+	var changed bool
+	if bf := cmd.Flag(cccredstore.BackendFlagName); bf != nil {
+		value = bf.Value.String()
+		changed = bf.Changed
+	}
+	if err := cccredstore.BindBackendFlag(&cccredstore.Options{}, value, changed, ""); err != nil {
+		return fmt.Errorf("--%s: %w", cccredstore.BackendFlagName, err)
+	}
+	keychain.SetBackendFlagOverride(value, changed)
+	return nil
 }
 
 // RegisterAll applies the given register functions to cmd/opts. Used by both

@@ -311,12 +311,18 @@ The View struct handles all output formatting. To add a new format:
 
 The API key is stored in the OS keyring via `cli-common/credstore` under ref
 `newrelic-cli/default`, key `api_key` (one logical credential, one key —
-§1.3), or — with the explicit `keyring.backend: file` opt-in — an encrypted
-file. It is **never** stored in plaintext, **never** in `config.yml`, and
+§1.3). It is **never** stored in plaintext, **never** in `config.yml`, and
 **never** read from the environment at runtime. `account_id`/`region` are
-non-secret and live in
-`~/.config/newrelic-cli/config.yml` alongside `credential_ref` and the
-optional `keyring.backend: file` opt-in.
+non-secret and live in `~/.config/newrelic-cli/config.yml` alongside
+`credential_ref` and the optional `keyring.backend` selector.
+
+**Backend selection** has three user-configurable knobs that fall back to
+auto-detect, in precedence order: `--backend <name>` flag >
+`NEWRELIC_CLI_KEYRING_BACKEND` env var > `keyring.backend` in `config.yml`
+> auto-detect. Supported names: `keychain`, `wincred`, `secret-service`,
+`file`, `memory`. The `file` backend additionally requires
+`NEWRELIC_CLI_KEYRING_PASSPHRASE`. This routes the *secret store*; it does
+NOT change the secret-source rule above.
 
 - **Ingress only** (`init` / `set-credential`): stdin, `--*-from-env <VAR>`,
   or an interactive no-echo prompt — never a flag/positional literal (§1.5).
@@ -348,7 +354,7 @@ optional `keyring.backend: file` opt-in.
 | `NEWRELIC_API_KEY` | User API key (NRAK-xxx) — **setup ingress only** (`init`/`set-credential` `--from-env`); not read at runtime |
 | `NEWRELIC_ACCOUNT_ID` | Account ID — non-secret runtime override (env > config.yml); also the installer ingress target for `nrq init --account-id-from-env NEWRELIC_ACCOUNT_ID` (resolved into `config.yml`, never the keyring) |
 | `NEWRELIC_REGION` | US or EU (non-secret runtime override; env > config.yml) |
-| `NEWRELIC_CLI_KEYRING_BACKEND` | `file` to force the encrypted-file backend (§1.4) |
+| `NEWRELIC_CLI_KEYRING_BACKEND` | Backend selector — one of `keychain`, `wincred`, `secret-service`, `file`, `memory` (§1.4). Lower precedence than `--backend`, higher than `keyring.backend` config. |
 | `NEWRELIC_CLI_KEYRING_PASSPHRASE` | File-backend passphrase for headless use (§1.4) |
 
 ## Dependencies

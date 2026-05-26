@@ -6,17 +6,23 @@
 // §1.5.2 allowed-key allowlist. The name is retained to avoid churning every
 // importer (Open CLI Collective Secret-Handling Standard §2.5).
 //
-// All runtime credential resolution goes through here and reads the OS
-// keyring only — never an environment variable, never a config field
-// (§1.11 acceptance item 2). NEWRELIC_API_KEY carries secret material into
-// nrq solely as *ingress* during `init` / `set-credential`.
+// All runtime credential resolution goes through here. The secret
+// material (the API key) is read from the OS keyring only — never an
+// environment variable, never a config field (§1.11 acceptance item 2).
+// NEWRELIC_API_KEY carries secret material into nrq solely as *ingress*
+// during `init` / `set-credential`.
+//
+// Note: backend *routing* (which keyring to open) is intentionally
+// user-configurable via the --backend flag, NEWRELIC_CLI_KEYRING_BACKEND
+// env var, and `keyring.backend` config key — see openWith below. The
+// secret-vs-routing distinction matters: do not "simplify" the routing
+// path away on the basis of the §1.11 secret-source rule.
 package keychain
 
 import (
 	"errors"
 	"fmt"
 	"os"
-	"strings"
 
 	"github.com/open-cli-collective/cli-common/credstore"
 
@@ -117,15 +123,17 @@ func openWith(cfg *config.Config, overwrite, runMigration, nonInteractive bool) 
 	}
 
 	opts := &credstore.Options{AllowedKeys: allowedKeys}
-	switch b := strings.TrimSpace(cfg.Keyring.Backend); b {
-	case "":
-		// Auto-select per §1.4 (credstore decides; fail-closed on Linux).
-	case "file":
-		opts.ConfigBackend = credstore.BackendFile
-	default:
-		// Fail closed: an unrecognized backend must not silently degrade to
-		// auto-selection and store credentials somewhere unintended.
-		return nil, fmt.Errorf("invalid keyring.backend %q in config (only \"file\" is supported)", b)
+	// Bind the --backend flag (from the cobra layer, recorded by
+	// root.WireBackendSelection) and cfg.Keyring.Backend together at one
+	// site. Flag-side precedence wins over config; both are validated by
+	// credstore.Open downstream.
+	flagValue, flagSet := GetBackendFlagOverride()
+	if err := credstore.BindBackendFlag(opts, flagValue, flagSet, cfg.Keyring.Backend); err != nil {
+		source := "--" + credstore.BackendFlagName
+		if !flagSet {
+			source = "keyring.backend"
+		}
+		return nil, fmt.Errorf("%s: %w", source, err)
 	}
 	opts.FilePassphrase = passphraseFunc(service, nonInteractive)
 

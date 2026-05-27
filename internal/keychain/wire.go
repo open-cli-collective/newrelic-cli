@@ -2,6 +2,21 @@ package keychain
 
 import "sync"
 
+// Backend-flag override lifecycle:
+//
+//   - Written by root.WireBackendSelection at cobra PersistentPreRunE time,
+//     once per Execute(), from the parsed --backend flag.
+//   - Read by openWith on every keychain.Open* call.
+//   - Zero values (("", false)) mean "no --backend supplied" and openWith
+//     falls through to env > config.Keyring.Backend > auto-detect via
+//     credstore.BindBackendFlag.
+//   - RWMutex defends against tests that read/write from parallel
+//     goroutines; cobra itself dispatches PreRunE on the main goroutine
+//     before any RunE, so there is no production race.
+//
+// Any new caller of openWith must run after PreRunE has fired (or
+// explicitly call SetBackendFlagOverride first). Tests that mutate the
+// override should defer a reset to keep state isolated.
 var (
 	backendMu         sync.RWMutex
 	backendFlagValue  string

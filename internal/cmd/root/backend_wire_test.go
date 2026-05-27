@@ -62,6 +62,7 @@ func TestWireBackendSelection_FlagInvalid(t *testing.T) {
 }
 
 func TestWireBackendSelection_ConfigPassthrough(t *testing.T) {
+	resetState(t)
 	t.Setenv(cccredstore.BackendEnvVar(serviceName), "")
 	opts := &cccredstore.Options{}
 	if err := cccredstore.BindBackendFlag(opts, "", false, "memory"); err != nil {
@@ -76,6 +77,7 @@ func TestWireBackendSelection_ConfigPassthrough(t *testing.T) {
 }
 
 func TestWireBackendSelection_InvalidConfigDeferred(t *testing.T) {
+	resetState(t)
 	t.Setenv(cccredstore.BackendEnvVar(serviceName), "")
 	opts := &cccredstore.Options{}
 	if err := cccredstore.BindBackendFlag(opts, "", false, "bogus"); err != nil {

@@ -274,6 +274,7 @@ type showStatus struct {
 	CredentialRef    string `json:"credential_ref"`
 	Backend          string `json:"backend"`
 	BackendSource    string `json:"backend_source"`
+	KeyringBackend   string `json:"keyring_backend,omitempty"` // selector from config.yml
 	PassphraseSource string `json:"passphrase_source,omitempty"`
 	APIKeyPresent    bool   `json:"api_key_present"`
 	AccountID        string `json:"account_id,omitempty"`
@@ -318,6 +319,7 @@ func runShow(opts *root.Options) error {
 		CredentialRef:   st.Ref(),
 		Backend:         string(backend),
 		BackendSource:   string(bsrc),
+		KeyringBackend:  cfg.Keyring.Backend,
 		APIKeyPresent:   st.HasAPIKey(),
 		AccountID:       accountID,
 		AccountIDSource: string(aSrc),
@@ -336,6 +338,9 @@ func runShow(opts *root.Options) error {
 	v.Println("")
 	v.Print("  Credential ref: %s\n", status.CredentialRef)
 	v.Print("  Backend:        %s (%s)\n", status.Backend, status.BackendSource)
+	if status.KeyringBackend != "" {
+		v.Print("  keyring.backend: %s (config.yml)\n", status.KeyringBackend)
+	}
 	if status.PassphraseSource != "" {
 		v.Print("  Passphrase:     %s\n", status.PassphraseSource)
 	}

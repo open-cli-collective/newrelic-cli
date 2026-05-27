@@ -192,7 +192,14 @@ The API key lives **only** in the OS keyring via the shared
 |----------|---------|
 | macOS | Keychain |
 | Windows | Credential Manager |
-| Linux | Secret Service (encrypted-file fallback when no keyring is available; opt-in via `keyring.backend: file`) |
+| Linux | Secret Service (encrypted-file fallback when no keyring is available) |
+
+Backend selection has three user-configurable knobs that fall back to
+auto-detect, in precedence order: `--backend <name>` flag >
+`NEWRELIC_CLI_KEYRING_BACKEND` env var > `keyring.backend` in
+`config.yml` > auto-detect. Supported names: `keychain`, `wincred`,
+`secret-service`, `file`, `memory`. The `file` backend additionally
+requires `NEWRELIC_CLI_KEYRING_PASSPHRASE`.
 
 Non-secret config (`credential_ref`, `account_id`, `region`) lives in
 `~/.config/newrelic-cli/config.yml` (0600). A pre-existing macOS Keychain

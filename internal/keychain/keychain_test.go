@@ -76,7 +76,12 @@ func TestOpen_UnknownBackend_FailsClosed(t *testing.T) {
 
 	_, err := keychain.OpenNoMigrate()
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "invalid keyring.backend")
+	// Post cli-common v0.2.0: BindBackendFlag passes the config value
+	// through and credstore.Open surfaces the failure. The keychain
+	// wrapper prefixes the error with "keyring.backend:" to name the
+	// knob that produced the bad value.
+	assert.Contains(t, err.Error(), "keyring.backend")
+	assert.Contains(t, err.Error(), "bogus")
 }
 
 func TestOpenRef_OverridesConfiguredRef(t *testing.T) {

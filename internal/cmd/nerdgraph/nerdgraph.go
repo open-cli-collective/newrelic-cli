@@ -2,11 +2,23 @@ package nerdgraph
 
 import (
 	"encoding/json"
+	"io"
 
 	"github.com/spf13/cobra"
 
 	"github.com/open-cli-collective/newrelic-cli/internal/cmd/root"
 )
+
+// emitPassthroughJSON is the passthrough wire contract for `nrq nerdgraph
+// query`: pretty-printed JSON with 2-space indent and a trailing newline.
+// Extracted from runQuery so the byte shape can be pinned without a
+// stubbed API client. Matches the format the deleted View.JSON path
+// produced via MarshalWithMigration + json.Indent.
+func emitPassthroughJSON(w io.Writer, result interface{}) error {
+	enc := json.NewEncoder(w)
+	enc.SetIndent("", "  ")
+	return enc.Encode(result)
+}
 
 // Register adds the nerdgraph commands to the root command
 func Register(rootCmd *cobra.Command, opts *root.Options) {
@@ -91,10 +103,5 @@ func runQuery(opts *root.Options, query string) error {
 	if err != nil {
 		return err
 	}
-
-	// Passthrough surface: always JSON regardless of -o. Two-space indent +
-	// trailing newline preserves the wire shape downstream tools expect.
-	enc := json.NewEncoder(opts.Stdout)
-	enc.SetIndent("", "  ")
-	return enc.Encode(result)
+	return emitPassthroughJSON(opts.Stdout, result)
 }

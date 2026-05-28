@@ -18,6 +18,7 @@ import (
 
 	"github.com/open-cli-collective/cli-common/credstore"
 
+	"github.com/open-cli-collective/newrelic-cli/api"
 	"github.com/open-cli-collective/newrelic-cli/internal/cmd/root"
 	"github.com/open-cli-collective/newrelic-cli/internal/config"
 	"github.com/open-cli-collective/newrelic-cli/internal/keychain"
@@ -522,8 +523,20 @@ func runTest(o *testOptions) error {
 		v.Error("Test failed: %v", err)
 		return err
 	}
+	return renderTest(o, result, client.AccountID.IsEmpty())
+}
+
+// renderTest is the pure rendering boundary for config test: given a
+// resolved ConnectionTestResult and whether an account is configured, it
+// emits either the JSON envelope (--json carve-out) or the human-readable
+// text path. Split from runTest so the carve-out composition rule
+// (local --json wins under -o table/plain) is unit-testable without the
+// network round-trip APIClient/TestConnection forces.
+func renderTest(o *testOptions, result *api.ConnectionTestResult, accountEmpty bool) error {
+	opts := o.Options
+	v := opts.View()
 	status := connectionTestStatus{
-		Success:       result.APIKeyValid && (result.AccountAccess || client.AccountID.IsEmpty()),
+		Success:       result.APIKeyValid && (result.AccountAccess || accountEmpty),
 		APIKeyValid:   result.APIKeyValid,
 		AccountAccess: result.AccountAccess,
 		AccountID:     result.AccountID,
@@ -552,7 +565,7 @@ func runTest(o *testOptions) error {
 		v.Println("Reconfigure with: nrq init")
 		return errors.New("API key validation failed")
 	}
-	if !client.AccountID.IsEmpty() {
+	if !accountEmpty {
 		if result.AccountAccess {
 			v.Success("Account %d accessible", result.AccountID)
 		} else {

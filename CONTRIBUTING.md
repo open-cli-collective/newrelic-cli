@@ -266,7 +266,7 @@ func runList(opts *root.Options) error {
         rows[i] = []string{item.ID, item.Name}
     }
 
-    return v.Render(headers, rows, items)
+    return v.Render(headers, rows)
 }
 ```
 

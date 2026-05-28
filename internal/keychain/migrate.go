@@ -58,7 +58,7 @@ type nonSecretCandidate struct {
 	field    string // account_id | region
 	value    string
 	priority int    // lower wins: keychain(0) beats file(1)
-	location string // descriptor for _migration `from`
+	location string // human-readable source descriptor (file:/p#field, keychain:svc/acct)
 }
 
 // labeledDeleter removes one legacy original; label names the source (e.g.
@@ -153,7 +153,7 @@ func migrateLegacyOverwrite(s *Store, cfg *config.Config, overwrite bool) error 
 
 	// Surface the stderr signal for every field actually moved this run
 	// (§1.8 bans silent migration; §2.5 moves all three).
-	if len(plan.changes) > 0 {
+	if plan.movedSecret || plan.scrubbedOnly || len(plan.movedNonSecret) > 0 {
 		if plan.movedSecret {
 			credstore.EmitMigrationStderr(secretField, s.ref)
 		} else if plan.scrubbedOnly {
@@ -183,7 +183,6 @@ type migrationPlan struct {
 	secretValue    string
 	foldAccountID  string // "" = leave cfg.AccountID as-is
 	foldRegion     string
-	changes        []credstore.MigrationChange
 	movedSecret    bool
 	movedNonSecret []string // fields whose value changed config.yml this run
 	// replacedExisting: --overwrite forced a legacy value over a DIFFERENT
@@ -226,17 +225,9 @@ func planMigration(service, profile, ref string, cfg *config.Config, d discovere
 			// Already migrated (values match): no write. But if legacy
 			// originals still exist they are about to be scrubbed by the
 			// deleters — that IS a one-time migration side effect, so
-			// record it and signal once (§1.8).
+			// signal once (§1.8).
 			if len(d.deleters) > 0 {
 				p.scrubbedOnly = true
-				locs := make([]string, 0, len(d.secrets))
-				for _, c := range d.secrets {
-					locs = append(locs, c.location)
-				}
-				p.changes = append(p.changes, credstore.MigrationJSONEntry(
-					secretField, strings.Join(locs, ", "),
-					fmt.Sprintf("keyring:%s/%s/%s (already present; legacy copies removed)",
-						service, profile, KeyAPIKey)))
 			}
 		default:
 			p.writeSecret = true
@@ -246,9 +237,6 @@ func planMigration(service, profile, ref string, cfg *config.Config, d discovere
 			// AND the value differs (the no-overwrite-disagree and
 			// agree cases are handled above) — i.e. a destructive replace.
 			p.replacedExisting = hasTarget && overwrite && secretDisagrees(distinct, target)
-			p.changes = append(p.changes, credstore.MigrationJSONEntry(
-				secretField, d.secrets[0].location,
-				fmt.Sprintf("keyring:%s/%s/%s", service, profile, KeyAPIKey)))
 		}
 	}
 
@@ -281,12 +269,6 @@ func planMigration(service, profile, ref string, cfg *config.Config, d discovere
 			p.foldRegion = c.value
 		}
 		p.movedNonSecret = append(p.movedNonSecret, field)
-		cfgPath, perr := config.Path()
-		if perr != nil {
-			return migrationPlan{}, perr
-		}
-		p.changes = append(p.changes, credstore.MigrationJSONEntry(
-			field, c.location, fmt.Sprintf("config:%s#%s", cfgPath, field)))
 	}
 	sort.Strings(p.movedNonSecret)
 	return p, nil

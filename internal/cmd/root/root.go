@@ -53,9 +53,8 @@ func (o *Options) View() *view.View {
 // client — never from PersistentPreRunE — so `init`, `set-credential`,
 // `config *`, `--help`, and no-credential paths never force keyring access
 // or the §1.8 migration. Because it is the one place that opens the keyring,
-// the migration runs at a single deterministic point: the stderr/_migration
-// signal, non-zero-exit behavior, and §1.8 ingress-after-migration ordering
-// are all deterministic.
+// the migration runs at a single deterministic point: the stderr signal
+// and §1.8 ingress-after-migration ordering are deterministic.
 func (o *Options) APIClient() (*api.Client, error) {
 	store, err := keychain.Open() // runs the one-time §1.8 migration
 	if err != nil {

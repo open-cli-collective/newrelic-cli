@@ -59,11 +59,15 @@ type setCredentialOptions struct {
 // setCredentialEnvelope is the §1.5.2 / §1.8 control-plane response shape
 // emitted on stdout when --json is set. backend is empty when the keyring
 // store was never opened (pre-keyring failure). error is omitted on success.
+// warning is omitted unless API-key validation flagged a non-fatal caveat
+// (e.g., a non-standard key prefix) — automation consumers need a
+// machine-readable surface for those signals since stderr is silenced.
 type setCredentialEnvelope struct {
 	Ref     string `json:"ref"`
 	Key     string `json:"key"`
 	Backend string `json:"backend"`
 	Written bool   `json:"written"`
+	Warning string `json:"warning,omitempty"`
 	Error   string `json:"error,omitempty"`
 }
 
@@ -159,6 +163,12 @@ func runSetCredential(o *setCredentialOptions) error {
 					"requires --ref when there is no active config to default from",
 				config.DefaultCredentialRef))
 		}
+		// Resolve the active credential_ref so a downstream OpenRef failure
+		// surfaces a useful Ref value in the envelope (otherwise the JSON
+		// consumer can't tell which ref was attempted).
+		if cfg, cerr := config.Load(); cerr == nil && cfg.CredentialRef != "" {
+			o.ref = cfg.CredentialRef
+		}
 	}
 
 	var secret string
@@ -174,10 +184,15 @@ func runSetCredential(o *setCredentialOptions) error {
 			return preKeyringFail(fmt.Errorf("environment variable %s is empty or unset", o.fromEnv))
 		}
 	}
+	var apiKeyWarning string
 	if warning, err := validate.APIKey(secret); err != nil {
 		return preKeyringFail(err)
-	} else if warning != "" && !o.json {
-		v.Warning("%s", warning)
+	} else if warning != "" {
+		if o.json {
+			apiKeyWarning = warning // surfaced via envelope.Warning below
+		} else {
+			v.Warning("%s", warning)
+		}
 	}
 
 	st, err := keychain.OpenRef(o.ref) // pure ingress: no migration
@@ -225,6 +240,7 @@ func runSetCredential(o *setCredentialOptions) error {
 			Key:     o.key,
 			Backend: storeBackendName(st),
 			Written: true,
+			Warning: apiKeyWarning,
 		})
 	}
 	v.Success("Stored %s in the OS keyring at %s", o.key, st.Ref())

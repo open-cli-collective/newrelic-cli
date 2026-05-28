@@ -169,11 +169,13 @@ func TestSetCredential_RefDefaulting_ConfigExistsUsesActive(t *testing.T) {
 		"--key", "api_key", "--stdin")
 	require.NoError(t, err)
 
-	// Verify the secret landed in the active ref's bundle.
+	// Verify the secret landed in the active ref's bundle — not just that
+	// the right ref was opened, but that the key was actually written.
 	st, err := keychain.OpenNoMigrate()
 	require.NoError(t, err)
 	defer func() { _ = st.Close() }()
 	assert.Equal(t, "newrelic-cli/custom", st.Ref())
+	assert.True(t, st.HasAPIKey(), "active ref's bundle must have received the key")
 }
 
 func TestSetCredential_RefDefaulting_ExplicitWins(t *testing.T) {

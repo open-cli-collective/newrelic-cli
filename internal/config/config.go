@@ -172,9 +172,12 @@ func hasUserConfigInDir(newDir string) (bool, error) {
 
 	reloc, relErr := detectRelocation(newDir)
 	if relErr != nil {
-		if errors.Is(relErr, ErrRelocationConflict) {
-			return false, relErr
-		}
+		// Propagate any error — ErrRelocationConflict, malformed-old,
+		// permission errors, etc. Silently swallowing non-conflict errors
+		// would misreport "no config exists" on a box where config does
+		// exist but is temporarily unreadable, causing set-credential to
+		// incorrectly demand --ref.
+		return false, relErr
 	}
 	if reloc.Kind == relocOldOnly {
 		oldYML := filepath.Join(reloc.OldPath, configFileName)

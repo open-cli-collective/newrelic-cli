@@ -12,6 +12,7 @@ import (
 	"github.com/open-cli-collective/newrelic-cli/internal/cmd/dashboards"
 	"github.com/open-cli-collective/newrelic-cli/internal/cmd/deployments"
 	"github.com/open-cli-collective/newrelic-cli/internal/cmd/entities"
+	"github.com/open-cli-collective/newrelic-cli/internal/cmd/initcmd"
 	"github.com/open-cli-collective/newrelic-cli/internal/cmd/keys"
 	"github.com/open-cli-collective/newrelic-cli/internal/cmd/logs"
 	"github.com/open-cli-collective/newrelic-cli/internal/cmd/me"
@@ -40,6 +41,9 @@ var expectedJSONCarveOuts = map[string]bool{
 // Catches both regressions (a resource leaf grows a --json) and silent
 // scope creep (a new diagnostic adds --json without updating the list).
 func TestJSONCarveOuts_Match(t *testing.T) {
+	// Mirror the full set of registrations from cmd/nrq/main.go so the test
+	// is truly exhaustive — any future --json added under, say, initcmd
+	// would otherwise silently bypass this enforcement check.
 	rootCmd, _ := root.NewRootCmd()
 	root.RegisterAll(rootCmd, &root.Options{},
 		alerts.Register,
@@ -48,6 +52,7 @@ func TestJSONCarveOuts_Match(t *testing.T) {
 		dashboards.Register,
 		deployments.Register,
 		entities.Register,
+		initcmd.Register,
 		keys.Register,
 		logs.Register,
 		me.Register,

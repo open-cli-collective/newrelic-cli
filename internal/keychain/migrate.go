@@ -153,15 +153,19 @@ func migrateLegacyOverwrite(s *Store, cfg *config.Config, overwrite bool) error 
 
 	// Surface the stderr signal for every field actually moved this run
 	// (§1.8 bans silent migration; §2.5 moves all three).
-	if plan.movedSecret || plan.scrubbedOnly || len(plan.movedNonSecret) > 0 {
-		if plan.movedSecret {
-			credstore.EmitMigrationStderr(secretField, s.ref)
-		} else if plan.scrubbedOnly {
-			fmt.Fprintf(os.Stderr,
-				"removed legacy %s credential source(s) for %s "+
-					"(the keyring already held it); this is a one-time operation\n",
-				secretField, s.ref)
-		}
+	if plan.movedSecret {
+		credstore.EmitMigrationStderr(secretField, s.ref)
+	} else if plan.scrubbedOnly {
+		fmt.Fprintf(os.Stderr,
+			"removed legacy %s credential source(s) for %s "+
+				"(the keyring already held it); this is a one-time operation\n",
+			secretField, s.ref)
+	}
+	// config.Path() is only needed for the non-secret stderr lines —
+	// guard the lookup so a movedSecret-only run never returns a spurious
+	// error from a HOME/XDG resolution failure after all real work
+	// (keyring write, config save, legacy scrub) has already completed.
+	if len(plan.movedNonSecret) > 0 {
 		cfgPath, perr := config.Path()
 		if perr != nil {
 			return perr

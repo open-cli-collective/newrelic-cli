@@ -890,7 +890,10 @@ reserved per cli-common [`docs/output-and-rendering.md`](https://github.com/open
 - **Passthrough surfaces**: `nerdgraph query` and `nrql` always emit JSON
   regardless of `-o` (their data is GraphQL/NRQL result shape).
 
-`nrq -o json …` on any resource command is rejected at the root.
+`nrq -o json …` on any resource command is rejected at the root. The
+previously-deprecated root `--json` boolean alias is also removed — it
+was a translation layer over `-o json` and has no closed-set value to
+forward to.
 
 ### Table (default)
 

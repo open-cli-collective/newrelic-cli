@@ -144,6 +144,41 @@ func Load() (*Config, error) {
 	return loadFromNewDir(newDir)
 }
 
+// HasUserConfig reports whether a config.yml exists at the canonical path
+// or a relocation-fallback path. Mirrors loadFromNewDir's file-presence
+// semantics (including relocOldOnly). Callers should treat malformed
+// configs as errors, not silently as "no config" — set-credential uses
+// this to decide whether --ref is required per §1.5.2 (--ref defaults to
+// the active config's credential_ref only if a config file already exists).
+func HasUserConfig() (bool, error) {
+	newDir, err := Dir()
+	if err != nil {
+		return false, err
+	}
+	newYML := filepath.Join(newDir, configFileName)
+	if _, found, err := readConfigYML(newYML); err != nil {
+		return false, err
+	} else if found {
+		return true, nil
+	}
+
+	reloc, relErr := detectRelocation(newDir)
+	if relErr != nil {
+		if errors.Is(relErr, ErrRelocationConflict) {
+			return false, relErr
+		}
+	}
+	if reloc.Kind == relocOldOnly {
+		oldYML := filepath.Join(reloc.OldPath, configFileName)
+		if _, found, err := readConfigYML(oldYML); err != nil {
+			return false, err
+		} else if found {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
 // loadFromNewDir is the testable seam — production AND tests both call this.
 // Splitting it out avoids the "test helper as parallel implementation" trap
 // (slck MON-5372 Codex r1 lesson): production can never silently regress

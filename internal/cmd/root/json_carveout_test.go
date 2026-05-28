@@ -8,6 +8,7 @@ import (
 
 	"github.com/open-cli-collective/newrelic-cli/internal/cmd/alerts"
 	"github.com/open-cli-collective/newrelic-cli/internal/cmd/apps"
+	"github.com/open-cli-collective/newrelic-cli/internal/cmd/completion"
 	"github.com/open-cli-collective/newrelic-cli/internal/cmd/configcmd"
 	"github.com/open-cli-collective/newrelic-cli/internal/cmd/dashboards"
 	"github.com/open-cli-collective/newrelic-cli/internal/cmd/deployments"
@@ -48,6 +49,7 @@ func TestJSONCarveOuts_Match(t *testing.T) {
 	root.RegisterAll(rootCmd, &root.Options{},
 		alerts.Register,
 		apps.Register,
+		completion.Register,
 		configcmd.Register,
 		dashboards.Register,
 		deployments.Register,

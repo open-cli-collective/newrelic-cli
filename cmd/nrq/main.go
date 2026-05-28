@@ -13,8 +13,8 @@ func main() {
 
 	if err := rootCmd.Execute(); err != nil {
 		// Migration emits its stderr signal synchronously during the
-		// migration itself (keychain/migrate.go Phase 3), so a non-zero
-		// exit needs no extra flushing.
+		// migration itself (keychain/migrate.go, after the Phase 4 success
+		// boundary), so a non-zero exit needs no extra flushing.
 
 		// Map error types to exit codes for shell scripting
 		var apiErr *api.APIError

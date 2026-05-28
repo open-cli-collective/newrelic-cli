@@ -134,7 +134,7 @@ func TestSetCredential_JSONFailure_MissingRefNoConfig_PreKeyring(t *testing.T) {
 func TestSetCredential_JSONFailure_BothStdinAndEnv_PreKeyring(t *testing.T) {
 	testutil.Setup(t)
 	t.Setenv("NRQ_TEST_VAR", "ignored-value")
-	stdout, _, err := runSetCredentialViaRoot(t,
+	stdout, stderr, err := runSetCredentialViaRoot(t,
 		secretSentinel+"\n",
 		"--ref", "newrelic-cli/test", "--key", "api_key", "--stdin", "--from-env", "NRQ_TEST_VAR", "--json")
 	require.Error(t, err)
@@ -142,6 +142,7 @@ func TestSetCredential_JSONFailure_BothStdinAndEnv_PreKeyring(t *testing.T) {
 	env := parseEnvelope(t, stdout)
 	assert.False(t, env.Written)
 	assert.Contains(t, env.Error, "exactly one")
+	assert.Empty(t, stderr.String(), "SilenceErrors must keep stderr empty on --json pre-keyring failure")
 }
 
 // --- --ref strict defaulting tests ------------------------------------------
@@ -270,6 +271,32 @@ func TestSetCredential_NeverEmitsSecret_AcrossAllPaths(t *testing.T) {
 }
 
 // --- Root-flag position invariance (Codex Major fix) ----------------------
+
+// TestSetCredential_RootDeprecatedJSONBeforeSubcommand_AlsoEmitsEnvelope
+// covers the deprecated root `--json` boolean variant of the same fix —
+// root.go:146 registers it as a deprecated alias, and `nrq --json
+// set-credential ...` must trigger the envelope path too.
+func TestSetCredential_RootDeprecatedJSONBeforeSubcommand_AlsoEmitsEnvelope(t *testing.T) {
+	testutil.Setup(t)
+	rootCmd, opts := root.NewRootCmd()
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	opts.Stdout, opts.Stderr = stdout, stderr
+	opts.Stdin = strings.NewReader(secretSentinel + "\n")
+	root.RegisterAll(rootCmd, opts, Register)
+	// Deprecated root --json BEFORE the subcommand.
+	rootCmd.SetArgs([]string{"--json", "set-credential",
+		"--ref", "newrelic-cli/test", "--key", "api_key", "--stdin"})
+	require.NoError(t, rootCmd.Execute())
+
+	env := parseEnvelope(t, stdout)
+	assert.True(t, env.Written)
+	assert.NotEmpty(t, env.Backend)
+	// Stderr may contain cobra's deprecation notice for --json — that's a
+	// general nrq warning surface, not a set-credential failure. The §1.12
+	// invariant only forbids the secret value itself.
+	assert.NotContains(t, stdout.String()+stderr.String(), secretSentinel)
+}
 
 // TestSetCredential_RootJSONBeforeSubcommand_AlsoEmitsEnvelope guards the
 // fix for the order-dependence bug: `nrq -o json set-credential ...` (root

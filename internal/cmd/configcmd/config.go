@@ -18,11 +18,11 @@ import (
 
 	"github.com/open-cli-collective/cli-common/credstore"
 
+	"github.com/open-cli-collective/newrelic-cli/api"
 	"github.com/open-cli-collective/newrelic-cli/internal/cmd/root"
 	"github.com/open-cli-collective/newrelic-cli/internal/config"
 	"github.com/open-cli-collective/newrelic-cli/internal/keychain"
 	"github.com/open-cli-collective/newrelic-cli/internal/validate"
-	"github.com/open-cli-collective/newrelic-cli/internal/view"
 )
 
 // Register adds `config` (with subcommands) and the top-level
@@ -90,15 +90,6 @@ Examples (--ref is required when no config.yml exists — §1.5.2; once
   nrq set-credential --key api_key --stdin   # after 'nrq init' has created config.yml`,
 		Args: root.NoPositionalArgs, // never echo a fat-fingered secret (§1.12)
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			// Honor both the subcommand-local --json AND the root --output json
-			// / deprecated root --json (root.go:140-147). Without this, the
-			// effective behavior would be order-dependent — `nrq --json
-			// set-credential` would bypass the envelope while
-			// `nrq set-credential --json` would emit it. Normalize so the
-			// rest of runSetCredential has a single switch.
-			if o.Output == "json" {
-				o.json = true
-			}
 			if o.json {
 				// §1.5.2: emit envelope on stdout; suppress cobra's stderr
 				// auto-print so the only thing on stderr is the envelope's
@@ -389,6 +380,11 @@ func setAPIKeyRemovedErr() error {
 
 // ---- config show (§2.5 diagnostic; never the secret value) -----------------
 
+type showOptions struct {
+	*root.Options
+	json bool
+}
+
 type showStatus struct {
 	CredentialRef    string `json:"credential_ref"`
 	Backend          string `json:"backend"`
@@ -403,16 +399,20 @@ type showStatus struct {
 }
 
 func newShowCmd(opts *root.Options) *cobra.Command {
-	return &cobra.Command{
+	o := &showOptions{Options: opts}
+	cmd := &cobra.Command{
 		Use:   "show",
 		Short: "Show credential/config status (no secret values)",
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			return runShow(opts)
+			return runShow(o)
 		},
 	}
+	cmd.Flags().BoolVar(&o.json, "json", false, "Emit a JSON envelope (§2 carve-out for diagnostics)")
+	return cmd
 }
 
-func runShow(opts *root.Options) error {
+func runShow(o *showOptions) error {
+	opts := o.Options
 	v := opts.View()
 	// `config show` is a pure-read diagnostic and must remain usable during
 	// an unresolved §1.8 / MON-5373 relocation conflict — LoadForRuntime
@@ -449,8 +449,10 @@ func runShow(opts *root.Options) error {
 		status.PassphraseSource = keychain.PassphraseSource(st.Service())
 	}
 
-	if v.Format == view.FormatJSON {
-		return v.JSON(status)
+	if o.json {
+		enc := json.NewEncoder(opts.Stdout)
+		enc.SetIndent("", "  ")
+		return enc.Encode(status)
 	}
 
 	v.Println("Configuration status:")
@@ -479,6 +481,11 @@ func runShow(opts *root.Options) error {
 
 // ---- config test (connection smoke; routes through the lazy resolver) ------
 
+type testOptions struct {
+	*root.Options
+	json bool
+}
+
 type connectionTestStatus struct {
 	Success       bool   `json:"success"`
 	APIKeyValid   bool   `json:"api_key_valid"`
@@ -491,16 +498,20 @@ type connectionTestStatus struct {
 }
 
 func newTestCmd(opts *root.Options) *cobra.Command {
-	return &cobra.Command{
+	o := &testOptions{Options: opts}
+	cmd := &cobra.Command{
 		Use:   "test",
 		Short: "Test connection to New Relic",
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			return runTest(opts)
+			return runTest(o)
 		},
 	}
+	cmd.Flags().BoolVar(&o.json, "json", false, "Emit a JSON envelope (§2 carve-out for diagnostics)")
+	return cmd
 }
 
-func runTest(opts *root.Options) error {
+func runTest(o *testOptions) error {
+	opts := o.Options
 	v := opts.View()
 	client, err := opts.APIClient() // lazy resolver: opens keyring, runs §1.8
 	if err != nil {
@@ -512,8 +523,20 @@ func runTest(opts *root.Options) error {
 		v.Error("Test failed: %v", err)
 		return err
 	}
+	return renderTest(o, result, client.AccountID.IsEmpty())
+}
+
+// renderTest is the pure rendering boundary for config test: given a
+// resolved ConnectionTestResult and whether an account is configured, it
+// emits either the JSON envelope (--json carve-out) or the human-readable
+// text path. Split from runTest so the carve-out composition rule
+// (local --json wins under -o table/plain) is unit-testable without the
+// network round-trip APIClient/TestConnection forces.
+func renderTest(o *testOptions, result *api.ConnectionTestResult, accountEmpty bool) error {
+	opts := o.Options
+	v := opts.View()
 	status := connectionTestStatus{
-		Success:       result.APIKeyValid && (result.AccountAccess || client.AccountID.IsEmpty()),
+		Success:       result.APIKeyValid && (result.AccountAccess || accountEmpty),
 		APIKeyValid:   result.APIKeyValid,
 		AccountAccess: result.AccountAccess,
 		AccountID:     result.AccountID,
@@ -524,8 +547,10 @@ func runTest(opts *root.Options) error {
 	if result.Error != nil {
 		status.Error = result.ErrorMessage
 	}
-	if v.Format == view.FormatJSON {
-		return v.JSON(status)
+	if o.json {
+		enc := json.NewEncoder(opts.Stdout)
+		enc.SetIndent("", "  ")
+		return enc.Encode(status)
 	}
 	if result.APIKeyValid {
 		v.Success("API key valid")
@@ -540,7 +565,7 @@ func runTest(opts *root.Options) error {
 		v.Println("Reconfigure with: nrq init")
 		return errors.New("API key validation failed")
 	}
-	if !client.AccountID.IsEmpty() {
+	if !accountEmpty {
 		if result.AccountAccess {
 			v.Success("Account %d accessible", result.AccountID)
 		} else {

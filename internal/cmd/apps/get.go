@@ -15,9 +15,8 @@ func newGetCmd(opts *root.Options) *cobra.Command {
 		Long: `Get detailed information about a specific APM application.
 
 Displays ID, name, language, health status, reporting status, and last reported time.`,
-		Example: `  nrq apps get 12345678
-  nrq apps get 12345678 -o json`,
-		Args: cobra.ExactArgs(1),
+		Example: `  nrq apps get 12345678`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runGet(opts, args[0])
 		},
@@ -38,8 +37,6 @@ func runGet(opts *root.Options, appID string) error {
 	v := opts.View()
 
 	switch v.Format {
-	case "json":
-		return v.JSON(app)
 	case "plain":
 		return v.Plain([][]string{
 			{fmt.Sprintf("%d", app.ID), app.Name, app.Language, app.HealthStatus},

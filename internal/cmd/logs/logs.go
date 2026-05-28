@@ -113,7 +113,6 @@ func newListRulesCmd(opts *root.Options) *cobra.Command {
 Displays rule ID, description, enabled status, and last update time.
 Use 'logs rules create' to add new rules or 'logs rules delete' to remove them.`,
 		Example: `  nrq logs rules list
-  nrq logs rules list -o json
   nrq logs rules list --limit 10`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runListRules(listOpts)
@@ -159,7 +158,7 @@ func runListRules(opts *listRulesOptions) error {
 		}
 	}
 
-	return v.Render(headers, rows, rules)
+	return v.Render(headers, rows)
 }
 
 type createRuleOptions struct {
@@ -297,8 +296,6 @@ func runCreateRule(opts *createRuleOptions) error {
 	v := opts.View()
 
 	switch v.Format {
-	case "json":
-		return v.JSON(rule)
 	case "plain":
 		return v.Plain([][]string{
 			{rule.ID, rule.Description, fmt.Sprintf("%t", rule.Enabled)},
@@ -455,8 +452,6 @@ func runUpdateRule(opts *updateRuleOptions, ruleID string, cmd *cobra.Command) e
 	v := opts.View()
 
 	switch v.Format {
-	case "json":
-		return v.JSON(rule)
 	case "plain":
 		return v.Plain([][]string{
 			{rule.ID, rule.Description, fmt.Sprintf("%t", rule.Enabled)},

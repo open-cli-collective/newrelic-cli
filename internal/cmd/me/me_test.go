@@ -22,16 +22,17 @@ func newView(t *testing.T, f view.Format) (*view.View, *bytes.Buffer) {
 	return v, &out
 }
 
-// §1.12: no surface (table/json/plain) ever contains the api_key. The
+// §1.12: no surface (table/plain) ever contains the api_key. The
 // ConnectionTestResult has no key field, but pin it so a future field
-// addition can't regress the secret-absence guarantee.
+// addition can't regress the secret-absence guarantee. JSON output was
+// removed per cli-common docs/output-and-rendering.md §2.
 func TestRenderMe_NeverLeaksAPIKey(t *testing.T) {
 	res := &api.ConnectionTestResult{
 		APIKeyValid: true, AccountAccess: true,
 		UserID: "1234", UserEmail: "u@example.com",
 		AccountID: 42, AccountName: "Acct", Region: "US",
 	}
-	for _, f := range []view.Format{view.FormatTable, view.FormatJSON, view.FormatPlain} {
+	for _, f := range []view.Format{view.FormatTable, view.FormatPlain} {
 		v, out := newView(t, f)
 		require.NoError(t, renderMe(v, res, true))
 		s := out.String()
@@ -44,11 +45,11 @@ func TestRenderMe_NeverLeaksAPIKey(t *testing.T) {
 // account fields are omitted entirely when no account is configured.
 func TestRenderMe_NoAccountConfigured_OmitsAccountFields(t *testing.T) {
 	res := &api.ConnectionTestResult{APIKeyValid: true, UserID: "1", UserEmail: "x@y.z", Region: "EU"}
-	v, out := newView(t, view.FormatJSON)
+	v, out := newView(t, view.FormatTable)
 	require.NoError(t, renderMe(v, res, false))
 	s := out.String()
-	assert.NotContains(t, s, "account_id")
-	assert.NotContains(t, s, "account_name")
+	assert.NotContains(t, s, "Account ID")
+	assert.NotContains(t, s, "Account name")
 	assert.Contains(t, s, "x@y.z")
 }
 

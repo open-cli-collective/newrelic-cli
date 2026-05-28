@@ -1,8 +1,8 @@
 // Package noleak holds nrq's §1.12 / §1.11 acceptance suite: it drives the
 // REAL entrypoint (root.NewRootCmd) and asserts the API-key secret never
-// appears in stdout, stderr, config.yml, or the JSON _migration block, that
-// runtime resolution is keyring-only (no env), and that the one-time §1.8
-// signal fires exactly once on the real command path (§1.11.6).
+// appears in stdout, stderr, or config.yml, that runtime resolution is
+// keyring-only (no env), and that the one-time §1.8 stderr signal fires
+// exactly once on the real command path (§1.11.6).
 package noleak_test
 
 import (
@@ -24,7 +24,6 @@ import (
 	"github.com/open-cli-collective/newrelic-cli/internal/cmd/root"
 	"github.com/open-cli-collective/newrelic-cli/internal/config"
 	"github.com/open-cli-collective/newrelic-cli/internal/keychain"
-	"github.com/open-cli-collective/newrelic-cli/internal/output"
 	"github.com/open-cli-collective/newrelic-cli/internal/testutil"
 )
 
@@ -45,7 +44,7 @@ func mustConfigPath(t *testing.T) string {
 // migration) — exactly what an API command does, minus the network call. So
 // these exercise the single-chokepoint architecture, not a bypass.
 //
-//	__probe      success path: resolve client, emit JSON via the real view.
+//	__probe      success path: resolve client (migration runs), then no-op.
 //	__probefail  resolve client (migration runs), then return a non-zero
 //	             error — the §1.11.6 "signal survives a non-zero exit" case.
 func probeRegister(rootCmd *cobra.Command, opts *root.Options) {
@@ -53,10 +52,8 @@ func probeRegister(rootCmd *cobra.Command, opts *root.Options) {
 		Use:    "__probe",
 		Hidden: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			if _, err := opts.APIClient(); err != nil {
-				return err
-			}
-			return opts.View().JSON(map[string]string{"ok": "true"})
+			_, err := opts.APIClient()
+			return err
 		},
 	})
 	rootCmd.AddCommand(&cobra.Command{
@@ -89,12 +86,6 @@ func run(t *testing.T, args ...string) (string, string, error) {
 	r, w, _ := os.Pipe()
 	os.Stderr = w
 	err := rootCmd.Execute()
-	// Mirror cmd/nrq/main.go EXACTLY: on a non-zero exit, flush any pending
-	// §1.8 block before the process would os.Exit. This is the real
-	// entrypoint contract under test (§1.11.6).
-	if err != nil {
-		output.FlushMigrationJSONOnError(&out)
-	}
 	_ = w.Close()
 	os.Stderr = origStderr
 	var pipeBuf bytes.Buffer
@@ -119,7 +110,7 @@ func TestNoLeak_ShowAndConfigFile(t *testing.T) {
 	plantLegacyFile(t, tmp)
 
 	// Trigger migration via the probe (api_key -> keyring).
-	_, _, err := run(t, "__probe", "-o", "json")
+	_, _, err := run(t, "__probe")
 	require.NoError(t, err)
 
 	out, errOut, err := run(t, "config", "show")
@@ -131,34 +122,23 @@ func TestNoLeak_ShowAndConfigFile(t *testing.T) {
 	assert.NotContains(t, string(raw), sentinel, "secret must never be in config.yml")
 }
 
-// §1.11.6: the one-time signal fires exactly once on the real JSON path and
-// is absent on the next run; the secret value is never in the block.
-func TestMigrationSignal_JSON_OnceOnly(t *testing.T) {
+// §1.11.6: the one-time stderr signal fires exactly once on the real command
+// path and is absent on the next run; the secret value is never in the line.
+func TestMigrationSignal_Stderr_OnceOnly(t *testing.T) {
 	tmp := testutil.Setup(t)
 	plantLegacyFile(t, tmp)
 
-	out1, _, err := run(t, "__probe", "-o", "json")
+	_, err1, err := run(t, "__probe")
 	require.NoError(t, err)
-	assert.Contains(t, out1, `"_migration"`)
-	assert.Contains(t, out1, `"api_key"`)
-	assert.Contains(t, out1, "config:")   // non-secret moves signaled too (§1.8)
-	assert.NotContains(t, out1, sentinel) // never the value
+	assert.Contains(t, err1, "migrated api_key to keyring")
+	assert.Contains(t, err1, "migrated account_id to config")
+	assert.Contains(t, err1, "migrated region to config")
+	assert.NotContains(t, err1, sentinel) // never the value
 
-	out2, _, err := run(t, "__probe", "-o", "json")
+	_, err2, err := run(t, "__probe")
 	require.NoError(t, err)
-	assert.NotContains(t, out2, `"_migration"`, "signal must not repeat")
-}
-
-// §1.11.6 text path + survives a non-zero exit downstream.
-func TestMigrationSignal_TextStderr(t *testing.T) {
-	tmp := testutil.Setup(t)
-	plantLegacyFile(t, tmp)
-	_, errOut, err := run(t, "__probe")
-	require.NoError(t, err)
-	assert.Contains(t, errOut, "migrated api_key to keyring")
-	assert.Contains(t, errOut, "migrated account_id to config")
-	assert.Contains(t, errOut, "migrated region to config")
-	assert.NotContains(t, errOut, sentinel)
+	assert.NotContains(t, err2, "migrated api_key to keyring", "signal must not repeat")
+	assert.NotContains(t, err2, "one-time operation")
 }
 
 // §1.11 item 2 (real chokepoint): a runtime API command resolves through
@@ -175,16 +155,16 @@ func TestRuntime_APIClient_IgnoresAPIKeyEnv(t *testing.T) {
 }
 
 // §1.11.6: the one-time signal SURVIVES a non-zero exit. Migration succeeds
-// inside opts.APIClient(); the command then fails. The real entrypoint must
-// still emit _migration (flushed on the error path) — and never the value.
+// inside opts.APIClient(); the command then fails. The stderr signal is
+// emitted synchronously during the migration itself, so it lands on the
+// terminal before the command's RunE returns its error.
 func TestMigrationSignal_SurvivesNonZeroExit(t *testing.T) {
 	tmp := testutil.Setup(t)
 	plantLegacyFile(t, tmp)
-	out, _, err := run(t, "__probefail", "-o", "json")
+	out, errOut, err := run(t, "__probefail")
 	require.Error(t, err, "__probefail must exit non-zero")
-	assert.Contains(t, out, `"_migration"`, "signal must survive a non-zero exit")
-	assert.Contains(t, out, `"api_key"`)
-	assert.NotContains(t, out, sentinel)
+	assert.Contains(t, errOut, "migrated api_key to keyring", "stderr signal must survive a non-zero exit")
+	assert.NotContains(t, out+errOut, sentinel)
 }
 
 // §1.5/§1.11 (Blocker): an existing keyring value is never silently
@@ -246,10 +226,10 @@ func TestMigration_CleanupFailure_NoSignal_FileRetained(t *testing.T) {
 	require.NoError(t, os.Chmod(dir, 0o500))
 	t.Cleanup(func() { _ = os.Chmod(dir, 0o700) })
 
-	out, errOut, err := run(t, "__probe", "-o", "json")
+	out, errOut, err := run(t, "__probe")
 	require.Error(t, err, "migration must fail when it cannot complete (config save or legacy scrub)")
-	assert.NotContains(t, out, `"_migration"`, "no signal on an incomplete migration")
-	assert.NotContains(t, errOut, "one-time operation")
+	assert.NotContains(t, errOut, "one-time operation", "no signal on an incomplete migration")
+	assert.NotContains(t, errOut, "migrated api_key to keyring")
 	assert.NotContains(t, out+errOut, sentinel)
 	_, statErr := os.Stat(legacy)
 	assert.NoError(t, statErr, "legacy file must remain for a retry")
@@ -452,8 +432,8 @@ func TestConfigClear_All_ScrubsLegacyFile(t *testing.T) {
 	assert.False(t, st.HasAPIKey(), "wipe must survive the next migrating Open()")
 }
 
-// L1: `config show -o json` reports api_key presence as a bool and never the
-// value (secret-absence pinned for the JSON surface).
+// L1: `config show --json` reports api_key presence as a bool and never the
+// value (secret-absence pinned for the JSON carve-out surface).
 func TestConfigShow_JSON_NoSecretValue(t *testing.T) {
 	testutil.Setup(t)
 	st0, err := keychain.OpenNoMigrate()
@@ -461,7 +441,7 @@ func TestConfigShow_JSON_NoSecretValue(t *testing.T) {
 	require.NoError(t, st0.SetAPIKey(sentinel))
 	_ = st0.Close()
 
-	out, _, err := run(t, "config", "show", "-o", "json")
+	out, _, err := run(t, "config", "show", "--json")
 	require.NoError(t, err)
 	assert.Contains(t, out, `"api_key_present": true`)
 	assert.NotContains(t, out, sentinel, "config show JSON must never contain the value")

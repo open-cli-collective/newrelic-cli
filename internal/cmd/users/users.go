@@ -41,7 +41,6 @@ User types:
   CORE_USER_TIER:  Core user
   BASIC_USER_TIER: Basic user`,
 		Example: `  nrq users list
-  nrq users list -o json
   nrq users list --limit 20`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runList(listOpts)
@@ -88,7 +87,7 @@ func runList(opts *listOptions) error {
 		}
 	}
 
-	return v.Render(headers, rows, users)
+	return v.Render(headers, rows)
 }
 
 func newGetCmd(opts *root.Options) *cobra.Command {
@@ -97,9 +96,8 @@ func newGetCmd(opts *root.Options) *cobra.Command {
 		Short: "Get details for a specific user",
 		Long: `Get detailed information about a user including their authentication
 domain and group memberships.`,
-		Example: `  nrq users get 12345
-  nrq users get 12345 -o json`,
-		Args: cobra.ExactArgs(1),
+		Example: `  nrq users get 12345`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runGet(opts, args[0])
 		},
@@ -120,8 +118,6 @@ func runGet(opts *root.Options, userID string) error {
 	v := opts.View()
 
 	switch v.Format {
-	case "json":
-		return v.JSON(user)
 	case "plain":
 		return v.Plain([][]string{
 			{user.ID, user.Name, user.Email, user.Type},

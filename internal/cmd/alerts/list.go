@@ -27,7 +27,6 @@ Incident preference values:
   PER_CONDITION:          One incident per condition
   PER_CONDITION_AND_TARGET: One incident per condition and target`,
 		Example: `  nrq alerts policies list
-  nrq alerts policies list -o json
   nrq alerts policies list --limit 10`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runListPolicies(listOpts)
@@ -72,5 +71,5 @@ func runListPolicies(opts *listPoliciesOptions) error {
 		}
 	}
 
-	return v.Render(headers, rows, policies)
+	return v.Render(headers, rows)
 }

@@ -1,7 +1,9 @@
 package nrql
 
 import (
+	"encoding/json"
 	"fmt"
+	"io"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -10,6 +12,16 @@ import (
 	"github.com/open-cli-collective/newrelic-cli/internal/cmd/root"
 	"github.com/open-cli-collective/newrelic-cli/internal/deeplink"
 )
+
+// emitPassthroughJSON is the passthrough wire contract for `nrq nrql`:
+// pretty-printed JSON with 2-space indent and a trailing newline.
+// Extracted so the byte shape can be pinned without a stubbed API client.
+// The --link path bypasses this — it emits a plain URL via Println.
+func emitPassthroughJSON(w io.Writer, result interface{}) error {
+	enc := json.NewEncoder(w)
+	enc.SetIndent("", "  ")
+	return enc.Encode(result)
+}
 
 type queryOptions struct {
 	*root.Options
@@ -139,9 +151,7 @@ func runQuery(opts *queryOptions, nrql string) error {
 	if err != nil {
 		return err
 	}
-
-	v := opts.View()
-	return v.JSON(result)
+	return emitPassthroughJSON(opts.Stdout, result)
 }
 
 // containsClause checks if the NRQL query already contains a specific clause

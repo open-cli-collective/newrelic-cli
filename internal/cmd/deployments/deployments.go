@@ -149,7 +149,7 @@ func runList(opts *listOptions, args []string) error {
 		}
 	}
 
-	return v.Render(headers, rows, deployments)
+	return v.Render(headers, rows)
 }
 
 type createOptions struct {
@@ -228,8 +228,6 @@ func runCreate(opts *createOptions, args []string) error {
 	v := opts.View()
 
 	switch v.Format {
-	case "json":
-		return v.JSON(deployment)
 	case "plain":
 		return v.Plain([][]string{
 			{fmt.Sprintf("%d", deployment.ID), deployment.Revision, deployment.Timestamp},
@@ -328,12 +326,7 @@ func runSearch(opts *searchOptions, whereClause string) error {
 		return nil
 	}
 
-	// For JSON output, return the raw results
-	if v.Format == "json" {
-		return v.JSON(result.Results)
-	}
-
-	// For table output, extract common fields
+	// Extract common fields for table/plain output
 	headers := []string{"TIMESTAMP", "APP NAME", "REVISION", "DESCRIPTION", "USER"}
 	rows := make([][]string, len(result.Results))
 	for i, r := range result.Results {
@@ -346,7 +339,7 @@ func runSearch(opts *searchOptions, whereClause string) error {
 		}
 	}
 
-	return v.Render(headers, rows, result.Results)
+	return v.Render(headers, rows)
 }
 
 func formatNRQLValue(v interface{}) string {

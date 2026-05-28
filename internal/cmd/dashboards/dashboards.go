@@ -46,7 +46,6 @@ func newListCmd(opts *root.Options) *cobra.Command {
 Displays dashboard GUID, name, and account ID. The GUID is a base64-encoded
 entity identifier that can be used with 'dashboards get'.`,
 		Example: `  nrq dashboards list
-  nrq dashboards list -o json
   nrq dashboards list --limit 10`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runList(listOpts)
@@ -91,7 +90,7 @@ func runList(opts *listOptions) error {
 		}
 	}
 
-	return v.Render(headers, rows, dashboards)
+	return v.Render(headers, rows)
 }
 
 func newGetCmd(opts *root.Options) *cobra.Command {
@@ -102,9 +101,8 @@ func newGetCmd(opts *root.Options) *cobra.Command {
 
 The GUID is a base64-encoded entity identifier from 'dashboards list' or
 the New Relic UI (visible in the dashboard URL).`,
-		Example: `  nrq dashboards get "MjcxMjY0MHxWSVp8REFTSEJPQVJEXDI5Mjg="
-  nrq dashboards get "MjcxMjY0MHxWSVp8REFTSEJPQVJEXDI5Mjg=" -o json`,
-		Args: cobra.ExactArgs(1),
+		Example: `  nrq dashboards get "MjcxMjY0MHxWSVp8REFTSEJPQVJEXDI5Mjg="`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runGet(opts, api.EntityGUID(args[0]))
 		},
@@ -125,8 +123,6 @@ func runGet(opts *root.Options, guid api.EntityGUID) error {
 	v := opts.View()
 
 	switch v.Format {
-	case "json":
-		return v.JSON(dashboard)
 	case "plain":
 		rows := [][]string{
 			{dashboard.GUID.String(), dashboard.Name, dashboard.Permissions},
@@ -183,10 +179,7 @@ The JSON file should contain the dashboard definition with the following structu
 
 Permissions: PUBLIC_READ_WRITE, PUBLIC_READ_ONLY, PRIVATE`,
 		Example: `  # Create a dashboard from a JSON file
-  nrq dashboards create --from-file dashboard.json
-
-  # Create and output result as JSON
-  nrq dashboards create --from-file dashboard.json -o json`,
+  nrq dashboards create --from-file dashboard.json`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runCreate(createOpts)
 		},
@@ -231,8 +224,6 @@ func runCreate(opts *createOptions) error {
 	}
 
 	switch v.Format {
-	case "json":
-		return v.JSON(dashboard)
 	case "plain":
 		rows := [][]string{
 			{dashboard.GUID.String(), dashboard.Name},
@@ -262,10 +253,7 @@ func newUpdateCmd(opts *root.Options) *cobra.Command {
 The JSON file format is the same as for 'dashboards create'.
 The GUID identifies which dashboard to update.`,
 		Example: `  # Update a dashboard from a JSON file
-  nrq dashboards update "MjcxMjY0MHxWSVp8REFTSEJPQVJEXDI5Mjg=" --from-file dashboard.json
-
-  # Update and output result as JSON
-  nrq dashboards update "MjcxMjY0MHxWSVp8REFTSEJPQVJEXDI5Mjg=" --from-file dashboard.json -o json`,
+  nrq dashboards update "MjcxMjY0MHxWSVp8REFTSEJPQVJEXDI5Mjg=" --from-file dashboard.json`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runUpdate(updateOpts, api.EntityGUID(args[0]))
@@ -311,8 +299,6 @@ func runUpdate(opts *updateOptions, guid api.EntityGUID) error {
 	}
 
 	switch v.Format {
-	case "json":
-		return v.JSON(dashboard)
 	case "plain":
 		rows := [][]string{
 			{dashboard.GUID.String(), dashboard.Name},

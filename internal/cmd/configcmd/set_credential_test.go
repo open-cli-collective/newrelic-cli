@@ -272,13 +272,17 @@ func TestSetCredential_NeverEmitsSecret_AcrossAllPaths(t *testing.T) {
 	}
 }
 
-// --- Root-flag position invariance (Codex Major fix) ----------------------
+// --- Closed-set carve-out composition (cli-common §2) --------------------
 
-// TestSetCredential_RootDeprecatedJSONBeforeSubcommand_AlsoEmitsEnvelope
-// covers the deprecated root `--json` boolean variant of the same fix —
-// root.go:146 registers it as a deprecated alias, and `nrq --json
-// set-credential ...` must trigger the envelope path too.
-func TestSetCredential_RootDeprecatedJSONBeforeSubcommand_AlsoEmitsEnvelope(t *testing.T) {
+// TestSetCredential_LocalJSONWinsWhenGlobalOutputIsTable pins the carve-out
+// composition rule: with the global -o restricted to {table, plain}
+// (cli-common docs/output-and-rendering.md §2), the subcommand-local --json
+// flag remains the sole way to request the §1.5.2 envelope. Driving root
+// with `-o table set-credential --json` proves the local flag wins and the
+// envelope is emitted regardless of the global output selector. Replaces
+// the previous `-o json`-driven test that exercised the now-removed
+// root-mirror behavior.
+func TestSetCredential_LocalJSONWinsWhenGlobalOutputIsTable(t *testing.T) {
 	testutil.Setup(t)
 	rootCmd, opts := root.NewRootCmd()
 	stdout := &bytes.Buffer{}
@@ -286,42 +290,36 @@ func TestSetCredential_RootDeprecatedJSONBeforeSubcommand_AlsoEmitsEnvelope(t *t
 	opts.Stdout, opts.Stderr = stdout, stderr
 	opts.Stdin = strings.NewReader(secretSentinel + "\n")
 	root.RegisterAll(rootCmd, opts, Register)
-	// Deprecated root --json BEFORE the subcommand.
-	rootCmd.SetArgs([]string{"--json", "set-credential",
-		"--ref", "newrelic-cli/test", "--key", "api_key", "--stdin"})
-	require.NoError(t, rootCmd.Execute())
-
-	env := parseEnvelope(t, stdout)
-	assert.True(t, env.Written)
-	assert.NotEmpty(t, env.Backend)
-	// Stderr may contain cobra's deprecation notice for --json — that's a
-	// general nrq warning surface, not a set-credential failure. The §1.12
-	// invariant only forbids the secret value itself.
-	assert.NotContains(t, stdout.String()+stderr.String(), secretSentinel)
-}
-
-// TestSetCredential_RootJSONBeforeSubcommand_AlsoEmitsEnvelope guards the
-// fix for the order-dependence bug: `nrq -o json set-credential ...` (root
-// flag before the subcommand) must emit the envelope and silence stderr,
-// same as `nrq set-credential --json ...`. Without the o.Output == "json"
-// normalization in the RunE wrapper, the two forms diverge silently.
-func TestSetCredential_RootJSONBeforeSubcommand_AlsoEmitsEnvelope(t *testing.T) {
-	testutil.Setup(t)
-	rootCmd, opts := root.NewRootCmd()
-	stdout := &bytes.Buffer{}
-	stderr := &bytes.Buffer{}
-	opts.Stdout, opts.Stderr = stdout, stderr
-	opts.Stdin = strings.NewReader(secretSentinel + "\n")
-	root.RegisterAll(rootCmd, opts, Register)
-	// Root --output BEFORE the subcommand.
-	rootCmd.SetArgs([]string{"-o", "json", "set-credential",
-		"--ref", "newrelic-cli/test", "--key", "api_key", "--stdin"})
+	// Global says table; subcommand --json must still win and emit envelope.
+	rootCmd.SetArgs([]string{"-o", "table", "set-credential",
+		"--ref", "newrelic-cli/test", "--key", "api_key", "--stdin", "--json"})
 	require.NoError(t, rootCmd.Execute())
 
 	env := parseEnvelope(t, stdout)
 	assert.True(t, env.Written)
 	assert.Equal(t, "newrelic-cli/test", env.Ref)
 	assert.NotEmpty(t, env.Backend)
-	assert.Empty(t, stderr.String(), "root --output json must trigger SilenceErrors path too")
+	assert.Empty(t, stderr.String(), "local --json must silence cobra stderr too")
 	assert.NotContains(t, stdout.String()+stderr.String(), secretSentinel)
+}
+
+// TestRoot_RejectsJSONOutputOnSetCredential pins the closed-set policy at the
+// root level: `nrq -o json set-credential …` must fail at PersistentPreRunE
+// before any subcommand RunE runs, regardless of whether the subcommand
+// itself has a JSON carve-out.
+func TestRoot_RejectsJSONOutputOnSetCredential(t *testing.T) {
+	testutil.Setup(t)
+	rootCmd, opts := root.NewRootCmd()
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	opts.Stdout, opts.Stderr = stdout, stderr
+	opts.Stdin = strings.NewReader(secretSentinel + "\n")
+	root.RegisterAll(rootCmd, opts, Register)
+	rootCmd.SetArgs([]string{"-o", "json", "set-credential",
+		"--ref", "newrelic-cli/test", "--key", "api_key", "--stdin"})
+	err := rootCmd.Execute()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "must be one of table, plain")
+	assert.NotContains(t, stdout.String()+stderr.String(), secretSentinel,
+		"§1.12: secret must not leak even on the rejected path")
 }

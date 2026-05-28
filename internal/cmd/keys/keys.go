@@ -53,8 +53,7 @@ func newListCmd(opts *root.Options) *cobra.Command {
 By default lists both user and ingest keys. Use --type to filter.`,
 		Example: `  nrq keys list
   nrq keys list --type user
-  nrq keys list --type ingest --account 12345
-  nrq keys list -o json`,
+  nrq keys list --type ingest --account 12345`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runList(listOpts)
 		},
@@ -110,7 +109,7 @@ func runList(opts *listOptions) error {
 		}
 	}
 
-	return v.Render(headers, rows, keys)
+	return v.Render(headers, rows)
 }
 
 // --- get ---
@@ -130,8 +129,7 @@ func newGetCmd(opts *root.Options) *cobra.Command {
 
 If --type is not specified, tries USER then INGEST to find the key.`,
 		Example: `  nrq keys get NRAK-XXXXXXXXXXXX
-  nrq keys get NRAK-XXXXXXXXXXXX --type user
-  nrq keys get NRAK-XXXXXXXXXXXX -o json`,
+  nrq keys get NRAK-XXXXXXXXXXXX --type user`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runGet(getOpts, args[0])
@@ -167,8 +165,6 @@ func runGet(opts *getOptions, keyID string) error {
 	v := opts.View()
 
 	switch v.Format {
-	case "json":
-		return v.JSON(key)
 	case "plain":
 		return v.Plain([][]string{
 			{key.ID, key.Name, key.Type, key.IngestType, key.Notes},
@@ -288,8 +284,6 @@ func runCreate(opts *createOptions) error {
 	v := opts.View()
 
 	switch v.Format {
-	case "json":
-		return v.JSON(key)
 	case "plain":
 		return v.Plain([][]string{
 			{key.ID, key.Name, key.Type, key.Key},
@@ -380,8 +374,6 @@ func runUpdate(opts *updateOptions, keyID string, cmd *cobra.Command) error {
 	v := opts.View()
 
 	switch v.Format {
-	case "json":
-		return v.JSON(key)
 	case "plain":
 		return v.Plain([][]string{
 			{key.ID, key.Name, key.Type},

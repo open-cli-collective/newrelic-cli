@@ -27,10 +27,7 @@ Health status values: green (healthy), orange (warning), red (critical), gray (n
 		Example: `  # List all applications
   nrq apps list
 
-  # Output as JSON for scripting
-  nrq apps list -o json
-
-  # Plain output for parsing
+  # Plain output for scripting
   nrq apps list -o plain | cut -f1  # Get app IDs only
 
   # Limit results
@@ -83,5 +80,5 @@ func runList(opts *listOptions) error {
 		}
 	}
 
-	return v.Render(headers, rows, apps)
+	return v.Render(headers, rows)
 }

@@ -4,7 +4,7 @@ This file provides guidance for AI agents working with the newrelic-cli codebase
 
 ## Project Overview
 
-newrelic-cli is a command-line interface for New Relic written in Go. It uses the Cobra framework for commands and provides a public `api/` package that can be imported as a Go library. The CLI supports multiple output formats (table, JSON, plain). The API key is stored in the OS keyring via the shared `cli-common/credstore` (macOS Keychain / Windows Credential Manager / Linux Secret Service), or an encrypted file with the explicit file-backend opt-in — never in plaintext and never in `config.yml`; non-secret `account_id`/`region` live in `~/.config/newrelic-cli/config.yml`. See "Credentials" below.
+newrelic-cli is a command-line interface for New Relic written in Go. It uses the Cobra framework for commands and provides a public `api/` package that can be imported as a Go library. Per cli-common [`docs/output-and-rendering.md`](https://github.com/open-cli-collective/cli-common/blob/main/docs/output-and-rendering.md) §2, resource reads emit text only (`-o table|plain`); JSON is reserved for control-plane envelopes (`set-credential`, `config show`, `config test` via subcommand-local `--json`) and passthrough surfaces (`nerdgraph`, `nrql`). The API key is stored in the OS keyring via the shared `cli-common/credstore` (macOS Keychain / Windows Credential Manager / Linux Secret Service), or an encrypted file with the explicit file-backend opt-in — never in plaintext and never in `config.yml`; non-secret `account_id`/`region` live in `~/.config/newrelic-cli/config.yml`. See "Credentials" below.
 
 ## Quick Commands
 
@@ -68,10 +68,9 @@ newrelic-cli/
 │   │   ├── synthetics/         # synthetics list, get
 │   │   └── users/              # users list, get
 │   ├── config/config.go        # Non-secret config.yml (credential_ref, account_id, region)
-│   ├── keychain/               # cli-common/credstore adapter + §1.8 migration
-│   ├── output/migration.go     # §1.8 _migration signal recorder/splice
+│   ├── keychain/               # cli-common/credstore adapter + §1.8 migration (always-stderr signal)
 │   ├── version/version.go      # Build-time version injection via ldflags
-│   └── view/view.go            # Output formatting (table, JSON, plain)
+│   └── view/view.go            # Output formatting (table, plain only — JSON via per-subcommand carve-outs)
 ├── Makefile                    # Build, test, lint targets
 └── go.mod                      # Module: github.com/open-cli-collective/newrelic-cli
 ```
@@ -85,7 +84,7 @@ Commands use an Options struct for dependency injection:
 ```go
 // Root options (global flags)
 type Options struct {
-    Output  string    // table, json, plain
+    Output  string    // table or plain (closed-set; cli-common §2)
     NoColor bool
     Stdin   io.Reader
     Stdout  io.Writer
@@ -123,13 +122,10 @@ Use the View struct for formatted output:
 ```go
 v := opts.View()
 
-// Table output (default)
+// Table output (default) or plain — Render switches on v.Format.
 headers := []string{"ID", "NAME", "STATUS"}
 rows := [][]string{{"123", "app", "green"}}
-v.Render(headers, rows, data)
-
-// JSON output
-v.JSON(data)
+v.Render(headers, rows)
 
 // Plain output (tab-separated, no headers)
 v.Plain(rows)
@@ -138,6 +134,16 @@ v.Plain(rows)
 v.Success("Created successfully")
 v.Warning("Deprecated flag")
 v.Error("Failed: %v", err)
+```
+
+JSON has no global render method by design (cli-common §2). Carve-out
+commands (`set-credential`, `config show`, `config test`) declare a local
+`--json` boolean and write directly:
+
+```go
+enc := json.NewEncoder(opts.Stdout)
+enc.SetIndent("", "  ")
+return enc.Encode(envelope)
 ```
 
 ### Safe Type Assertions
@@ -343,7 +349,7 @@ NOT change the secret-source rule above.
   → api_key to the keyring, account_id/region into config.yml, legacy
   originals deleted. Divergent legacy secret values fail loudly (never a
   silent pick; never the value, masked or not). The one-time signal is a
-  stderr line (human) or top-level `_migration` block (JSON).
+  stderr line, emitted synchronously during the migration itself.
 - Tests use `internal/testutil` (hermetic file backend, no real keyring) and
   `internal/noleak` (the §1.12/§1.11 acceptance suite).
 

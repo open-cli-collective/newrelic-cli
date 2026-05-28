@@ -17,9 +17,8 @@ func newMetricsCmd(opts *root.Options) *cobra.Command {
 Metric names follow the format: Category/Name (e.g., Apdex, HttpDispatcher,
 WebTransaction/Function/handler). Use these names with the Metric API or
 in NRQL queries with FROM Metric.`,
-		Example: `  nrq apps metrics 12345678
-  nrq apps metrics 12345678 -o json`,
-		Args: cobra.ExactArgs(1),
+		Example: `  nrq apps metrics 12345678`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runMetrics(opts, args[0])
 		},
@@ -45,8 +44,6 @@ func runMetrics(opts *root.Options, appID string) error {
 	}
 
 	switch v.Format {
-	case "json":
-		return v.JSON(metrics)
 	case "plain":
 		rows := make([][]string, len(metrics))
 		for i, m := range metrics {

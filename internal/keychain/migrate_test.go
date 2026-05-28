@@ -36,9 +36,8 @@ func TestPlanMigration_SingleSecretSource_Writes(t *testing.T) {
 	assert.True(t, p.writeSecret)
 	assert.Equal(t, "NRAK-1", p.secretValue)
 	assert.True(t, p.movedSecret)
-	require.Len(t, p.changes, 1)
-	assert.Equal(t, "api_key", p.changes[0].Field)
-	assert.Equal(t, "keyring:newrelic-cli/default/api_key", p.changes[0].To)
+	assert.False(t, p.scrubbedOnly)
+	assert.False(t, p.replacedExisting)
 }
 
 func TestPlanMigration_EqualMultiSource_Idempotent(t *testing.T) {
@@ -52,7 +51,8 @@ func TestPlanMigration_EqualMultiSource_Idempotent(t *testing.T) {
 	require.NoError(t, err)
 	assert.False(t, p.writeSecret)
 	assert.False(t, p.movedSecret)
-	assert.Empty(t, p.changes)
+	assert.False(t, p.scrubbedOnly, "no deleters → genuinely nothing happened, no signal")
+	assert.Empty(t, p.movedNonSecret)
 }
 
 // When the keyring already holds the (equal) secret but legacy originals
@@ -69,9 +69,6 @@ func TestPlanMigration_EqualButLegacyPresent_SignalsScrub(t *testing.T) {
 	assert.False(t, p.writeSecret, "value already present — no write")
 	assert.False(t, p.movedSecret)
 	assert.True(t, p.scrubbedOnly, "scrubbing legacy originals is a one-time side effect")
-	require.Len(t, p.changes, 1)
-	assert.Equal(t, "api_key", p.changes[0].Field)
-	assert.Contains(t, p.changes[0].To, "legacy copies removed")
 
 	// No deleters present → truly nothing happened → no signal.
 	p2, err := planMigration(svc, prof, ref, &config.Config{},
@@ -79,7 +76,7 @@ func TestPlanMigration_EqualButLegacyPresent_SignalsScrub(t *testing.T) {
 		target("NRAK-X"), false)
 	require.NoError(t, err)
 	assert.False(t, p2.scrubbedOnly)
-	assert.Empty(t, p2.changes)
+	assert.False(t, p2.movedSecret)
 }
 
 func TestPlanMigration_SecretDivergence_KeychainVsFile_FailsNamingAll(t *testing.T) {
@@ -145,7 +142,9 @@ func TestPlanMigration_NothingLegacy_NoOp(t *testing.T) {
 	p, err := planMigration(svc, prof, ref, &config.Config{}, discovered{}, noTarget, false)
 	require.NoError(t, err)
 	assert.False(t, p.writeSecret)
-	assert.Empty(t, p.changes)
+	assert.False(t, p.movedSecret)
+	assert.False(t, p.scrubbedOnly)
+	assert.Empty(t, p.movedNonSecret)
 }
 
 // --- non-secret (account_id/region): precedence resolves, never a conflict,
@@ -184,19 +183,9 @@ func TestPlanMigration_NonSecret_KeychainBeatsFileWhenConfigAbsent(t *testing.T)
 		{field: "account_id", value: "FILE", priority: 1, location: "file:/p#account_id"},
 	}}
 	p := nsFold(t, &config.Config{}, d)
-	assert.Equal(t, "KC", p.foldAccountID)
-	assert.Contains(t, p.movedNonSecret, "account_id")
-	// Recorded in _migration with a config destination (§1.8: non-secret
-	// moves are signaled too).
-	var found bool
-	for _, c := range p.changes {
-		if c.Field == "account_id" {
-			found = true
-			assert.Contains(t, c.To, "config:")
-			assert.Contains(t, c.To, "#account_id")
-		}
-	}
-	assert.True(t, found, "account_id move must be recorded in _migration")
+	assert.Equal(t, "KC", p.foldAccountID, "keychain (priority 0) wins over file (priority 1)")
+	assert.Contains(t, p.movedNonSecret, "account_id",
+		"account_id move must be recorded so the stderr signal fires (§1.8)")
 }
 
 func TestPlanMigration_NonSecret_FileOnlyAndKeychainOnly(t *testing.T) {

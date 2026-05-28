@@ -15,18 +15,17 @@ import (
 	"github.com/open-cli-collective/cli-common/credstore"
 
 	"github.com/open-cli-collective/newrelic-cli/internal/config"
-	"github.com/open-cli-collective/newrelic-cli/internal/output"
 )
 
 // One-time legacy migration (§1.8 / §2.5). nrq's legacy sources hold THREE
 // fields but only `api_key` is a secret: it moves to the credstore keyring
 // (fail-loud on divergence — never precedence-pick a secret); the non-secret
 // `account_id`/`region` are folded into config.yml (precedence MAY resolve a
-// non-secret divergence). The signal (stderr + _migration) is emitted only
-// AFTER the full success boundary — keyring write, config save, AND legacy
-// scrub all succeed — so a "one-time operation" line is never printed while a
-// plaintext copy still exists. Idempotent: once the originals are gone there
-// is nothing to do and no signal fires.
+// non-secret divergence). The stderr signal is emitted only AFTER the full
+// success boundary — keyring write, config save, AND legacy scrub all
+// succeed — so a "one-time operation" line is never printed while a plaintext
+// copy still exists. Idempotent: once the originals are gone there is nothing
+// to do and no signal fires.
 
 // legacyKeychainService is the only macOS Keychain service nrq has used
 // historically (it never renamed, unlike slck). Accounts: api_key (secret),
@@ -59,7 +58,7 @@ type nonSecretCandidate struct {
 	field    string // account_id | region
 	value    string
 	priority int    // lower wins: keychain(0) beats file(1)
-	location string // descriptor for _migration `from`
+	location string // human-readable source descriptor (file:/p#field, keychain:svc/acct)
 }
 
 // labeledDeleter removes one legacy original; label names the source (e.g.
@@ -152,33 +151,31 @@ func migrateLegacyOverwrite(s *Store, cfg *config.Config, overwrite bool) error 
 			"warning: --overwrite replaced an existing, different api_key in keyring %s\n", s.ref)
 	}
 
-	// Surface the signal for every field actually moved this run (§1.8
-	// bans silent migration; §2.5 moves all three). Record _migration ONLY
-	// on a JSON run (recording it on a text run would leave a stale block a
-	// later JSON command in the same process could splice in).
-	if len(plan.changes) > 0 {
-		if output.IsJSON() {
-			output.RecordMigration(credstore.NewMigrationBlock(plan.changes...))
-		} else {
-			if plan.movedSecret {
-				credstore.EmitMigrationStderr(secretField, s.ref)
-			} else if plan.scrubbedOnly {
-				fmt.Fprintf(os.Stderr,
-					"removed legacy %s credential source(s) for %s "+
-						"(the keyring already held it); this is a one-time operation\n",
-					secretField, s.ref)
-			}
-			cfgPath, perr := config.Path()
-			if perr != nil {
-				return perr
-			}
-			for _, f := range plan.movedNonSecret {
-				// Distinct human line: non-secret moves go to config.yml,
-				// NOT the keyring — do not reuse the keyring wording.
-				fmt.Fprintf(os.Stderr,
-					"migrated %s to config %s; this is a one-time operation\n",
-					f, cfgPath)
-			}
+	// Surface the stderr signal for every field actually moved this run
+	// (§1.8 bans silent migration; §2.5 moves all three).
+	if plan.movedSecret {
+		credstore.EmitMigrationStderr(secretField, s.ref)
+	} else if plan.scrubbedOnly {
+		fmt.Fprintf(os.Stderr,
+			"removed legacy %s credential source(s) for %s "+
+				"(the keyring already held it); this is a one-time operation\n",
+			secretField, s.ref)
+	}
+	// config.Path() is only needed for the non-secret stderr lines —
+	// guard the lookup so a movedSecret-only run never returns a spurious
+	// error from a HOME/XDG resolution failure after all real work
+	// (keyring write, config save, legacy scrub) has already completed.
+	if len(plan.movedNonSecret) > 0 {
+		cfgPath, perr := config.Path()
+		if perr != nil {
+			return perr
+		}
+		for _, f := range plan.movedNonSecret {
+			// Distinct human line: non-secret moves go to config.yml,
+			// NOT the keyring — do not reuse the keyring wording.
+			fmt.Fprintf(os.Stderr,
+				"migrated %s to config %s; this is a one-time operation\n",
+				f, cfgPath)
 		}
 	}
 	return nil
@@ -190,7 +187,6 @@ type migrationPlan struct {
 	secretValue    string
 	foldAccountID  string // "" = leave cfg.AccountID as-is
 	foldRegion     string
-	changes        []credstore.MigrationChange
 	movedSecret    bool
 	movedNonSecret []string // fields whose value changed config.yml this run
 	// replacedExisting: --overwrite forced a legacy value over a DIFFERENT
@@ -233,17 +229,9 @@ func planMigration(service, profile, ref string, cfg *config.Config, d discovere
 			// Already migrated (values match): no write. But if legacy
 			// originals still exist they are about to be scrubbed by the
 			// deleters — that IS a one-time migration side effect, so
-			// record it and signal once (§1.8).
+			// signal once (§1.8).
 			if len(d.deleters) > 0 {
 				p.scrubbedOnly = true
-				locs := make([]string, 0, len(d.secrets))
-				for _, c := range d.secrets {
-					locs = append(locs, c.location)
-				}
-				p.changes = append(p.changes, credstore.MigrationJSONEntry(
-					secretField, strings.Join(locs, ", "),
-					fmt.Sprintf("keyring:%s/%s/%s (already present; legacy copies removed)",
-						service, profile, KeyAPIKey)))
 			}
 		default:
 			p.writeSecret = true
@@ -253,9 +241,6 @@ func planMigration(service, profile, ref string, cfg *config.Config, d discovere
 			// AND the value differs (the no-overwrite-disagree and
 			// agree cases are handled above) — i.e. a destructive replace.
 			p.replacedExisting = hasTarget && overwrite && secretDisagrees(distinct, target)
-			p.changes = append(p.changes, credstore.MigrationJSONEntry(
-				secretField, d.secrets[0].location,
-				fmt.Sprintf("keyring:%s/%s/%s", service, profile, KeyAPIKey)))
 		}
 	}
 
@@ -288,12 +273,6 @@ func planMigration(service, profile, ref string, cfg *config.Config, d discovere
 			p.foldRegion = c.value
 		}
 		p.movedNonSecret = append(p.movedNonSecret, field)
-		cfgPath, perr := config.Path()
-		if perr != nil {
-			return migrationPlan{}, perr
-		}
-		p.changes = append(p.changes, credstore.MigrationJSONEntry(
-			field, c.location, fmt.Sprintf("config:%s#%s", cfgPath, field)))
 	}
 	sort.Strings(p.movedNonSecret)
 	return p, nil

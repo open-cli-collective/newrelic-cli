@@ -121,9 +121,10 @@ func TestRoot_RejectsJSONOutput(t *testing.T) {
 // TestRoot_RejectsJSONOutput_OnPassthrough pins the same rule for the
 // passthrough commands: even though nerdgraph/nrql emit JSON regardless of
 // -o, they still go through root validation, so `-o json` is rejected
-// before their RunE can fire. The companion behavior (`-o table`
-// nerdgraph query …` succeeds and still emits JSON) is covered by the
-// nerdgraph and nrql package tests.
+// before their RunE can fire. The wire shape of what those commands emit
+// when they DO run is pinned by the package-local
+// TestEmitPassthroughJSON_PreservesIndentedWireShape tests; the
+// command-path-with-`-o table` composition is not separately covered.
 func TestRoot_RejectsJSONOutput_OnPassthrough(t *testing.T) {
 	for _, name := range []string{"nerdgraph", "nrql"} {
 		t.Run(name, func(t *testing.T) {

@@ -207,20 +207,20 @@ func TestHasUserConfig_RelocNeither_RegistersAsAbsent(t *testing.T) {
 	assert.False(t, has)
 }
 
-// HasUserConfig under ErrRelocationConflict: a divergent canonical/old pair
-// means there IS a user config (in fact two), but the divergence must be
-// surfaced rather than silently picked. set-credential callers should fail
-// loud rather than write to the wrong bundle.
-func TestHasUserConfig_RelocBothDivergent_SurfacesConflict(t *testing.T) {
+// HasUserConfig answers "does a config.yml file exist?" — not "is the state
+// coherent?". When both canonical and old config.yml are present (the
+// bothDivergent row that detectRelocation would flag as
+// ErrRelocationConflict), the canonical readConfigYML check fires first and
+// short-circuits before detectRelocation is reached. The conflict is
+// surfaced through Load / LoadForRuntime at config-read time; not here.
+// This test pins the short-circuit so a future refactor that reorders the
+// probes doesn't accidentally route bothDivergent into the error path.
+func TestHasUserConfig_BothPresent_CanonicalShortCircuits(t *testing.T) {
 	old, new := setupRelocPair(t)
 	writeYAML(t, filepath.Join(old, configFileName), "credential_ref: newrelic-cli/old\n")
 	writeYAML(t, filepath.Join(new, configFileName), "credential_ref: newrelic-cli/new\n")
 
 	has, err := hasUserConfigInDir(new)
-	// Canonical IS present (we wrote new/), so the canonical readConfigYML
-	// branch fires first and returns true. ErrRelocationConflict surfaces
-	// through Load — HasUserConfig is "is there a file?", not "is the
-	// state coherent?". Verify the canonical-present case wins.
 	require.NoError(t, err)
-	assert.True(t, has, "canonical readable present → reported present regardless of conflict")
+	assert.True(t, has, "canonical readable → reported present without invoking detectRelocation")
 }

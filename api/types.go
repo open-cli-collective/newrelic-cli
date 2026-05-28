@@ -373,7 +373,13 @@ type NerdGraphResponse struct {
 	Errors []NerdGraphError       `json:"errors,omitempty"`
 }
 
-// NerdGraphError represents a GraphQL error
+// NerdGraphError represents a GraphQL error. Beyond the human-readable
+// message, NerdGraph returns structured detail in `extensions` (e.g. the
+// specific validation failures for an alert-condition mutation) and points at
+// the offending field via `path` — both previously discarded at parse time.
 type NerdGraphError struct {
-	Message string `json:"message"`
+	Message    string                   `json:"message"`
+	Path       []interface{}            `json:"path,omitempty"`
+	Locations  []map[string]interface{} `json:"locations,omitempty"`
+	Extensions map[string]interface{}   `json:"extensions,omitempty"`
 }

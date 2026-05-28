@@ -112,6 +112,38 @@ func TestGraphQLError_Error(t *testing.T) {
 	assert.Equal(t, "GraphQL error: Field 'foo' not found", err.Error())
 }
 
+func TestGraphQLError_Error_SurfacesPathAndExtensions(t *testing.T) {
+	err := &GraphQLError{
+		Message: "Validation Error",
+		Errors: []NerdGraphError{
+			{
+				Message: "Validation Error",
+				Path:    []interface{}{"alertsNrqlConditionStaticCreate"},
+				Extensions: map[string]interface{}{
+					"errorClass": "BAD_USER_INPUT",
+				},
+			},
+		},
+	}
+	got := err.Error()
+	assert.Contains(t, got, "GraphQL error: Validation Error")
+	assert.Contains(t, got, "path=[alertsNrqlConditionStaticCreate]")
+	assert.Contains(t, got, `"errorClass":"BAD_USER_INPUT"`)
+}
+
+func TestGraphQLError_Error_ListsMultipleErrors(t *testing.T) {
+	err := &GraphQLError{
+		Message: "first problem",
+		Errors: []NerdGraphError{
+			{Message: "first problem"},
+			{Message: "second problem"},
+		},
+	}
+	got := err.Error()
+	assert.Contains(t, got, "GraphQL error: first problem")
+	assert.Contains(t, got, "second problem")
+}
+
 func TestResponseError_Error(t *testing.T) {
 	t.Run("with underlying error", func(t *testing.T) {
 		err := &ResponseError{

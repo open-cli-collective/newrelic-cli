@@ -1,8 +1,10 @@
 package api
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 )
 
 // Common errors
@@ -52,14 +54,43 @@ func IsUnauthorized(err error) bool {
 	return false
 }
 
-// GraphQLError represents an error from a NerdGraph query
+// GraphQLError represents an error from a NerdGraph query. Message is the
+// first error's message (kept for back-compat); Errors carries the full set
+// with their `path` / `extensions`, which often hold the actionable detail —
+// e.g. which field failed validation on an alert-condition mutation.
 type GraphQLError struct {
 	Message string
+	Errors  []NerdGraphError
 }
 
-// Error implements the error interface
+// Error implements the error interface. It leads with the first message, then
+// appends the structured detail NerdGraph returns (each error's path +
+// extensions, and any additional errors) so callers see *why* a query was
+// rejected instead of a bare "Validation Error".
 func (e *GraphQLError) Error() string {
-	return fmt.Sprintf("GraphQL error: %s", e.Message)
+	msg := fmt.Sprintf("GraphQL error: %s", e.Message)
+	var details []string
+	for _, ge := range e.Errors {
+		var parts []string
+		if len(e.Errors) > 1 {
+			parts = append(parts, ge.Message)
+		}
+		if len(ge.Path) > 0 {
+			parts = append(parts, fmt.Sprintf("path=%v", ge.Path))
+		}
+		if len(ge.Extensions) > 0 {
+			if j, err := json.Marshal(ge.Extensions); err == nil && string(j) != "{}" {
+				parts = append(parts, fmt.Sprintf("extensions=%s", j))
+			}
+		}
+		if len(parts) > 0 {
+			details = append(details, strings.Join(parts, " "))
+		}
+	}
+	if len(details) > 0 {
+		msg += "\n  " + strings.Join(details, "\n  ")
+	}
+	return msg
 }
 
 // ResponseError represents an error parsing the response

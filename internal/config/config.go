@@ -155,6 +155,14 @@ func HasUserConfig() (bool, error) {
 	if err != nil {
 		return false, err
 	}
+	return hasUserConfigInDir(newDir)
+}
+
+// hasUserConfigInDir is the testable seam — production AND tests both call
+// this. Splitting the dir resolution from the file probe lets the relocation
+// suite exercise old-only / malformed paths without re-implementing them
+// (mirrors the loadFromNewDir / Load split in this file).
+func hasUserConfigInDir(newDir string) (bool, error) {
 	newYML := filepath.Join(newDir, configFileName)
 	if _, found, err := readConfigYML(newYML); err != nil {
 		return false, err

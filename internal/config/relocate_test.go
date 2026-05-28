@@ -185,3 +185,24 @@ func TestLoadForRuntime_DivergentMalformedCanonical_HardFail(t *testing.T) {
 // resetOnce returns a fresh sync.Once so warn-once side effects don't bleed
 // between tests in this file.
 func resetOnce() sync.Once { return sync.Once{} }
+
+// HasUserConfig must register a relocOldOnly config as present — otherwise
+// set-credential would falsely demand --ref on a box where the user has a
+// pre-relocation config.yml under the old hand-rolled path. Mirrors row 2
+// (TestRelocate_OldOnly_CopyNeeded) but for the §1.5.2 ref-defaulting path.
+func TestHasUserConfig_RelocOldOnly_RegistersAsPresent(t *testing.T) {
+	old, new := setupRelocPair(t)
+	writeYAML(t, filepath.Join(old, configFileName), "credential_ref: newrelic-cli/legacy\n")
+
+	has, err := hasUserConfigInDir(new)
+	require.NoError(t, err)
+	assert.True(t, has, "old-only config.yml must register as present")
+}
+
+// And the negative case: neither side has a config.yml.
+func TestHasUserConfig_RelocNeither_RegistersAsAbsent(t *testing.T) {
+	_, new := setupRelocPair(t)
+	has, err := hasUserConfigInDir(new)
+	require.NoError(t, err)
+	assert.False(t, has)
+}

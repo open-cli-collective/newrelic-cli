@@ -84,11 +84,20 @@ Examples (--ref is required when no config.yml exists — §1.5.2; once
   nrq set-credential --key api_key --stdin   # after 'nrq init' has created config.yml`,
 		Args: root.NoPositionalArgs, // never echo a fat-fingered secret (§1.12)
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			// Honor both the subcommand-local --json AND the root --output json
+			// / deprecated root --json (root.go:140-147). Without this, the
+			// effective behavior would be order-dependent — `nrq --json
+			// set-credential` would bypass the envelope while
+			// `nrq set-credential --json` would emit it. Normalize so the
+			// rest of runSetCredential has a single switch.
+			if o.Output == "json" {
+				o.json = true
+			}
 			if o.json {
 				// §1.5.2: emit envelope on stdout; suppress cobra's stderr
 				// auto-print so the only thing on stderr is the envelope's
-				// counterpart (nothing in the success case; nothing on
-				// failure either — the JSON envelope is the failure signal).
+				// counterpart (nothing on success or failure — the JSON
+				// envelope is the failure signal).
 				cmd.SilenceErrors = true
 				cmd.SilenceUsage = true
 			}
@@ -110,7 +119,9 @@ func runSetCredential(o *setCredentialOptions) error {
 	// Pre-keyring phase: failures here have no backend/ref resolved yet.
 	preKeyringFail := func(err error) error {
 		if o.json {
-			emitSetCredentialEnvelope(o, setCredentialEnvelope{
+			// On failure paths, the original error is the primary signal;
+			// a broken-pipe write error on the envelope would only obscure it.
+			_ = emitSetCredentialEnvelope(o, setCredentialEnvelope{
 				Ref:     o.ref, // may be empty if user omitted it
 				Key:     o.key,
 				Backend: "",
@@ -178,7 +189,9 @@ func runSetCredential(o *setCredentialOptions) error {
 	// Post-keyring phase: ref and backend are now populated from the open store.
 	postKeyringFail := func(err error) error {
 		if o.json {
-			emitSetCredentialEnvelope(o, setCredentialEnvelope{
+			// On failure paths, the original error is the primary signal;
+			// a broken-pipe write error on the envelope would only obscure it.
+			_ = emitSetCredentialEnvelope(o, setCredentialEnvelope{
 				Ref:     st.Ref(),
 				Key:     o.key,
 				Backend: storeBackendName(st),
@@ -207,13 +220,12 @@ func runSetCredential(o *setCredentialOptions) error {
 	}
 
 	if o.json {
-		emitSetCredentialEnvelope(o, setCredentialEnvelope{
+		return emitSetCredentialEnvelope(o, setCredentialEnvelope{
 			Ref:     st.Ref(),
 			Key:     o.key,
 			Backend: storeBackendName(st),
 			Written: true,
 		})
-		return nil
 	}
 	v.Success("Stored %s in the OS keyring at %s", o.key, st.Ref())
 	return nil
@@ -222,10 +234,15 @@ func runSetCredential(o *setCredentialOptions) error {
 // emitSetCredentialEnvelope writes a §1.5.2 / §1.8 control-plane envelope to
 // stdout. The secret value is never included by construction — the envelope
 // struct has no field for it. Tests assert §1.12 absence-of-value across
-// every failure path.
-func emitSetCredentialEnvelope(o *setCredentialOptions, env setCredentialEnvelope) {
+// every failure path. Returns any stdout write error so the caller surfaces
+// a broken pipe (otherwise a successful keyring write would exit 0 without
+// the envelope ever reaching the consumer).
+func emitSetCredentialEnvelope(o *setCredentialOptions, env setCredentialEnvelope) error {
 	enc := json.NewEncoder(o.Stdout)
-	_ = enc.Encode(env)
+	if err := enc.Encode(env); err != nil {
+		return fmt.Errorf("emit set-credential envelope: %w", err)
+	}
+	return nil
 }
 
 // storeBackendName extracts the credstore.Backend name from the open store,

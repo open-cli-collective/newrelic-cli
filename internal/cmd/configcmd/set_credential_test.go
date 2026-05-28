@@ -3,7 +3,6 @@ package configcmd
 import (
 	"bytes"
 	"encoding/json"
-	"os"
 	"strings"
 	"testing"
 
@@ -270,5 +269,30 @@ func TestSetCredential_NeverEmitsSecret_AcrossAllPaths(t *testing.T) {
 	}
 }
 
-// silence the unused import warning if FOO env var is unused in some branches
-var _ = os.Setenv
+// --- Root-flag position invariance (Codex Major fix) ----------------------
+
+// TestSetCredential_RootJSONBeforeSubcommand_AlsoEmitsEnvelope guards the
+// fix for the order-dependence bug: `nrq -o json set-credential ...` (root
+// flag before the subcommand) must emit the envelope and silence stderr,
+// same as `nrq set-credential --json ...`. Without the o.Output == "json"
+// normalization in the RunE wrapper, the two forms diverge silently.
+func TestSetCredential_RootJSONBeforeSubcommand_AlsoEmitsEnvelope(t *testing.T) {
+	testutil.Setup(t)
+	rootCmd, opts := root.NewRootCmd()
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	opts.Stdout, opts.Stderr = stdout, stderr
+	opts.Stdin = strings.NewReader(secretSentinel + "\n")
+	root.RegisterAll(rootCmd, opts, Register)
+	// Root --output BEFORE the subcommand.
+	rootCmd.SetArgs([]string{"-o", "json", "set-credential",
+		"--ref", "newrelic-cli/test", "--key", "api_key", "--stdin"})
+	require.NoError(t, rootCmd.Execute())
+
+	env := parseEnvelope(t, stdout)
+	assert.True(t, env.Written)
+	assert.Equal(t, "newrelic-cli/test", env.Ref)
+	assert.NotEmpty(t, env.Backend)
+	assert.Empty(t, stderr.String(), "root --output json must trigger SilenceErrors path too")
+	assert.NotContains(t, stdout.String()+stderr.String(), secretSentinel)
+}

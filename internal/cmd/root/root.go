@@ -93,9 +93,11 @@ users, and other New Relic resources.
 First-time setup (API key in the OS keyring — never plaintext, never in config.yml):
   nrq init
 
-Non-interactive credential ingress:
-  op read "op://vault/New Relic/api key" | nrq set-credential --key api_key --stdin
-  nrq set-credential --key api_key --from-env NEWRELIC_API_KEY
+Non-interactive credential ingress (--ref is required when no config.yml
+exists — §1.5.2; once 'nrq init' has run, --ref defaults to the active
+config's credential_ref):
+  op read "op://vault/New Relic/api key" | nrq set-credential --ref newrelic-cli/default --key api_key --stdin
+  nrq set-credential --ref newrelic-cli/default --key api_key --from-env NEWRELIC_API_KEY
 
 Set the non-secret account ID / region (written to config.yml):
   nrq config set --account-id <id> --region US

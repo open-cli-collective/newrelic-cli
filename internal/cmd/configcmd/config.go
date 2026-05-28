@@ -6,6 +6,7 @@
 package configcmd
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -52,6 +53,24 @@ type setCredentialOptions struct {
 	stdin     bool
 	fromEnv   string
 	overwrite bool
+	json      bool
+}
+
+// setCredentialEnvelope is the §1.5.2 / §1.8 control-plane response shape
+// emitted on stdout when --json is set. backend is empty when the keyring
+// store was never opened (pre-keyring failure). error is omitted on success.
+//
+// Schema deliberately matches §1.5.2 verbatim (ref/key/backend/written/error)
+// so this implementation is the reference shape for jtk/cfl (atlassian-cli
+// #389) and sfdc (#43). No optional extensions — non-fatal validation
+// warnings (e.g. non-standard key prefix) are dropped under --json since
+// stderr is silenced; the human path retains the v.Warning() surface.
+type setCredentialEnvelope struct {
+	Ref     string `json:"ref"`
+	Key     string `json:"key"`
+	Backend string `json:"backend"`
+	Written bool   `json:"written"`
+	Error   string `json:"error,omitempty"`
 }
 
 func newSetCredentialCmd(opts *root.Options) *cobra.Command {
@@ -64,43 +83,93 @@ path (§1.5.2). It writes one key to the OS keyring. The value is read from
 stdin or a named environment variable — NEVER from a flag or positional
 argument (those leak via ps / shell history).
 
-Examples:
-  op read "op://Vault/New Relic/api key" | nrq set-credential --key api_key --stdin
-  nrq set-credential --key api_key --from-env NEWRELIC_API_KEY
-  nrq set-credential --ref newrelic-cli/default --key api_key --stdin`,
+Examples (--ref is required when no config.yml exists — §1.5.2; once
+'nrq init' has run, --ref defaults to the active config's credential_ref):
+  op read "op://Vault/New Relic/api key" | nrq set-credential --ref newrelic-cli/default --key api_key --stdin
+  nrq set-credential --ref newrelic-cli/default --key api_key --from-env NEWRELIC_API_KEY
+  nrq set-credential --key api_key --stdin   # after 'nrq init' has created config.yml`,
 		Args: root.NoPositionalArgs, // never echo a fat-fingered secret (§1.12)
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			// Honor both the subcommand-local --json AND the root --output json
+			// / deprecated root --json (root.go:140-147). Without this, the
+			// effective behavior would be order-dependent — `nrq --json
+			// set-credential` would bypass the envelope while
+			// `nrq set-credential --json` would emit it. Normalize so the
+			// rest of runSetCredential has a single switch.
+			if o.Output == "json" {
+				o.json = true
+			}
+			if o.json {
+				// §1.5.2: emit envelope on stdout; suppress cobra's stderr
+				// auto-print so the only thing on stderr is the envelope's
+				// counterpart (nothing on success or failure — the JSON
+				// envelope is the failure signal).
+				cmd.SilenceErrors = true
+				cmd.SilenceUsage = true
+			}
 			return runSetCredential(o)
 		},
 	}
-	cmd.Flags().StringVar(&o.ref, "ref", "", "Credential ref (default: config.yml credential_ref)")
+	cmd.Flags().StringVar(&o.ref, "ref", "", "Credential ref (required when no config.yml; defaults to active config's credential_ref otherwise — §1.5.2)")
 	cmd.Flags().StringVar(&o.key, "key", "", "Bundle key to set (only \"api_key\" is allowed)")
 	cmd.Flags().BoolVar(&o.stdin, "stdin", false, "Read the secret value from stdin")
 	cmd.Flags().StringVar(&o.fromEnv, "from-env", "", "Read the secret value from this environment variable")
 	cmd.Flags().BoolVar(&o.overwrite, "overwrite", false, "Replace an existing keyring value (refuses by default)")
+	cmd.Flags().BoolVar(&o.json, "json", false, "Emit a §1.5.2/§1.8 control-plane envelope on stdout instead of human text")
 	return cmd
 }
 
 func runSetCredential(o *setCredentialOptions) error {
 	v := o.View()
 
+	// Pre-keyring phase: failures here have no backend/ref resolved yet.
+	preKeyringFail := func(err error) error {
+		if o.json {
+			// On failure paths, the original error is the primary signal;
+			// a broken-pipe write error on the envelope would only obscure it.
+			_ = emitSetCredentialEnvelope(o, setCredentialEnvelope{
+				Ref:     o.ref, // may be empty if user omitted it
+				Key:     o.key,
+				Backend: "",
+				Written: false,
+				Error:   err.Error(),
+			})
+		}
+		return err
+	}
+
 	if o.key != keychain.KeyAPIKey {
-		return fmt.Errorf("unsupported --key %q: nrq's only bundle key is %q (§1.5.2)",
-			o.key, keychain.KeyAPIKey)
+		return preKeyringFail(fmt.Errorf("unsupported --key %q: nrq's only bundle key is %q (§1.5.2)",
+			o.key, keychain.KeyAPIKey))
 	}
 	if o.stdin == (o.fromEnv != "") {
-		return errors.New("provide exactly one of --stdin or --from-env (the value is never a flag/positional — §1.5)")
+		return preKeyringFail(errors.New("provide exactly one of --stdin or --from-env (the value is never a flag/positional — §1.5)"))
 	}
-	// --ref is optional: when omitted, OpenRef("") inherits config.yml's
-	// credential_ref, or DefaultCredentialRef when there is no config.yml
-	// (the §1.10 fresh-install automation primitive — `op read | nrq
-	// set-credential --key api_key --stdin` must work with no prior
-	// config). When provided, validate it up front so an invalid value
-	// fails with a message naming the --ref flag, not deep inside OpenRef.
 	if o.ref != "" {
 		if _, _, err := credstore.ParseRef(o.ref); err != nil {
-			return fmt.Errorf("invalid --ref %q: %w (expected <service>/<profile>, e.g. %s)",
-				o.ref, err, config.DefaultCredentialRef)
+			return preKeyringFail(fmt.Errorf("invalid --ref %q: %w (expected <service>/<profile>, e.g. %s)",
+				o.ref, err, config.DefaultCredentialRef))
+		}
+	} else {
+		// §1.5.2 strict: --ref defaults to the active config's credential_ref
+		// ONLY when a config file already exists. Absent any config, the
+		// fresh-install caller must pass --ref explicitly.
+		has, herr := config.HasUserConfig()
+		if herr != nil {
+			return preKeyringFail(fmt.Errorf("probe config presence: %w", herr))
+		}
+		if !has {
+			return preKeyringFail(fmt.Errorf(
+				"no config.yml found and --ref omitted; pass --ref %s "+
+					"(or run 'nrq init' first to create config.yml) — §1.5.2 "+
+					"requires --ref when there is no active config to default from",
+				config.DefaultCredentialRef))
+		}
+		// Resolve the active credential_ref so a downstream OpenRef failure
+		// surfaces a useful Ref value in the envelope (otherwise the JSON
+		// consumer can't tell which ref was attempted).
+		if cfg, cerr := config.Load(); cerr == nil && cfg.CredentialRef != "" {
+			o.ref = cfg.CredentialRef
 		}
 	}
 
@@ -108,31 +177,50 @@ func runSetCredential(o *setCredentialOptions) error {
 	if o.stdin {
 		b, err := io.ReadAll(o.Stdin)
 		if err != nil {
-			return fmt.Errorf("read secret from stdin: %w", err)
+			return preKeyringFail(fmt.Errorf("read secret from stdin: %w", err))
 		}
 		secret = strings.TrimRight(string(b), "\r\n")
 	} else {
 		secret = os.Getenv(o.fromEnv)
 		if secret == "" {
-			return fmt.Errorf("environment variable %s is empty or unset", o.fromEnv)
+			return preKeyringFail(fmt.Errorf("environment variable %s is empty or unset", o.fromEnv))
 		}
 	}
 	if warning, err := validate.APIKey(secret); err != nil {
-		return err
-	} else if warning != "" {
+		return preKeyringFail(err)
+	} else if warning != "" && !o.json {
+		// Under --json the envelope is the only diagnostic surface, and the
+		// §1.5.2 schema doesn't include a warning field — drop non-fatal
+		// validation caveats rather than expand the schema unilaterally.
 		v.Warning("%s", warning)
 	}
 
 	st, err := keychain.OpenRef(o.ref) // pure ingress: no migration
 	if err != nil {
-		return err
+		return preKeyringFail(err)
 	}
 	defer func() { _ = st.Close() }()
+
+	// Post-keyring phase: ref and backend are now populated from the open store.
+	postKeyringFail := func(err error) error {
+		if o.json {
+			// On failure paths, the original error is the primary signal;
+			// a broken-pipe write error on the envelope would only obscure it.
+			_ = emitSetCredentialEnvelope(o, setCredentialEnvelope{
+				Ref:     st.Ref(),
+				Key:     o.key,
+				Backend: storeBackendName(st),
+				Written: false,
+				Error:   err.Error(),
+			})
+		}
+		return err
+	}
 
 	// No-clobber by default (§1.5/§1.11): an existing keyring value is never
 	// silently replaced — the user must pass --overwrite.
 	if st.HasAPIKey() && !o.overwrite {
-		return fmt.Errorf("%s already set at %s; pass --overwrite to replace it", o.key, st.Ref())
+		return postKeyringFail(fmt.Errorf("%s already set at %s; pass --overwrite to replace it", o.key, st.Ref()))
 	}
 	if o.overwrite {
 		err = st.SetAPIKeyOverwrite(secret)
@@ -141,12 +229,43 @@ func runSetCredential(o *setCredentialOptions) error {
 	}
 	if err != nil {
 		if errors.Is(err, credstore.ErrExists) {
-			return fmt.Errorf("%s already set at %s; pass --overwrite to replace it", o.key, st.Ref())
+			return postKeyringFail(fmt.Errorf("%s already set at %s; pass --overwrite to replace it", o.key, st.Ref()))
 		}
-		return err
+		return postKeyringFail(err)
+	}
+
+	if o.json {
+		return emitSetCredentialEnvelope(o, setCredentialEnvelope{
+			Ref:     st.Ref(),
+			Key:     o.key,
+			Backend: storeBackendName(st),
+			Written: true,
+		})
 	}
 	v.Success("Stored %s in the OS keyring at %s", o.key, st.Ref())
 	return nil
+}
+
+// emitSetCredentialEnvelope writes a §1.5.2 / §1.8 control-plane envelope to
+// stdout. The secret value is never included by construction — the envelope
+// struct has no field for it. Tests assert §1.12 absence-of-value across
+// every failure path. Returns any stdout write error so the caller surfaces
+// a broken pipe (otherwise a successful keyring write would exit 0 without
+// the envelope ever reaching the consumer).
+func emitSetCredentialEnvelope(o *setCredentialOptions, env setCredentialEnvelope) error {
+	enc := json.NewEncoder(o.Stdout)
+	if err := enc.Encode(env); err != nil {
+		return fmt.Errorf("emit set-credential envelope: %w", err)
+	}
+	return nil
+}
+
+// storeBackendName extracts the credstore.Backend name from the open store,
+// discarding the Source — JSON envelope consumers care only about which
+// backend resolved (file vs keychain vs ...), not how it was selected.
+func storeBackendName(st *keychain.Store) string {
+	b, _ := st.Backend()
+	return string(b)
 }
 
 // ---- config set / aliases (non-secret config.yml) --------------------------

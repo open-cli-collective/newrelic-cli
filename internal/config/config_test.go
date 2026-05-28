@@ -119,3 +119,34 @@ func TestDir_StatedirContract(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "42", got.AccountID)
 }
+
+func TestHasUserConfig_Absent(t *testing.T) {
+	testutil.Setup(t)
+	has, err := config.HasUserConfig()
+	require.NoError(t, err)
+	assert.False(t, has, "absent config.yml must return false")
+}
+
+func TestHasUserConfig_Present(t *testing.T) {
+	testutil.Setup(t)
+	c := &config.Config{CredentialRef: "newrelic-cli/test"}
+	require.NoError(t, c.Save())
+
+	has, err := config.HasUserConfig()
+	require.NoError(t, err)
+	assert.True(t, has, "saved config.yml must register as present")
+}
+
+func TestHasUserConfig_MalformedSurfacesError(t *testing.T) {
+	testutil.Setup(t)
+	cfgPath, err := config.Path()
+	require.NoError(t, err)
+	require.NoError(t, os.MkdirAll(filepath.Dir(cfgPath), 0o700))
+	// Write deliberately bad YAML.
+	require.NoError(t, os.WriteFile(cfgPath, []byte("not: : valid: yaml\n"), 0o600))
+
+	has, err := config.HasUserConfig()
+	require.Error(t, err, "malformed config.yml must surface as an error, not silently as absent")
+	assert.False(t, has)
+	assert.NotContains(t, strings.ToLower(err.Error()), "secret", "error path must not echo any secret content")
+}

@@ -528,10 +528,11 @@ func TestConfigClear_All_MalformedConfig_StillScrubsFiles(t *testing.T) {
 	assert.True(t, os.IsNotExist(statErr), "legacy credentials must be scrubbed")
 }
 
-// §1.10 fresh-install automation primitive: on a box with NO config.yml,
-// `nrq set-credential --key api_key --stdin` (no --ref) must work, falling
-// back to the default ref — not error demanding --ref.
-func TestSetCredential_FreshInstall_NoRefNoConfig(t *testing.T) {
+// §1.5.2 strict: on a box with NO config.yml, `nrq set-credential
+// --key api_key --stdin` (no --ref) must FAIL with a clear hint naming the
+// canonical ref. This replaces the prior §1.10 fresh-install carve-out
+// per the family-wide alignment in cli-common PR #28.
+func TestSetCredential_FreshInstall_NoRefNoConfig_NowRequiresRef(t *testing.T) {
 	testutil.Setup(t)
 	_, statErr := os.Stat(mustConfigPath(t))
 	require.True(t, os.IsNotExist(statErr), "precondition: no config.yml")
@@ -542,7 +543,29 @@ func TestSetCredential_FreshInstall_NoRefNoConfig(t *testing.T) {
 	opts.Stdin = strings.NewReader(sentinel + "\n")
 	root.RegisterAll(rootCmd, opts, configcmd.Register)
 	rootCmd.SetArgs([]string{"set-credential", "--key", "api_key", "--stdin"})
-	require.NoError(t, rootCmd.Execute(), "fresh-install set-credential must not require --ref")
+	err := rootCmd.Execute()
+	require.Error(t, err, "§1.5.2 requires --ref when no config.yml exists")
+	combined := err.Error() + o.String() + e.String()
+	assert.Contains(t, combined, "--ref")
+	assert.Contains(t, combined, "newrelic-cli/default")
+	assert.NotContains(t, combined, sentinel, "§1.12: no secret leakage on the failure path either")
+}
+
+// Sibling proving the migration path: pass --ref explicitly and the same
+// fresh-install command succeeds. This is the one-flag fix installers need
+// to adopt.
+func TestSetCredential_FreshInstall_WithRefSucceeds(t *testing.T) {
+	testutil.Setup(t)
+	_, statErr := os.Stat(mustConfigPath(t))
+	require.True(t, os.IsNotExist(statErr), "precondition: no config.yml")
+
+	rootCmd, opts := root.NewRootCmd()
+	var o, e bytes.Buffer
+	opts.Stdout, opts.Stderr = &o, &e
+	opts.Stdin = strings.NewReader(sentinel + "\n")
+	root.RegisterAll(rootCmd, opts, configcmd.Register)
+	rootCmd.SetArgs([]string{"set-credential", "--ref", "newrelic-cli/default", "--key", "api_key", "--stdin"})
+	require.NoError(t, rootCmd.Execute())
 	assert.NotContains(t, o.String()+e.String(), sentinel)
 
 	st, err := keychain.OpenNoMigrate()

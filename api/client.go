@@ -171,7 +171,7 @@ func (c *Client) NerdGraphQuery(query string, variables map[string]interface{}) 
 	}
 
 	if len(resp.Errors) > 0 {
-		return nil, &GraphQLError{Message: resp.Errors[0].Message}
+		return nil, &GraphQLError{Message: resp.Errors[0].Message, Errors: resp.Errors}
 	}
 
 	return resp.Data, nil

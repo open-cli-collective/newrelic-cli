@@ -211,6 +211,7 @@ func runSetCredential(o *setCredentialOptions) error {
 				Key:     o.key,
 				Backend: storeBackendName(st),
 				Written: false,
+				Warning: apiKeyWarning,
 				Error:   err.Error(),
 			})
 		}

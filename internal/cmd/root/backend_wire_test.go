@@ -88,6 +88,66 @@ func TestWireBackendSelection_InvalidConfigDeferred(t *testing.T) {
 	}
 }
 
+// --- Closed-set output policy (cli-common §2) ----------------------------
+
+// TestRoot_RejectsJSONOutput pins the closed-set policy: `-o json` is
+// rejected at the root PersistentPreRunE, before any subcommand RunE runs.
+// Carve-outs (set-credential / config show / config test) use a
+// subcommand-local --json flag instead; passthrough commands (nerdgraph,
+// nrql) ignore -o entirely.
+func TestRoot_RejectsJSONOutput(t *testing.T) {
+	resetState(t)
+	t.Setenv(cccredstore.BackendEnvVar(serviceName), "")
+
+	rootCmd, _ := NewRootCmd()
+	called := false
+	rootCmd.AddCommand(&cobra.Command{
+		Use:  "leaf",
+		RunE: func(*cobra.Command, []string) error { called = true; return nil },
+	})
+	rootCmd.SetArgs([]string{"-o", "json", "leaf"})
+	err := rootCmd.Execute()
+	if err == nil {
+		t.Fatal("expected error from -o json, got nil")
+	}
+	if !strings.Contains(err.Error(), "must be one of table, plain") {
+		t.Errorf("error should name the closed set: %v", err)
+	}
+	if called {
+		t.Error("leaf RunE must NOT run when -o validation fails")
+	}
+}
+
+// TestRoot_RejectsJSONOutput_OnPassthrough pins the same rule for the
+// passthrough commands: even though nerdgraph/nrql emit JSON regardless of
+// -o, they still go through root validation, so `-o json` is rejected
+// before their RunE can fire. The companion behavior (`-o table`
+// nerdgraph query …` succeeds and still emits JSON) is covered by the
+// nerdgraph and nrql package tests.
+func TestRoot_RejectsJSONOutput_OnPassthrough(t *testing.T) {
+	for _, name := range []string{"nerdgraph", "nrql"} {
+		t.Run(name, func(t *testing.T) {
+			resetState(t)
+			t.Setenv(cccredstore.BackendEnvVar(serviceName), "")
+
+			rootCmd, _ := NewRootCmd()
+			called := false
+			rootCmd.AddCommand(&cobra.Command{
+				Use:  name,
+				RunE: func(*cobra.Command, []string) error { called = true; return nil },
+			})
+			rootCmd.SetArgs([]string{"-o", "json", name})
+			err := rootCmd.Execute()
+			if err == nil {
+				t.Fatal("expected error from -o json, got nil")
+			}
+			if called {
+				t.Errorf("%s RunE must NOT run when -o validation fails", name)
+			}
+		})
+	}
+}
+
 // TestWireBackendSelection_ShadowingSubcommand regresses the
 // cobra-doesn't-chain-PersistentPreRunE bug. nrq has no shadowers
 // today; the exported WireBackendSelection helper exists for this case.

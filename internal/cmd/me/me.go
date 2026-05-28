@@ -37,18 +37,6 @@ itself is never displayed (§1.12).`,
 	rootCmd.AddCommand(cmd)
 }
 
-// identity is the JSON shape. It deliberately has no api_key field — the
-// secret is never serialized (§1.12).
-type identity struct {
-	UserID        string `json:"user_id,omitempty"`
-	UserEmail     string `json:"user_email,omitempty"`
-	AccountID     int    `json:"account_id,omitempty"`
-	AccountName   string `json:"account_name,omitempty"`
-	Region        string `json:"region,omitempty"`
-	APIKeyValid   bool   `json:"api_key_valid"`
-	AccountAccess bool   `json:"account_access"`
-}
-
 func runMe(opts *root.Options) error {
 	// Single credential chokepoint: opts.APIClient() resolves the key from
 	// the keyring and runs the one-time §1.8 migration. No client injection.
@@ -90,16 +78,11 @@ func evaluate(res *api.ConnectionTestResult, accountConfigured bool) error {
 }
 
 // renderMe is pure (no I/O beyond the View writer): unit-tested directly
-// with synthetic results across table/json/plain. It never emits the
-// api_key (§1.12).
+// with synthetic results across table/plain. It never emits the api_key
+// (§1.12). JSON output was removed per cli-common
+// docs/output-and-rendering.md §2 — `me` is a diagnostic; the scripted
+// signal is the exit code.
 func renderMe(v *view.View, res *api.ConnectionTestResult, accountConfigured bool) error {
-	id := identity{
-		UserID:        res.UserID,
-		UserEmail:     res.UserEmail,
-		Region:        res.Region,
-		APIKeyValid:   res.APIKeyValid,
-		AccountAccess: res.AccountAccess,
-	}
 	rows := [][]string{
 		{"User ID", res.UserID},
 		{"User email", res.UserEmail},
@@ -107,13 +90,11 @@ func renderMe(v *view.View, res *api.ConnectionTestResult, accountConfigured boo
 		{"API key valid", fmt.Sprintf("%t", res.APIKeyValid)},
 	}
 	if accountConfigured {
-		id.AccountID = res.AccountID
-		id.AccountName = res.AccountName
 		rows = append(rows,
 			[]string{"Account ID", fmt.Sprintf("%d", res.AccountID)},
 			[]string{"Account name", res.AccountName},
 			[]string{"Account access", fmt.Sprintf("%t", res.AccountAccess)},
 		)
 	}
-	return v.Render([]string{"FIELD", "VALUE"}, rows, id)
+	return v.Render([]string{"FIELD", "VALUE"}, rows)
 }

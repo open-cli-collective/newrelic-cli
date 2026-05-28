@@ -1,6 +1,7 @@
 package nrql
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -140,8 +141,12 @@ func runQuery(opts *queryOptions, nrql string) error {
 		return err
 	}
 
-	v := opts.View()
-	return v.JSON(result)
+	// Passthrough surface: always JSON regardless of -o. Two-space indent +
+	// trailing newline preserves the wire shape downstream tools expect.
+	// The --link path above is the documented exception (plain URL line).
+	enc := json.NewEncoder(opts.Stdout)
+	enc.SetIndent("", "  ")
+	return enc.Encode(result)
 }
 
 // containsClause checks if the NRQL query already contains a specific clause

@@ -10,12 +10,11 @@ import (
 
 func newGetPolicyCmd(opts *root.Options) *cobra.Command {
 	return &cobra.Command{
-		Use:   "get <policy-id>",
-		Short: "Get details for a specific alert policy",
-		Long:  `Get detailed information about a specific alert policy including its incident preference setting.`,
-		Example: `  nrq alerts policies get 12345
-  nrq alerts policies get 12345 -o json`,
-		Args: cobra.ExactArgs(1),
+		Use:     "get <policy-id>",
+		Short:   "Get details for a specific alert policy",
+		Long:    `Get detailed information about a specific alert policy including its incident preference setting.`,
+		Example: `  nrq alerts policies get 12345`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runGetPolicy(opts, args[0])
 		},
@@ -36,8 +35,6 @@ func runGetPolicy(opts *root.Options, policyID string) error {
 	v := opts.View()
 
 	switch v.Format {
-	case "json":
-		return v.JSON(policy)
 	case "plain":
 		return v.Plain([][]string{
 			{fmt.Sprintf("%d", policy.ID), policy.Name, policy.IncidentPreference},

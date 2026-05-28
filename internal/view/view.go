@@ -8,29 +8,32 @@ import (
 	"text/tabwriter"
 
 	"github.com/fatih/color"
-
-	"github.com/open-cli-collective/newrelic-cli/internal/output"
 )
 
-// Format represents the output format type
+// Format represents the output format type.
+//
+// JSON is intentionally absent: per cli-common docs/output-and-rendering.md §2
+// resource reads emit only text/table/plain. Control-plane envelopes (e.g.
+// `nrq set-credential --json`, `nrq config show --json`) and passthrough
+// surfaces (`nrq nerdgraph`, `nrq nrql`) emit JSON via their own local
+// encoders, not through this view layer.
 type Format string
 
 const (
 	FormatTable Format = "table"
-	FormatJSON  Format = "json"
 	FormatPlain Format = "plain"
 )
 
-// ValidFormats contains all valid output formats
-var ValidFormats = []Format{FormatTable, FormatJSON, FormatPlain}
+// ValidFormats contains all valid output formats for the global --output flag.
+var ValidFormats = []Format{FormatTable, FormatPlain}
 
-// ValidateFormat checks if a format string is valid
+// ValidateFormat checks if a format string is valid.
 func ValidateFormat(f string) error {
 	switch Format(f) {
-	case FormatTable, FormatJSON, FormatPlain:
+	case FormatTable, FormatPlain:
 		return nil
 	default:
-		return fmt.Errorf("invalid output format %q: must be one of table, json, plain", f)
+		return fmt.Errorf("invalid output format %q: must be one of table, plain", f)
 	}
 }
 
@@ -85,22 +88,6 @@ func (v *View) Table(headers []string, rows [][]string) error {
 	return w.Flush()
 }
 
-// JSON renders data as formatted JSON. If the one-time §1.8 migration ran
-// this invocation it recorded a block in internal/output; that block is
-// spliced in here (consume-once) so it appears in exactly one JSON response
-// and never bleeds into a later one.
-func (v *View) JSON(data interface{}) error {
-	b, err := output.MarshalWithMigration(data)
-	if err != nil {
-		return err
-	}
-	if _, err := v.Out.Write(b); err != nil {
-		return err
-	}
-	_, err = v.Out.Write([]byte("\n"))
-	return err
-}
-
 // Plain renders rows as tab-separated values without headers
 func (v *View) Plain(rows [][]string) error {
 	for _, row := range rows {
@@ -149,16 +136,12 @@ func (v *View) Warning(format string, args ...interface{}) {
 	}
 }
 
-// Render automatically chooses output format based on View.Format
-func (v *View) Render(headers []string, rows [][]string, data interface{}) error {
-	switch v.Format {
-	case FormatJSON:
-		return v.JSON(data)
-	case FormatPlain:
+// Render dispatches to Table or Plain based on View.Format.
+func (v *View) Render(headers []string, rows [][]string) error {
+	if v.Format == FormatPlain {
 		return v.Plain(rows)
-	default:
-		return v.Table(headers, rows)
 	}
+	return v.Table(headers, rows)
 }
 
 // Truncate shortens a string to max length with ellipsis

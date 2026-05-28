@@ -51,7 +51,6 @@ Monitor types:
 
 Status values: ENABLED, DISABLED, MUTED`,
 		Example: `  nrq synthetics list
-  nrq synthetics list -o json
   nrq synthetics list --limit 10`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runList(listOpts)
@@ -98,7 +97,7 @@ func runList(opts *listOptions) error {
 		}
 	}
 
-	return v.Render(headers, rows, monitors)
+	return v.Render(headers, rows)
 }
 
 func newGetCmd(opts *root.Options) *cobra.Command {
@@ -107,9 +106,8 @@ func newGetCmd(opts *root.Options) *cobra.Command {
 		Short: "Get details for a specific synthetic monitor",
 		Long: `Get detailed information about a synthetic monitor including
 its type, status, frequency, and target URI (for applicable types).`,
-		Example: `  nrq synthetics get abc-123-def-456
-  nrq synthetics get abc-123-def-456 -o json`,
-		Args: cobra.ExactArgs(1),
+		Example: `  nrq synthetics get abc-123-def-456`,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runGet(opts, args[0])
 		},
@@ -130,8 +128,6 @@ func runGet(opts *root.Options, monitorID string) error {
 	v := opts.View()
 
 	switch v.Format {
-	case "json":
-		return v.JSON(monitor)
 	case "plain":
 		return v.Plain([][]string{
 			{monitor.ID, monitor.Name, monitor.Type, monitor.Status},
@@ -184,10 +180,7 @@ Status values: ENABLED, DISABLED, MUTED
 Common locations: AWS_US_EAST_1, AWS_US_EAST_2, AWS_US_WEST_1, AWS_US_WEST_2,
                   AWS_EU_WEST_1, AWS_EU_WEST_2, AWS_EU_CENTRAL_1, AWS_AP_SOUTHEAST_1`,
 		Example: `  # Create a monitor from a JSON file
-  nrq synthetics create --from-file monitor.json
-
-  # Create and output result as JSON
-  nrq synthetics create --from-file monitor.json -o json`,
+  nrq synthetics create --from-file monitor.json`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runCreate(createOpts)
 		},
@@ -238,8 +231,6 @@ func runCreate(opts *createOptions) error {
 	}
 
 	switch v.Format {
-	case "json":
-		return v.JSON(monitor)
 	case "plain":
 		rows := [][]string{
 			{monitor.ID, monitor.Name, monitor.Type, monitor.Status},
@@ -270,10 +261,7 @@ func newUpdateCmd(opts *root.Options) *cobra.Command {
 The JSON file format is similar to 'synthetics create', but the type cannot be changed.
 The monitor-id identifies which monitor to update.`,
 		Example: `  # Update a monitor from a JSON file
-  nrq synthetics update abc-123-def-456 --from-file monitor.json
-
-  # Update and output result as JSON
-  nrq synthetics update abc-123-def-456 --from-file monitor.json -o json`,
+  nrq synthetics update abc-123-def-456 --from-file monitor.json`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runUpdate(updateOpts, args[0])
@@ -319,8 +307,6 @@ func runUpdate(opts *updateOptions, monitorID string) error {
 	}
 
 	switch v.Format {
-	case "json":
-		return v.JSON(monitor)
 	case "plain":
 		rows := [][]string{
 			{monitor.ID, monitor.Name, monitor.Type, monitor.Status},

@@ -1,6 +1,8 @@
 package nerdgraph
 
 import (
+	"encoding/json"
+
 	"github.com/spf13/cobra"
 
 	"github.com/open-cli-collective/newrelic-cli/internal/cmd/root"
@@ -90,6 +92,9 @@ func runQuery(opts *root.Options, query string) error {
 		return err
 	}
 
-	v := opts.View()
-	return v.JSON(result)
+	// Passthrough surface: always JSON regardless of -o. Two-space indent +
+	// trailing newline preserves the wire shape downstream tools expect.
+	enc := json.NewEncoder(opts.Stdout)
+	enc.SetIndent("", "  ")
+	return enc.Encode(result)
 }

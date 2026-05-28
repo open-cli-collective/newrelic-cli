@@ -2,6 +2,14 @@
 
 This document provides a manual testing checklist for verifying nrq functionality against a live New Relic account.
 
+> **Note (#108):** Rows marked `(removed in #108)` reference the resource-read
+> `-o json` surface that was removed per cli-common
+> [`docs/output-and-rendering.md`](https://github.com/open-cli-collective/cli-common/blob/main/docs/output-and-rendering.md) §2.
+> `nrq -o json …` is now rejected at the root for those commands. JSON
+> remains available via per-subcommand carve-outs (`set-credential`,
+> `config show`, `config test` with `--json`) and passthrough commands
+> (`nerdgraph`, `nrql`).
+
 ## Prerequisites
 
 ### Required
@@ -41,10 +49,10 @@ nrq config show
 | Test | Command | Expected | Pass |
 |------|---------|----------|------|
 | List apps (table) | `nrq apps list` | Table with ID, NAME, LANGUAGE, STATUS columns | [ ] |
-| List apps (JSON) | `nrq apps list -o json` | Valid JSON array | [ ] |
+| ~~List apps (JSON)~~ | ~~`nrq apps list -o json`~~ | ~~Valid JSON array~~ | ~~[ ]~~ |
 | List apps (plain) | `nrq apps list -o plain` | Tab-separated, no headers | [ ] |
 | Get app | `nrq apps get <id>` | App details displayed | [ ] |
-| Get app (JSON) | `nrq apps get <id> -o json` | Valid JSON object | [ ] |
+| ~~Get app (JSON)~~ | ~~`nrq apps get <id> -o json`~~ | ~~Valid JSON object~~ | ~~[ ]~~ |
 | Get invalid app | `nrq apps get 99999999` | Error message, exit code 1 | [ ] |
 | List metrics | `nrq apps metrics <id>` | List of metric names | [ ] |
 
@@ -58,7 +66,7 @@ nrq config show
 | Test | Command | Expected | Pass |
 |------|---------|----------|------|
 | List policies (table) | `nrq alerts policies list` | Table with ID, NAME, INCIDENT PREFERENCE | [ ] |
-| List policies (JSON) | `nrq alerts policies list -o json` | Valid JSON array | [ ] |
+| ~~List policies (JSON)~~ | ~~`nrq alerts policies list -o json`~~ | ~~Valid JSON array~~ | ~~[ ]~~ |
 | Get policy | `nrq alerts policies get <id>` | Policy details displayed | [ ] |
 | Get invalid policy | `nrq alerts policies get 99999999` | Error message | [ ] |
 
@@ -72,9 +80,9 @@ nrq config show
 | Test | Command | Expected | Pass |
 |------|---------|----------|------|
 | List dashboards (table) | `nrq dashboards list` | Table with GUID, NAME, PAGES | [ ] |
-| List dashboards (JSON) | `nrq dashboards list -o json` | Valid JSON array | [ ] |
+| ~~List dashboards (JSON)~~ | ~~`nrq dashboards list -o json`~~ | ~~Valid JSON array~~ | ~~[ ]~~ |
 | Get dashboard | `nrq dashboards get <guid>` | Dashboard details displayed | [ ] |
-| Get dashboard (JSON) | `nrq dashboards get <guid> -o json` | Valid JSON with pages/widgets | [ ] |
+| ~~Get dashboard (JSON)~~ | ~~`nrq dashboards get <guid> -o json`~~ | ~~Valid JSON with pages/widgets~~ | ~~[ ]~~ |
 
 **Notes:**
 - Record a dashboard GUID for reference: `__________`
@@ -87,7 +95,7 @@ nrq config show
 |------|---------|----------|------|
 | List deployments | `nrq deployments list <app-id>` | Table or "No deployments found" | [ ] |
 | Create deployment | `nrq deployments create <app-id> -r "newrelic-cli-test-v1.0.0" -d "Test deployment"` | Success message with ID | [ ] |
-| Create deployment (JSON) | `nrq deployments create <app-id> -r "newrelic-cli-test-v1.0.1" -o json` | Valid JSON object | [ ] |
+| ~~Create deployment (JSON)~~ | ~~`nrq deployments create <app-id> -r "newrelic-cli-test-v1.0.1" -o json`~~ | ~~Valid JSON object~~ | ~~[ ]~~ |
 | Verify created | `nrq deployments list <app-id>` | Shows test deployments | [ ] |
 | Missing revision | `nrq deployments create <app-id>` | Error about required flag | [ ] |
 
@@ -102,7 +110,7 @@ nrq config show
 |------|---------|----------|------|
 | Search by type | `nrq entities search "type = 'APPLICATION'"` | Table with APM apps | [ ] |
 | Search by name | `nrq entities search "name LIKE '%'"` | Table with entities | [ ] |
-| Search (JSON) | `nrq entities search "type = 'APPLICATION'" -o json` | Valid JSON array | [ ] |
+| ~~Search (JSON)~~ | ~~`nrq entities search "type = 'APPLICATION'" -o json`~~ | ~~Valid JSON array~~ | ~~[ ]~~ |
 | Empty results | `nrq entities search "name = 'nonexistent-entity-xyz'"` | "No entities found" | [ ] |
 
 ---
@@ -112,12 +120,12 @@ nrq config show
 | Test | Command | Expected | Pass |
 |------|---------|----------|------|
 | List rules | `nrq logs rules list` | Table or "No log parsing rules found" | [ ] |
-| List rules (JSON) | `nrq logs rules list -o json` | Valid JSON array | [ ] |
+| ~~List rules (JSON)~~ | ~~`nrq logs rules list -o json`~~ | ~~Valid JSON array~~ | ~~[ ]~~ |
 | Create rule | See command below | Success message with ID | [ ] |
 | Verify created | `nrq logs rules list` | Shows test rule | [ ] |
 | Update rule description | `nrq logs rules update <rule-id> --description "newrelic-cli-test-updated"` | Success message | [ ] |
 | Update rule (disable) | `nrq logs rules update <rule-id> --disabled` | Success message | [ ] |
-| Update rule (JSON) | `nrq logs rules update <rule-id> --description "test" -o json` | Valid JSON object | [ ] |
+| ~~Update rule (JSON)~~ | ~~`nrq logs rules update <rule-id> --description "test" -o json`~~ | ~~Valid JSON object~~ | ~~[ ]~~ |
 | Verify update persisted | `nrq logs rules list` | Shows updated description | [ ] |
 | Delete rule | `nrq logs rules delete <rule-id>` | Success message | [ ] |
 | Verify deleted | `nrq logs rules list` | Test rule removed | [ ] |
@@ -163,7 +171,7 @@ nrq logs rules create \
 | Test | Command | Expected | Pass |
 |------|---------|----------|------|
 | List monitors | `nrq synthetics list` | Table or "No synthetic monitors found" | [ ] |
-| List monitors (JSON) | `nrq synthetics list -o json` | Valid JSON array | [ ] |
+| ~~List monitors (JSON)~~ | ~~`nrq synthetics list -o json`~~ | ~~Valid JSON array~~ | ~~[ ]~~ |
 | Get monitor | `nrq synthetics get <id>` | Monitor details | [ ] |
 | Get invalid monitor | `nrq synthetics get invalid-id` | Error message | [ ] |
 
@@ -177,7 +185,7 @@ nrq logs rules create \
 | Test | Command | Expected | Pass |
 |------|---------|----------|------|
 | List users | `nrq users list` | Table with ID, NAME, EMAIL, ROLE | [ ] |
-| List users (JSON) | `nrq users list -o json` | Valid JSON array | [ ] |
+| ~~List users (JSON)~~ | ~~`nrq users list -o json`~~ | ~~Valid JSON array~~ | ~~[ ]~~ |
 | Get user | `nrq users get <id>` | User details | [ ] |
 | Get invalid user | `nrq users get 99999999` | Error message | [ ] |
 
@@ -223,12 +231,16 @@ nrq logs rules create \
 
 ### Output Format Consistency
 
-For each command that supports output formats, verify:
+Resource reads support `table` and `plain` per cli-common
+[`docs/output-and-rendering.md`](https://github.com/open-cli-collective/cli-common/blob/main/docs/output-and-rendering.md) §2.
+JSON is reserved for control-plane envelopes (`--json` on set-credential,
+config show, config test) and passthrough surfaces (nerdgraph, nrql). For
+each resource command, verify:
 
 | Format | Characteristics | Pass |
 |--------|-----------------|------|
 | `table` | Aligned columns, headers, colored status | [ ] |
-| `json` | Valid JSON, parseable by jq | [ ] |
+| ~~`json`~~ | ~~Valid JSON, parseable by jq~~ (removed in #108 for resource reads) | n/a |
 | `plain` | Tab-separated, no headers, no color | [ ] |
 
 ### Global Flags

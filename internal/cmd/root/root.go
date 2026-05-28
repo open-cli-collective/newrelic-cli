@@ -13,7 +13,6 @@ import (
 	"github.com/open-cli-collective/newrelic-cli/api"
 	"github.com/open-cli-collective/newrelic-cli/internal/config"
 	"github.com/open-cli-collective/newrelic-cli/internal/keychain"
-	"github.com/open-cli-collective/newrelic-cli/internal/output"
 	"github.com/open-cli-collective/newrelic-cli/internal/version"
 	"github.com/open-cli-collective/newrelic-cli/internal/view"
 )
@@ -124,27 +123,16 @@ func NewRootCmd() (*cobra.Command, *Options) {
 			if err := view.ValidateFormat(opts.Output); err != nil {
 				return err
 			}
-			// Mirror the resolved format so the §1.8 migration can choose
-			// the stderr line vs the _migration JSON splice. The deprecated
-			// --json bool still forces JSON.
-			format := opts.Output
-			if jsonFlag, _ := cmd.Flags().GetBool("json"); jsonFlag {
-				format = "json"
-				opts.Output = "json"
-			}
-			output.OutputFormat = format
 			return WireBackendSelection(cmd)
 		},
 	}
 
 	cmd.PersistentFlags().StringVarP(&opts.Output, "output", "o", "table",
-		"Output format: table, json, or plain")
+		"Output format: table or plain")
 	cmd.PersistentFlags().BoolVar(&opts.NoColor, "no-color", false,
 		"Disable colored output")
 	cmd.PersistentFlags().BoolVarP(&opts.Verbose, "verbose", "v", false,
 		"Enable verbose output (shows API requests)")
-	cmd.PersistentFlags().Bool("json", false, "Output in JSON format (deprecated: use -o json)")
-	_ = cmd.PersistentFlags().MarkDeprecated("json", "use --output json instead")
 	cmd.PersistentFlags().String(cccredstore.BackendFlagName, "", cccredstore.BackendFlagUsage())
 
 	return cmd, opts

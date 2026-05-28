@@ -128,5 +128,5 @@ func runSearch(opts *searchOptions, query string) error {
 		rows[i] = row
 	}
 
-	return v.Render(headers, rows, entities)
+	return v.Render(headers, rows)
 }

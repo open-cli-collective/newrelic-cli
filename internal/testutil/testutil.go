@@ -13,7 +13,6 @@ import (
 	"github.com/open-cli-collective/cli-common/statedirtest"
 
 	"github.com/open-cli-collective/newrelic-cli/internal/config"
-	"github.com/open-cli-collective/newrelic-cli/internal/output"
 )
 
 // Setup isolates the full §3.1 7-var env set under t.TempDir() (via
@@ -46,10 +45,6 @@ func Setup(t *testing.T) string {
 		_ = os.Unsetenv(e)
 	}
 
-	// A prior test's recorded §1.8 block must never bleed into this one's
-	// JSON output.
-	output.ResetMigration()
-	t.Cleanup(output.ResetMigration)
 	return tmp
 }
 

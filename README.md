@@ -14,7 +14,7 @@ A command-line interface for interacting with New Relic APIs.
 - **NRQL**: Run NRQL queries directly from the command line
 - **Synthetic Monitors**: List and inspect synthetic monitoring configurations
 - **Users**: List and view user details
-- **Multiple Output Formats**: Table, JSON, and plain (scriptable) output
+- **Agent-First Output**: Table and plain (scriptable) output on resource reads; JSON reserved for control-plane envelopes (`set-credential`, `config show`, `config test` with `--json`) and NerdGraph/NRQL passthrough (see cli-common docs/output-and-rendering.md §2)
 - **Secure Credential Storage**: API key stored in the OS keyring (macOS Keychain / Windows Credential Manager / Linux Secret Service), or an encrypted file with the explicit file-backend opt-in — never in plaintext and never in `config.yml`
 
 ## Installation
@@ -152,7 +152,6 @@ nrq init --region US \
 
 # Verify the resolved credential / account (exits non-zero if broken)
 nrq me
-nrq me -o json
 
 # Low-level scripted secret ingress (single key, stdin or env — never a flag value)
 nrq set-credential --key api_key --stdin
@@ -277,7 +276,6 @@ List all APM applications in your account.
 
 ```bash
 nrq apps list
-nrq apps list -o json
 nrq apps list -o plain
 ```
 
@@ -296,7 +294,6 @@ Get details for a specific application.
 ```bash
 nrq apps get <app-id>
 nrq apps get 12345678
-nrq apps get 12345678 -o json
 ```
 
 **Table Output:**
@@ -330,7 +327,6 @@ List all alert policies.
 
 ```bash
 nrq alerts policies list
-nrq alerts policies list -o json
 ```
 
 **Table Output:**
@@ -361,7 +357,6 @@ List all dashboards.
 
 ```bash
 nrq dashboards list
-nrq dashboards list -o json
 ```
 
 **Table Output:**
@@ -578,7 +573,6 @@ List all log parsing rules.
 
 ```bash
 nrq logs rules list
-nrq logs rules list -o json
 ```
 
 **Table Output:**
@@ -747,7 +741,6 @@ List all synthetic monitors.
 
 ```bash
 nrq synthetics list
-nrq synthetics list -o json
 ```
 
 **Table Output:**
@@ -778,7 +771,6 @@ List all users in your account.
 
 ```bash
 nrq users list
-nrq users list -o json
 ```
 
 **Table Output:**
@@ -889,6 +881,17 @@ nrq config delete-account-id --force
 
 ## Output Formats
 
+Resource reads emit text only (table by default, plain for scripts). JSON is
+reserved per cli-common [`docs/output-and-rendering.md`](https://github.com/open-cli-collective/cli-common/blob/main/docs/output-and-rendering.md) §2 for:
+
+- **Control-plane envelopes**: `set-credential --json`, `config show --json`,
+  `config test --json` — `--json` is a subcommand-local flag, not part of the
+  global `-o` selector.
+- **Passthrough surfaces**: `nerdgraph query` and `nrql` always emit JSON
+  regardless of `-o` (their data is GraphQL/NRQL result shape).
+
+`nrq -o json …` on any resource command is rejected at the root.
+
 ### Table (default)
 
 Human-readable tabular format with headers and aligned columns.
@@ -896,14 +899,6 @@ Human-readable tabular format with headers and aligned columns.
 ```bash
 nrq apps list
 nrq apps list -o table
-```
-
-### JSON
-
-Machine-readable JSON output for programmatic use.
-
-```bash
-nrq apps list -o json
 ```
 
 ### Plain
@@ -924,8 +919,8 @@ nrq apps list -o plain
 # Get all app IDs
 nrq apps list -o plain | cut -f1
 
-# Get app ID by name
-nrq apps list -o json | jq -r '.[] | select(.name == "production-api") | .id'
+# Get app ID by name (plain output: ID is column 1, NAME is column 2)
+nrq apps list -o plain | awk -F'\t' '$2 == "production-api" {print $1}'
 ```
 
 ### Create Deployments from Git
@@ -938,26 +933,18 @@ nrq deployments create $APP_ID \
   --user "$(git config user.name)"
 ```
 
-### Monitor Health Status
+### Monitor Health Status (via NerdGraph passthrough)
 
 ```bash
-# Check for unhealthy apps
-nrq apps list -o json | jq -r '.[] | select(.health_status != "green") | .name'
-```
-
-### Batch Operations
-
-```bash
-# Record deployment for all production apps
-nrq apps list -o json | \
-  jq -r '.[] | select(.name | startswith("prod")) | .id' | \
-  xargs -I {} nrq deployments create {} --revision v1.0.0
+# Check for unhealthy apps using the passthrough JSON surface
+nrq nerdgraph query '{ actor { entitySearch(query: "domain = '\''APM'\''") { results { entities { name ... on AlertableEntityOutline { alertSeverity } } } } } }' \
+  | jq -r '.actor.entitySearch.results.entities[] | select(.alertSeverity != "NOT_ALERTING") | .name'
 ```
 
 ### NRQL in Scripts
 
 ```bash
-# Get error count as a number
+# Get error count as a number (nrql is a passthrough JSON surface)
 ERROR_COUNT=$(nrq nrql query "SELECT count(*) FROM TransactionError SINCE 1 hour ago" | jq '.results[0].count')
 echo "Errors in last hour: $ERROR_COUNT"
 ```

@@ -36,13 +36,49 @@ builds:
       - -X github.com/open-cli-collective/newrelic-cli/internal/version.Version={{.Version}}
       - -X github.com/open-cli-collective/newrelic-cli/internal/version.Commit={{.Commit}}
       - -X github.com/open-cli-collective/newrelic-cli/internal/version.BuildDate={{.Date}}
-  - id: nrq-unix-win
+  # linux must ALSO build with CGO: onepassword-sdk-go (transitive via
+  # cli-common) has no pure-Go path on linux — its client_builder_no_cgo.go
+  # (//go:build !cgo && (darwin || linux)) is a compile-error sentinel, so the
+  # old CGO-off linux build broke every release since v1.0.39. We cross-compile
+  # CGO from the macOS runner with zig (installed in release.yml), targeting
+  # musl so the binaries stay STATIC + portable — better than the dynamic-glibc
+  # concern the original CGO-off split was avoiding. Windows is unaffected: the
+  # SDK's client_builder_cgo.go builds under `cgo || windows`, so CGO-off
+  # windows still compiles — it keeps its own static CGO-off build below.
+  - id: nrq-linux
+    main: ./cmd/nrq
+    binary: nrq
+    env:
+      - CGO_ENABLED=1
+    goos:
+      - linux
+    goarch:
+      - amd64
+      - arm64
+    overrides:
+      - goos: linux
+        goarch: amd64
+        env:
+          - CGO_ENABLED=1
+          - "CC=zig cc -target x86_64-linux-musl"
+          - "CXX=zig c++ -target x86_64-linux-musl"
+      - goos: linux
+        goarch: arm64
+        env:
+          - CGO_ENABLED=1
+          - "CC=zig cc -target aarch64-linux-musl"
+          - "CXX=zig c++ -target aarch64-linux-musl"
+    ldflags:
+      - -s -w
+      - -X github.com/open-cli-collective/newrelic-cli/internal/version.Version={{.Version}}
+      - -X github.com/open-cli-collective/newrelic-cli/internal/version.Commit={{.Commit}}
+      - -X github.com/open-cli-collective/newrelic-cli/internal/version.BuildDate={{.Date}}
+  - id: nrq-windows
     main: ./cmd/nrq
     binary: nrq
     env:
       - CGO_ENABLED=0
     goos:
-      - linux
       - windows
     goarch:
       - amd64
@@ -68,11 +104,11 @@ archives:
 # Linux packages (.deb and .rpm)
 nfpms:
   - id: nrq
-    # deb/rpm are linux-only: pull the static CGO-off build, never darwin.
-    # `ids` (the v2 build-id filter) — `builds` is deprecated and fails
-    # `goreleaser check`.
+    # deb/rpm are linux-only: pull the static linux build (now CGO+zig+musl),
+    # never darwin/windows. `ids` (the v2 build-id filter) — `builds` is
+    # deprecated and fails `goreleaser check`.
     ids:
-      - nrq-unix-win
+      - nrq-linux
     package_name: nrq
     vendor: Open CLI Collective
     homepage: https://github.com/open-cli-collective/newrelic-cli

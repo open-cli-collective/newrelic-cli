@@ -44,9 +44,21 @@ parts:
     plugin: go
     source: .
     build-snaps:
-      - go/1.24/stable
+      # Must be >= go.mod's `go` directive. If it's older, the build go
+      # auto-downloads the required toolchain, and the "go: downloading goX..."
+      # line poisons snapcraft's go-compiler-version parse (build fails before
+      # compiling). Bump in lockstep with go.mod.
+      - go/1.26/stable
+    build-packages:
+      # CGO toolchain: onepassword-sdk-go (transitive) has no pure-Go path on
+      # linux, so it cannot be built with CGO disabled.
+      - gcc
+      - libc6-dev
     build-environment:
-      - CGO_ENABLED: "0"
+      - CGO_ENABLED: "1"
+      # Never auto-download a toolchain (see build-snaps note); fail loudly with
+      # a clear "go.mod requires go >= X" instead if the channel falls behind.
+      - GOTOOLCHAIN: local
     override-build: |
       # Get version from git
       VERSION=$(git describe --tags --always --dirty 2>/dev/null || echo "dev")

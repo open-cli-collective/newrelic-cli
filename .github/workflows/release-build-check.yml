@@ -1,0 +1,51 @@
+name: Release build check
+
+# Build the release artifacts on PRs that touch build-affecting files, so a
+# change that breaks `goreleaser` (CGO/cross-compile, toolchain, build config)
+# is caught at review time instead of at tag time. Before this existed, the
+# release build only ran on `v*` tags (release.yml), so breakage accumulated
+# undetected across several versions (no published release v1.0.39–v1.0.44).
+#
+# Mirrors release.yml's build environment exactly (macos-15 + zig for the
+# linux CGO cross-compile) but stops at `goreleaser build` — no archives,
+# packages, signing, or publish.
+
+on:
+  pull_request:
+    paths:
+      - "**.go"
+      - "go.mod"
+      - "go.sum"
+      - ".goreleaser.yml"
+      - ".github/workflows/release.yml"
+      - ".github/workflows/release-build-check.yml"
+
+jobs:
+  build:
+    # darwin builds with CGO (Keychain) and can't cross-compile from Linux, and
+    # linux builds CGO cross-compiled via zig — same as release.yml, so the
+    # check runs on macOS to exercise the real release matrix.
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.26"
+
+      - name: Install GoReleaser
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          version: "~> v2"
+          install-only: true
+
+      - name: Install zig (linux CGO cross-compiler)
+        run: brew install zig
+
+      - name: GoReleaser check
+        run: goreleaser check
+
+      - name: Build all release targets (no publish)
+        run: goreleaser build --snapshot --clean

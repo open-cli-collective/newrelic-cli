@@ -75,7 +75,9 @@ jobs:
           tmp=$(mktemp -d)
           mkdir -p "$tmp/xdg/newrelic-cli"
           printf 'credential_ref: newrelic-cli/default\n' > "$tmp/xdg/newrelic-cli/config.yml"
-          out=$(env -u NEWRELIC_CLI_KEYRING_BACKEND HOME="$tmp" XDG_CONFIG_HOME="$tmp/xdg" "$arm_bin" --output json config show)
+          # `config show --json` (the §2 diagnostics carve-out flag), not the
+          # global `--output json` — #110 restricted `--output` to table/plain.
+          out=$(env -u NEWRELIC_CLI_KEYRING_BACKEND HOME="$tmp" XDG_CONFIG_HOME="$tmp/xdg" "$arm_bin" config show --json)
           echo "$out"
           b=$(echo "$out" | jq -r '.backend'); s=$(echo "$out" | jq -r '.backend_source'); r=$(echo "$out" | jq -r '.credential_ref')
           [ "$b" = "keychain" ] && [ "$s" = "auto" ] && [ "$r" = "newrelic-cli/default" ] \

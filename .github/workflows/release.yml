@@ -393,36 +393,6 @@ jobs:
           Write-Host "`nSubmitting new package to Winget..."
           ./wingetcreate.exe submit --token ${{ secrets.WINGET_GITHUB_TOKEN }} $manifestDir
 
-  snap:
-    needs: goreleaser
-    runs-on: ubuntu-latest
-    env:
-      TAG: ${{ github.ref_name }}
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ env.TAG }}
-          fetch-depth: 0
-
-      - name: Set snap version from tag
-        run: |
-          VERSION="${TAG#v}"
-          sed -i "s/^version: git$/version: '${VERSION}'/" snap/snapcraft.yaml
-          echo "Snap version: ${VERSION}"
-          grep '^version:' snap/snapcraft.yaml
-
-      - name: Build snap
-        uses: snapcore/action-build@v1
-        id: build
-
-      - name: Publish to Snapcraft Store
-        uses: snapcore/action-publish@v1
-        env:
-          SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}
-        with:
-          snap: ${{ steps.build.outputs.snap }}
-          release: stable
-
   linux-packages:
     needs: goreleaser
     runs-on: ubuntu-latest

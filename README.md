@@ -49,14 +49,6 @@ winget install OpenCLICollective.newrelic-cli
 
 ### Linux
 
-**Snap**
-
-```bash
-sudo snap install ocli-newrelic
-```
-
-> Note: After installation, the command is available as `nrq`.
-
 **APT (Debian/Ubuntu)**
 
 ```bash

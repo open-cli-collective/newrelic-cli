@@ -15,7 +15,6 @@ import (
 //go:embed testdata/*.json
 var testdataFS embed.FS
 
-// RecordedRequest captures details of an HTTP request for test assertions
 type RecordedRequest struct {
 	Method  string
 	Path    string
@@ -23,7 +22,6 @@ type RecordedRequest struct {
 	Body    []byte
 }
 
-// MockServer is a test HTTP server that records requests and returns configured responses
 type MockServer struct {
 	*httptest.Server
 	mu         sync.Mutex
@@ -33,7 +31,6 @@ type MockServer struct {
 	handler    http.HandlerFunc
 }
 
-// NewMockServer creates a new mock server with default 200 OK response
 func NewMockServer() *MockServer {
 	m := &MockServer{
 		statusCode: http.StatusOK,
@@ -41,7 +38,6 @@ func NewMockServer() *MockServer {
 	}
 
 	m.Server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Record the request
 		body, _ := io.ReadAll(r.Body)
 		m.mu.Lock()
 		m.requests = append(m.requests, RecordedRequest{
@@ -51,7 +47,6 @@ func NewMockServer() *MockServer {
 			Body:    body,
 		})
 
-		// Use custom handler if set
 		if m.handler != nil {
 			m.mu.Unlock()
 			m.handler(w, r)
@@ -70,7 +65,6 @@ func NewMockServer() *MockServer {
 	return m
 }
 
-// SetResponse configures the response for subsequent requests
 func (m *MockServer) SetResponse(status int, body interface{}) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -87,21 +81,18 @@ func (m *MockServer) SetResponse(status int, body interface{}) {
 	}
 }
 
-// SetHandler sets a custom handler for complex scenarios
 func (m *MockServer) SetHandler(h http.HandlerFunc) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.handler = h
 }
 
-// Requests returns all recorded requests
 func (m *MockServer) Requests() []RecordedRequest {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return append([]RecordedRequest{}, m.requests...)
 }
 
-// LastRequest returns the most recent request
 func (m *MockServer) LastRequest() *RecordedRequest {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -111,14 +102,12 @@ func (m *MockServer) LastRequest() *RecordedRequest {
 	return &m.requests[len(m.requests)-1]
 }
 
-// Reset clears recorded requests
 func (m *MockServer) Reset() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.requests = nil
 }
 
-// AssertRequestCount checks the number of requests made
 func (m *MockServer) AssertRequestCount(t *testing.T, expected int) {
 	t.Helper()
 	actual := len(m.Requests())
@@ -127,7 +116,6 @@ func (m *MockServer) AssertRequestCount(t *testing.T, expected int) {
 	}
 }
 
-// AssertLastPath checks the path of the last request
 func (m *MockServer) AssertLastPath(t *testing.T, expected string) {
 	t.Helper()
 	req := m.LastRequest()
@@ -137,7 +125,6 @@ func (m *MockServer) AssertLastPath(t *testing.T, expected string) {
 	}
 }
 
-// AssertLastMethod checks the HTTP method of the last request
 func (m *MockServer) AssertLastMethod(t *testing.T, expected string) {
 	t.Helper()
 	req := m.LastRequest()
@@ -147,7 +134,6 @@ func (m *MockServer) AssertLastMethod(t *testing.T, expected string) {
 	}
 }
 
-// AssertLastHeader checks a header value in the last request
 func (m *MockServer) AssertLastHeader(t *testing.T, key, expected string) {
 	t.Helper()
 	req := m.LastRequest()
@@ -158,7 +144,6 @@ func (m *MockServer) AssertLastHeader(t *testing.T, key, expected string) {
 	}
 }
 
-// NewTestClient creates an API client configured to use the mock server
 func NewTestClient(server *MockServer) *Client {
 	return &Client{
 		APIKey:        "test-api-key",
@@ -171,7 +156,6 @@ func NewTestClient(server *MockServer) *Client {
 	}
 }
 
-// LoadTestFixture loads a JSON fixture file from testdata directory
 func LoadTestFixture(t *testing.T, filename string) []byte {
 	t.Helper()
 	data, err := testdataFS.ReadFile("testdata/" + filename)

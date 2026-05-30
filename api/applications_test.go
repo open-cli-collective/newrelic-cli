@@ -20,18 +20,15 @@ func TestListApplications(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, apps, 3)
 
-	// Verify first application
 	assert.Equal(t, 12345678, apps[0].ID)
 	assert.Equal(t, "My Application", apps[0].Name)
 	assert.Equal(t, "java", apps[0].Language)
 	assert.Equal(t, "green", apps[0].HealthStatus)
 	assert.True(t, apps[0].Reporting)
 
-	// Verify inactive application
 	assert.Equal(t, "Inactive App", apps[2].Name)
 	assert.False(t, apps[2].Reporting)
 
-	// Verify request
 	server.AssertLastPath(t, "/applications.json")
 	server.AssertLastMethod(t, "GET")
 }
@@ -79,7 +76,6 @@ func TestGetApplication(t *testing.T) {
 	assert.Equal(t, "java", app.Language)
 	assert.Equal(t, "green", app.HealthStatus)
 
-	// Verify correct path with ID
 	server.AssertLastPath(t, "/applications/12345678.json")
 }
 
@@ -108,12 +104,10 @@ func TestListApplicationMetrics(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, metrics, 4)
 
-	// Verify first metric
 	assert.Equal(t, "HttpDispatcher", metrics[0].Name)
 	assert.Contains(t, metrics[0].Values, "call_count")
 	assert.Contains(t, metrics[0].Values, "average_response_time")
 
-	// Verify path
 	server.AssertLastPath(t, "/applications/12345678/metrics.json")
 }
 

@@ -1,11 +1,7 @@
-// Package api - keys.go provides methods for managing New Relic API keys
-// via the NerdGraph apiAccess API (keySearch, apiAccessCreateKeys,
-// apiAccessUpdateKeys, apiAccessDeleteKeys).
 package api
 
 import "fmt"
 
-// apiAccessKeyFields is the common set of GraphQL fields for API access keys
 const apiAccessKeyFields = `
 	id
 	name
@@ -17,9 +13,7 @@ const apiAccessKeyFields = `
 	}
 `
 
-// SearchAPIKeys searches for API keys with optional type and account filters
 func (c *Client) SearchAPIKeys(keyTypes []string, accountID int) ([]ApiAccessKey, error) {
-	// Build the types array
 	typesStr := "USER, INGEST"
 	if len(keyTypes) > 0 {
 		typesStr = ""
@@ -31,7 +25,6 @@ func (c *Client) SearchAPIKeys(keyTypes []string, accountID int) ([]ApiAccessKey
 		}
 	}
 
-	// Build scope clause
 	scopeClause := ""
 	if accountID > 0 {
 		scopeClause = fmt.Sprintf(", scope: {accountIds: %d}", accountID)
@@ -80,7 +73,6 @@ func (c *Client) SearchAPIKeys(keyTypes []string, accountID int) ([]ApiAccessKey
 	return keys, nil
 }
 
-// GetAPIAccessKey retrieves a specific API key by ID and type
 func (c *Client) GetAPIAccessKey(keyID string, keyType string) (*ApiAccessKey, error) {
 	query := fmt.Sprintf(`
 	{
@@ -115,7 +107,6 @@ func (c *Client) GetAPIAccessKey(keyID string, keyType string) (*ApiAccessKey, e
 	return &key, nil
 }
 
-// FindAPIAccessKey retrieves a key by ID, trying USER then INGEST type
 func (c *Client) FindAPIAccessKey(keyID string) (*ApiAccessKey, error) {
 	key, err := c.GetAPIAccessKey(keyID, "USER")
 	if err == nil {
@@ -124,7 +115,6 @@ func (c *Client) FindAPIAccessKey(keyID string) (*ApiAccessKey, error) {
 	return c.GetAPIAccessKey(keyID, "INGEST")
 }
 
-// GetCurrentUserID returns the current user's ID from NerdGraph
 func (c *Client) GetCurrentUserID() (int, error) {
 	query := `{ actor { user { id } } }`
 
@@ -145,7 +135,6 @@ func (c *Client) GetCurrentUserID() (int, error) {
 	return safeInt(user["id"]), nil
 }
 
-// CreateUserAPIKey creates a new user API key
 func (c *Client) CreateUserAPIKey(accountID, userID int, name, notes string) (*ApiAccessKey, error) {
 	mutation := fmt.Sprintf(`
 	mutation {
@@ -163,7 +152,6 @@ func (c *Client) CreateUserAPIKey(accountID, userID int, name, notes string) (*A
 	return c.execCreateKeys(mutation)
 }
 
-// CreateIngestAPIKey creates a new ingest API key (LICENSE or BROWSER)
 func (c *Client) CreateIngestAPIKey(accountID int, ingestType, name, notes string) (*ApiAccessKey, error) {
 	mutation := fmt.Sprintf(`
 	mutation {
@@ -205,9 +193,7 @@ func (c *Client) execCreateKeys(mutation string) (*ApiAccessKey, error) {
 	return &key, nil
 }
 
-// UpdateAPIAccessKey updates an existing API key's name and/or notes
 func (c *Client) UpdateAPIAccessKey(keyID string, keyType string, update ApiAccessKeyUpdate) (*ApiAccessKey, error) {
-	// Build the update fields
 	fields := fmt.Sprintf(`keyId: "%s"`, keyID)
 	if update.Name != nil {
 		fields += fmt.Sprintf(`, name: "%s"`, escapeGraphQL(*update.Name))
@@ -216,7 +202,6 @@ func (c *Client) UpdateAPIAccessKey(keyID string, keyType string, update ApiAcce
 		fields += fmt.Sprintf(`, notes: "%s"`, escapeGraphQL(*update.Notes))
 	}
 
-	// Use the appropriate key type bucket
 	var keyBucket string
 	switch keyType {
 	case "USER":
@@ -262,9 +247,7 @@ func (c *Client) UpdateAPIAccessKey(keyID string, keyType string, update ApiAcce
 	return &key, nil
 }
 
-// DeleteAPIAccessKeys deletes API keys by their IDs, separated by type
 func (c *Client) DeleteAPIAccessKeys(userKeyIDs, ingestKeyIDs []string) ([]string, error) {
-	// Build the keys argument
 	parts := []string{}
 	if len(userKeyIDs) > 0 {
 		ids := formatStringSlice(userKeyIDs)
@@ -329,7 +312,6 @@ func (c *Client) DeleteAPIAccessKeys(userKeyIDs, ingestKeyIDs []string) ([]strin
 	return deletedIDs, nil
 }
 
-// parseApiAccessKey converts a NerdGraph response map to an ApiAccessKey
 func parseApiAccessKey(v interface{}) ApiAccessKey {
 	m, ok := safeMap(v)
 	if !ok {
@@ -345,7 +327,6 @@ func parseApiAccessKey(v interface{}) ApiAccessKey {
 	}
 }
 
-// escapeGraphQL escapes special characters for GraphQL string values
 func escapeGraphQL(s string) string {
 	result := ""
 	for _, c := range s {
@@ -367,7 +348,6 @@ func escapeGraphQL(s string) string {
 	return result
 }
 
-// formatStringSlice formats a string slice as GraphQL string array items
 func formatStringSlice(ss []string) string {
 	result := ""
 	for i, s := range ss {

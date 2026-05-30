@@ -20,12 +20,10 @@ func TestListAlertPolicies(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, policies, 3)
 
-	// Verify first policy
 	assert.Equal(t, 111, policies[0].ID)
 	assert.Equal(t, "Production Alerts", policies[0].Name)
 	assert.Equal(t, "PER_POLICY", policies[0].IncidentPreference)
 
-	// Verify request path
 	server.AssertLastPath(t, "/alerts_policies.json")
 }
 
@@ -59,7 +57,6 @@ func TestGetAlertPolicy(t *testing.T) {
 	server := NewMockServer()
 	defer server.Close()
 
-	// GraphQL response for GetAlertPolicy
 	response := `{
 		"data": {
 			"actor": {
@@ -87,7 +84,6 @@ func TestGetAlertPolicy(t *testing.T) {
 	assert.Equal(t, "Production Alerts", policy.Name)
 	assert.Equal(t, "PER_POLICY", policy.IncidentPreference)
 
-	// Verify GraphQL endpoint was used
 	server.AssertLastPath(t, "/graphql")
 	server.AssertLastMethod(t, "POST")
 }
@@ -96,7 +92,6 @@ func TestGetAlertPolicy_NotFound(t *testing.T) {
 	server := NewMockServer()
 	defer server.Close()
 
-	// Policy is null when not found
 	response := `{
 		"data": {
 			"actor": {

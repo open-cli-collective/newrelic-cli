@@ -20,13 +20,11 @@ func TestListDeployments(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, deployments, 2)
 
-	// Verify first deployment
 	assert.Equal(t, 9001, deployments[0].ID)
 	assert.Equal(t, "v1.2.3", deployments[0].Revision)
 	assert.Equal(t, "Feature release: new dashboard", deployments[0].Description)
 	assert.Equal(t, "deploy-bot", deployments[0].User)
 
-	// Verify request path
 	server.AssertLastPath(t, "/applications/12345678/deployments.json")
 }
 
@@ -71,11 +69,9 @@ func TestCreateDeployment(t *testing.T) {
 	assert.Equal(t, 9002, deployment.ID)
 	assert.Equal(t, "v1.2.4", deployment.Revision)
 
-	// Verify request
 	server.AssertLastPath(t, "/applications/12345678/deployments.json")
 	server.AssertLastMethod(t, "POST")
 
-	// Verify body contains deployment data
 	req := server.LastRequest()
 	require.NotNil(t, req)
 	assert.Contains(t, string(req.Body), `"revision":"v1.2.4"`)
@@ -95,7 +91,6 @@ func TestCreateDeployment_MinimalFields(t *testing.T) {
 	require.NotNil(t, deployment)
 	assert.Equal(t, "v1.0.0", deployment.Revision)
 
-	// Verify only revision is in body (no empty fields)
 	req := server.LastRequest()
 	require.NotNil(t, req)
 	assert.Contains(t, string(req.Body), `"revision":"v1.0.0"`)

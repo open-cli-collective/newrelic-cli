@@ -20,7 +20,6 @@ func TestListSyntheticMonitors(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, monitors, 3)
 
-	// Verify first monitor
 	assert.Equal(t, "syn-001", monitors[0].ID)
 	assert.Equal(t, "Homepage Check", monitors[0].Name)
 	assert.Equal(t, "SIMPLE", monitors[0].Type)
@@ -28,7 +27,6 @@ func TestListSyntheticMonitors(t *testing.T) {
 	assert.Equal(t, "ENABLED", monitors[0].Status)
 	assert.Equal(t, "https://example.com", monitors[0].URI)
 
-	// Verify request path uses synthetics URL
 	server.AssertLastPath(t, "/synthetics/monitors.json")
 }
 
@@ -75,7 +73,6 @@ func TestGetSyntheticMonitor(t *testing.T) {
 	assert.Equal(t, "SIMPLE", monitor.Type)
 	assert.Equal(t, "https://example.com", monitor.URI)
 
-	// Verify request path includes monitor ID
 	server.AssertLastPath(t, "/synthetics/monitors/syn-001")
 }
 

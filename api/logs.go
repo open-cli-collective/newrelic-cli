@@ -2,7 +2,6 @@ package api
 
 import "fmt"
 
-// ListLogParsingRules returns all log parsing rules for the account
 func (c *Client) ListLogParsingRules() ([]LogParsingRule, error) {
 	if err := c.RequireAccountID(); err != nil {
 		return nil, err
@@ -61,7 +60,6 @@ func (c *Client) ListLogParsingRules() ([]LogParsingRule, error) {
 		if !ok {
 			continue
 		}
-		// Skip deleted rules
 		if deleted, ok := rule["deleted"].(bool); ok && deleted {
 			continue
 		}
@@ -79,7 +77,6 @@ func (c *Client) ListLogParsingRules() ([]LogParsingRule, error) {
 	return rules, nil
 }
 
-// CreateLogParsingRule creates a new log parsing rule
 func (c *Client) CreateLogParsingRule(description, grok, nrql string, enabled bool, lucene string) (*LogParsingRule, error) {
 	if err := c.RequireAccountID(); err != nil {
 		return nil, err
@@ -143,7 +140,6 @@ func (c *Client) CreateLogParsingRule(description, grok, nrql string, enabled bo
 	}, nil
 }
 
-// GetLogParsingRule returns a specific log parsing rule by ID
 func (c *Client) GetLogParsingRule(ruleID string) (*LogParsingRule, error) {
 	rules, err := c.ListLogParsingRules()
 	if err != nil {
@@ -159,8 +155,6 @@ func (c *Client) GetLogParsingRule(ruleID string) (*LogParsingRule, error) {
 	return nil, fmt.Errorf("rule not found: %s", ruleID)
 }
 
-// LogParsingRuleUpdate contains the fields that can be updated on a log parsing rule.
-// All fields are optional - only non-nil values will be included in the update.
 type LogParsingRuleUpdate struct {
 	Description *string
 	Enabled     *bool
@@ -169,7 +163,6 @@ type LogParsingRuleUpdate struct {
 	NRQL        *string
 }
 
-// UpdateLogParsingRule updates an existing log parsing rule.
 // The NerdGraph API requires all fields to be provided, so this function
 // fetches the existing rule first and merges the updates.
 func (c *Client) UpdateLogParsingRule(ruleID string, update LogParsingRuleUpdate) (*LogParsingRule, error) {
@@ -177,13 +170,11 @@ func (c *Client) UpdateLogParsingRule(ruleID string, update LogParsingRuleUpdate
 		return nil, err
 	}
 
-	// Fetch existing rule to get current values
 	existing, err := c.GetLogParsingRule(ruleID)
 	if err != nil {
 		return nil, err
 	}
 
-	// Merge updates with existing values
 	description := existing.Description
 	if update.Description != nil {
 		description = *update.Description
@@ -264,7 +255,6 @@ func (c *Client) UpdateLogParsingRule(ruleID string, update LogParsingRuleUpdate
 	}, nil
 }
 
-// DeleteLogParsingRule deletes a log parsing rule
 func (c *Client) DeleteLogParsingRule(ruleID string) error {
 	if err := c.RequireAccountID(); err != nil {
 		return err

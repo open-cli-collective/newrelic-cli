@@ -20,17 +20,14 @@ func TestListUsers(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, users, 2)
 
-	// Verify first user
 	assert.Equal(t, "user-001", users[0].ID)
 	assert.Equal(t, "Alice Admin", users[0].Name)
 	assert.Equal(t, "alice@example.com", users[0].Email)
 	assert.Equal(t, "Default", users[0].AuthenticationDomain)
 
-	// Verify second user
 	assert.Equal(t, "user-002", users[1].ID)
 	assert.Equal(t, "Bob Developer", users[1].Name)
 
-	// Verify GraphQL endpoint was used
 	server.AssertLastPath(t, "/graphql")
 }
 
@@ -64,7 +61,6 @@ func TestListUsers_MultiDomain(t *testing.T) {
 	server := NewMockServer()
 	defer server.Close()
 
-	// Response with multiple authentication domains
 	response := `{
 		"data": {
 			"actor": {
@@ -105,7 +101,6 @@ func TestListUsers_MultiDomain(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, users, 2)
 
-	// Users from different domains
 	assert.Equal(t, "Default", users[0].AuthenticationDomain)
 	assert.Equal(t, "SSO", users[1].AuthenticationDomain)
 }
@@ -148,7 +143,6 @@ func TestGetUser_NotFound(t *testing.T) {
 	server := NewMockServer()
 	defer server.Close()
 
-	// Response with no matching user
 	response := `{
 		"data": {
 			"actor": {

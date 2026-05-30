@@ -2,7 +2,6 @@ package api
 
 import "encoding/json"
 
-// ListSyntheticMonitors returns all synthetic monitors
 func (c *Client) ListSyntheticMonitors() ([]SyntheticMonitor, error) {
 	data, err := c.doRequest("GET", c.SyntheticsURL+"/monitors.json", nil)
 	if err != nil {
@@ -17,7 +16,6 @@ func (c *Client) ListSyntheticMonitors() ([]SyntheticMonitor, error) {
 	return resp.Monitors, nil
 }
 
-// GetSyntheticMonitor returns a specific synthetic monitor by ID
 func (c *Client) GetSyntheticMonitor(monitorID string) (*SyntheticMonitor, error) {
 	data, err := c.doRequest("GET", c.SyntheticsURL+"/monitors/"+monitorID, nil)
 	if err != nil {
@@ -32,7 +30,6 @@ func (c *Client) GetSyntheticMonitor(monitorID string) (*SyntheticMonitor, error
 	return &monitor, nil
 }
 
-// SyntheticMonitorInput represents the input for creating or updating a synthetic monitor
 type SyntheticMonitorInput struct {
 	Name      string   `json:"name"`
 	Type      string   `json:"type"`
@@ -43,9 +40,7 @@ type SyntheticMonitorInput struct {
 	Script    string   `json:"script,omitempty"`
 }
 
-// CreateSyntheticMonitor creates a new synthetic monitor
 func (c *Client) CreateSyntheticMonitor(input *SyntheticMonitorInput) (*SyntheticMonitor, error) {
-	// Build the request body
 	body := map[string]interface{}{
 		"name":      input.Name,
 		"type":      input.Type,
@@ -73,9 +68,7 @@ func (c *Client) CreateSyntheticMonitor(input *SyntheticMonitorInput) (*Syntheti
 	return &monitor, nil
 }
 
-// UpdateSyntheticMonitor updates an existing synthetic monitor
 func (c *Client) UpdateSyntheticMonitor(monitorID string, input *SyntheticMonitorInput) (*SyntheticMonitor, error) {
-	// Build the request body
 	body := map[string]interface{}{
 		"name":      input.Name,
 		"frequency": input.Frequency,
@@ -102,7 +95,6 @@ func (c *Client) UpdateSyntheticMonitor(monitorID string, input *SyntheticMonito
 	return &monitor, nil
 }
 
-// DeleteSyntheticMonitor deletes a synthetic monitor by ID
 func (c *Client) DeleteSyntheticMonitor(monitorID string) error {
 	_, err := c.doRequest("DELETE", c.SyntheticsURL+"/monitors/"+monitorID, nil)
 	return err

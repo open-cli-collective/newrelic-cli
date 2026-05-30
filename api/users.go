@@ -33,7 +33,6 @@ func (c *Client) ListUsers() ([]User, error) {
 		return nil, err
 	}
 
-	// Navigate the nested structure safely
 	actor, ok := safeMap(result["actor"])
 	if !ok {
 		return nil, &ResponseError{Message: "unexpected response format: missing actor"}
@@ -124,7 +123,6 @@ func (c *Client) GetUser(userID string) (*User, error) {
 		return nil, err
 	}
 
-	// Navigate and find the user
 	actor, ok := safeMap(result["actor"])
 	if !ok {
 		return nil, &ResponseError{Message: "unexpected response format"}

@@ -18,20 +18,16 @@ func TestListLogParsingRules(t *testing.T) {
 	rules, err := client.ListLogParsingRules()
 
 	require.NoError(t, err)
-	// Should only have 2 rules (deleted one is filtered out)
 	require.Len(t, rules, 2)
 
-	// Verify first rule
 	assert.Equal(t, "rule-001", rules[0].ID)
 	assert.Equal(t, "Parse Apache access logs", rules[0].Description)
 	assert.True(t, rules[0].Enabled)
 	assert.Equal(t, "%{COMBINEDAPACHELOG}", rules[0].Grok)
 
-	// Verify second rule
 	assert.Equal(t, "rule-002", rules[1].ID)
 	assert.Equal(t, "Parse JSON application logs", rules[1].Description)
 
-	// Verify GraphQL endpoint was used
 	server.AssertLastPath(t, "/graphql")
 }
 
@@ -39,7 +35,6 @@ func TestListLogParsingRules_FiltersDeleted(t *testing.T) {
 	server := NewMockServer()
 	defer server.Close()
 
-	// Response with only a deleted rule
 	response := `{
 		"data": {
 			"actor": {
@@ -101,7 +96,6 @@ func TestCreateLogParsingRule(t *testing.T) {
 	assert.Equal(t, "Newly created rule", rule.Description)
 	assert.True(t, rule.Enabled)
 
-	// Verify request
 	server.AssertLastPath(t, "/graphql")
 	server.AssertLastMethod(t, "POST")
 }
@@ -164,7 +158,6 @@ func TestDeleteLogParsingRule(t *testing.T) {
 	server.AssertLastPath(t, "/graphql")
 	server.AssertLastMethod(t, "POST")
 
-	// Verify rule ID was in the mutation
 	req := server.LastRequest()
 	require.NotNil(t, req)
 	assert.Contains(t, string(req.Body), "rule-001")
@@ -209,16 +202,13 @@ func TestUpdateLogParsingRule(t *testing.T) {
 	server := NewMockServer()
 	defer server.Close()
 
-	// Set up handler to return different responses for list and update requests
 	requestCount := 0
 	server.SetHandler(func(w http.ResponseWriter, r *http.Request) {
 		requestCount++
 		w.Header().Set("Content-Type", "application/json")
 		if requestCount == 1 {
-			// First request is to list rules (to get existing values)
 			w.Write(LoadTestFixture(t, "log_parsing_rules.json"))
 		} else {
-			// Second request is the actual update
 			w.Write(LoadTestFixture(t, "log_rule_updated.json"))
 		}
 	})
@@ -238,7 +228,6 @@ func TestUpdateLogParsingRule(t *testing.T) {
 	assert.Equal(t, "Updated description", rule.Description)
 	assert.False(t, rule.Enabled)
 
-	// Verify two requests were made (list + update)
 	assert.Equal(t, 2, requestCount)
 }
 
@@ -246,22 +235,18 @@ func TestUpdateLogParsingRule_PartialUpdate(t *testing.T) {
 	server := NewMockServer()
 	defer server.Close()
 
-	// Set up handler to return different responses for list and update requests
 	requestCount := 0
 	server.SetHandler(func(w http.ResponseWriter, r *http.Request) {
 		requestCount++
 		w.Header().Set("Content-Type", "application/json")
 		if requestCount == 1 {
-			// First request is to list rules
 			w.Write(LoadTestFixture(t, "log_parsing_rules.json"))
 		} else {
-			// Second request is the actual update
 			w.Write(LoadTestFixture(t, "log_rule_updated.json"))
 		}
 	})
 
 	client := NewTestClient(server)
-	// Only update grok pattern
 	grok := "%{IP:client_ip} %{WORD:method}"
 	_, err := client.UpdateLogParsingRule("rule-001", LogParsingRuleUpdate{
 		Grok: &grok,
@@ -269,7 +254,6 @@ func TestUpdateLogParsingRule_PartialUpdate(t *testing.T) {
 
 	require.NoError(t, err)
 
-	// Verify the update request contains grok
 	req := server.LastRequest()
 	require.NotNil(t, req)
 	assert.Contains(t, string(req.Body), "grok")
@@ -279,7 +263,6 @@ func TestUpdateLogParsingRule_RuleNotFound(t *testing.T) {
 	server := NewMockServer()
 	defer server.Close()
 
-	// Return rules list that doesn't include the requested rule
 	server.SetResponse(http.StatusOK, LoadTestFixture(t, "log_parsing_rules.json"))
 
 	client := NewTestClient(server)
@@ -296,16 +279,13 @@ func TestUpdateLogParsingRule_UpdateError(t *testing.T) {
 	server := NewMockServer()
 	defer server.Close()
 
-	// Set up handler to return rules list first, then an error on update
 	requestCount := 0
 	server.SetHandler(func(w http.ResponseWriter, r *http.Request) {
 		requestCount++
 		w.Header().Set("Content-Type", "application/json")
 		if requestCount == 1 {
-			// First request is to list rules
 			w.Write(LoadTestFixture(t, "log_parsing_rules.json"))
 		} else {
-			// Second request returns an error
 			w.Write([]byte(`{
 				"data": {
 					"logConfigurationsUpdateParsingRule": {

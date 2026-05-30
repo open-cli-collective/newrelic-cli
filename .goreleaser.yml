@@ -2,6 +2,11 @@ version: 2
 
 project_name: newrelic-cli
 
+before:
+  hooks:
+    # a mutating tidy must fail the release, not build from a dirty tree
+    - sh -c "go mod tidy && git diff --exit-code go.mod go.sum"
+
 builds:
   # INT-448: darwin builds with CGO so 99designs/keyring's Keychain backend
   # (//go:build darwin && cgo) is compiled in; without it credstore fails
@@ -91,6 +96,36 @@ checksum:
   name_template: checksums.txt
   algorithm: sha256
 
+# Canonical Homebrew cask. skip_upload: true → goreleaser RENDERS the cask into
+# dist/ but does NOT push it; the reusable release workflow's homebrew-alias step
+# is the single atomic writer that commits the canonical cask + the newrelic-cli
+# alias to the tap in one push. No `token:` here — the tap token belongs only to
+# that alias job, and skip_upload needs none. goreleaser renders both on_macos and
+# on_linux blocks from the build matrix; kept as-is (matching the prior hand-rolled
+# cask, which also had on_linux — Linuxbrew users), per cli-common distribution.md
+# §3 (goreleaser owns the canonical cask). Replaces BOTH the heredoc Casks/nrq.rb
+# and the deprecated Formula/newrelic-cli.rb regeneration.
+homebrew_casks:
+  - name: nrq
+    binaries: [nrq]
+    skip_upload: true
+    repository:
+      owner: open-cli-collective
+      name: homebrew-tap
+    homepage: https://github.com/open-cli-collective/newrelic-cli
+    description: "Command-line interface for New Relic"
+    hooks:
+      post:
+        install: |
+          system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/nrq"]
+    caveats: |
+      To configure nrq, run:
+        nrq init
+
+      Your API key is stored in the OS keyring (Keychain on macOS,
+      Credential Manager on Windows, Secret Service on Linux).
+      It is never written to a plaintext file.
+
 changelog:
   use: github
   sort: asc
@@ -114,3 +149,6 @@ release:
   github:
     owner: open-cli-collective
     name: newrelic-cli
+  # idempotent re-runs: a retried release overwrites the same assets instead of
+  # erroring on "asset already exists" (release-preflight hard-requires this).
+  replace_existing_artifacts: true

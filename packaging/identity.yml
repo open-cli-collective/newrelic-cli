@@ -1,0 +1,36 @@
+schema: open-cli-identity/v1
+repo: newrelic-cli
+binary: nrq
+goreleaser_config: .goreleaser.yml
+tag:
+  prefix: v
+  version_scheme: major_minor_run_patch
+archives:
+  name_template: "nrq_v{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+packages:
+  homebrew:
+    canonical_cask: nrq
+    alias_casks: [newrelic-cli]
+  winget: { id: OpenCLICollective.newrelic-cli }
+  chocolatey: { id: nrq-cli }
+  linux: { package_name: nrq }
+
+# Faithful port of the darwin Keychain gate: with the backend override unset and
+# a seeded config, the arm64 binary must auto-select the macOS Keychain backend.
+# The reusable release.yml's darwin-gate runs this. `config show --json` is the §2
+# control-plane carve-out flag — NOT `--output json` (nrq#110 restricted the
+# global -o/--output to a closed {table, plain} set).
+keychain_probe:
+  env_unset: [NEWRELIC_CLI_KEYRING_BACKEND]
+  seed_config:
+    path: newrelic-cli/config.yml
+    content: |
+      credential_ref: newrelic-cli/default
+  command: ["config", "show", "--json"]
+  output: json
+  assertions:
+    .backend: keychain
+    .backend_source: auto
+    .credential_ref: newrelic-cli/default
+
+version_file: version.txt

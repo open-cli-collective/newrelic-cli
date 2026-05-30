@@ -6,9 +6,8 @@ name: Release build check
 # release build only ran on `v*` tags (release.yml), so breakage accumulated
 # undetected across several versions (no published release v1.0.39–v1.0.44).
 #
-# Mirrors release.yml's build environment exactly (macos-15 + zig for the
-# linux CGO cross-compile) but stops at `goreleaser build` — no archives,
-# packages, signing, or publish.
+# Mirrors release.yml's build environment exactly (macos-15 for darwin CGO)
+# but stops at `goreleaser build` — no archives, packages, signing, or publish.
 
 on:
   pull_request:
@@ -22,9 +21,8 @@ on:
 
 jobs:
   build:
-    # darwin builds with CGO (Keychain) and can't cross-compile from Linux, and
-    # linux builds CGO cross-compiled via zig — same as release.yml, so the
-    # check runs on macOS to exercise the real release matrix.
+    # darwin builds with CGO (Keychain) and can't cross-compile from Linux, so
+    # the check runs on macOS to exercise the real release matrix.
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
@@ -41,11 +39,46 @@ jobs:
           version: "~> v2"
           install-only: true
 
-      - name: Install zig (linux CGO cross-compiler)
-        run: brew install zig
-
       - name: GoReleaser check
         run: goreleaser check
 
+      - name: Static release build guard
+        run: |
+          set -euo pipefail
+          for target in linux/amd64 linux/arm64 windows/amd64 windows/arm64; do
+            goos="${target%/*}"
+            goarch="${target#*/}"
+            CGO_ENABLED=0 GOOS="$goos" GOARCH="$goarch" \
+              go build -o "$RUNNER_TEMP/nrq-$goos-$goarch" ./cmd/nrq
+          done
+
+          for goarch in amd64 arm64; do
+            deps=$(CGO_ENABLED=0 GOOS=linux GOARCH="$goarch" go list -deps ./cmd/nrq)
+            if printf '%s\n' "$deps" | grep -E '^(github.com/byteness/keyring|github.com/1password/onepassword-sdk-go)(/|$)'; then
+              echo "static Linux nrq $goarch build graph must not include byteness/keyring or onepassword-sdk-go"
+              exit 1
+            fi
+          done
+
       - name: Build all release targets (no publish)
         run: goreleaser build --snapshot --clean
+
+      - name: Verify static Linux release artifacts
+        run: |
+          set -euo pipefail
+          art=dist/artifacts.json
+          for goarch in amd64 arm64; do
+            bin=$(jq -r --arg goarch "$goarch" '.[] | select(.type=="Binary" and .goos=="linux" and .goarch==$goarch) | .path' "$art")
+            [ -n "$bin" ] || { echo "missing linux/$goarch binary in artifacts.json"; exit 1; }
+            case "$bin" in
+              dist/nrq-unix-win_linux_*) ;;
+              *) echo "linux/$goarch binary came from unexpected build id: $bin"; exit 1 ;;
+            esac
+            file "$bin" | grep -q 'statically linked' \
+              || { echo "linux/$goarch release binary is not statically linked"; file "$bin"; exit 1; }
+          done
+
+          for goarch in amd64 arm64; do
+            count=$(jq --arg goarch "$goarch" '[.[] | select(.type=="Binary" and .goos=="linux" and .goarch==$goarch)] | length' "$art")
+            [ "$count" = 1 ] || { echo "expected exactly one linux/$goarch binary, found $count"; exit 1; }
+          done

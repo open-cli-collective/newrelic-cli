@@ -31,12 +31,6 @@ jobs:
           version: "~> v2"
           install-only: true
 
-      # zig is the C cross-compiler for the linux CGO builds (onepassword-sdk-go
-      # requires CGO on linux). darwin uses xcrun clang natively; linux/musl
-      # cross-compiles from this macOS runner via `zig cc`. See .goreleaser.yml.
-      - name: Install zig (linux CGO cross-compiler)
-        run: brew install zig
-
       - name: GoReleaser check
         run: goreleaser check
 

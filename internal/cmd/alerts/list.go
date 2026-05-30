@@ -49,7 +49,6 @@ func runListPolicies(opts *listPoliciesOptions) error {
 		return err
 	}
 
-	// Apply limit
 	if opts.limit > 0 && len(policies) > opts.limit {
 		policies = policies[:opts.limit]
 	}

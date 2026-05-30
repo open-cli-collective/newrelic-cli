@@ -73,7 +73,6 @@ func runList(opts *listOptions) error {
 		return err
 	}
 
-	// Apply limit
 	if opts.limit > 0 && len(monitors) > opts.limit {
 		monitors = monitors[:opts.limit]
 	}

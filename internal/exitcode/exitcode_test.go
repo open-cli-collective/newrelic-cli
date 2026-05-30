@@ -12,29 +12,24 @@ func TestFromHTTPStatus(t *testing.T) {
 		status   int
 		expected int
 	}{
-		// Success codes
 		{"200 OK", 200, Success},
 		{"201 Created", 201, Success},
 		{"204 No Content", 204, Success},
 		{"299 edge case", 299, Success},
 
-		// Auth errors
 		{"401 Unauthorized", 401, AuthError},
 		{"403 Forbidden", 403, AuthError},
 
-		// API errors (other 4xx)
 		{"400 Bad Request", 400, APIError},
 		{"404 Not Found", 404, APIError},
 		{"422 Unprocessable", 422, APIError},
 		{"429 Rate Limited", 429, APIError},
 
-		// Server errors
 		{"500 Internal Server Error", 500, ServerError},
 		{"502 Bad Gateway", 502, ServerError},
 		{"503 Service Unavailable", 503, ServerError},
 		{"504 Gateway Timeout", 504, ServerError},
 
-		// Edge cases
 		{"0 unknown", 0, GeneralError},
 		{"100 informational", 100, GeneralError},
 		{"300 redirect", 300, GeneralError},
@@ -50,7 +45,6 @@ func TestFromHTTPStatus(t *testing.T) {
 }
 
 func TestExitCodeValues(t *testing.T) {
-	// Verify exit code values match expected standards
 	assert.Equal(t, 0, Success)
 	assert.Equal(t, 1, GeneralError)
 	assert.Equal(t, 2, UsageError)

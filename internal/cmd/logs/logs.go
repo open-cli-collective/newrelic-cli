@@ -135,7 +135,6 @@ func runListRules(opts *listRulesOptions) error {
 		return err
 	}
 
-	// Apply limit
 	if opts.limit > 0 && len(rules) > opts.limit {
 		rules = rules[:opts.limit]
 	}

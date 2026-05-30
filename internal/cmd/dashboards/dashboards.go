@@ -68,7 +68,6 @@ func runList(opts *listOptions) error {
 		return err
 	}
 
-	// Apply limit
 	if opts.limit > 0 && len(dashboards) > opts.limit {
 		dashboards = dashboards[:opts.limit]
 	}

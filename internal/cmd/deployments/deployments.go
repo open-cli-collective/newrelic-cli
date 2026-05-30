@@ -80,7 +80,6 @@ Examples:
 }
 
 func runList(opts *listOptions, args []string) error {
-	// Determine the app identifier from flags or positional arg
 	var identifier string
 	switch {
 	case opts.name != "":
@@ -109,7 +108,6 @@ func runList(opts *listOptions, args []string) error {
 		return err
 	}
 
-	// Apply time filtering
 	var since, until time.Time
 	if opts.since != "" {
 		since, err = api.ParseFlexibleTime(opts.since)
@@ -125,7 +123,6 @@ func runList(opts *listOptions, args []string) error {
 	}
 	deployments = api.FilterDeploymentsByTime(deployments, since, until)
 
-	// Apply limit
 	if opts.limit > 0 && len(deployments) > opts.limit {
 		deployments = deployments[:opts.limit]
 	}

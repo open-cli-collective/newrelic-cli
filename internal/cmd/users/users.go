@@ -63,7 +63,6 @@ func runList(opts *listOptions) error {
 		return err
 	}
 
-	// Apply limit
 	if opts.limit > 0 && len(users) > opts.limit {
 		users = users[:opts.limit]
 	}

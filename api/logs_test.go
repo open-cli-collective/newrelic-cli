@@ -154,7 +154,6 @@ func TestDeleteLogParsingRule(t *testing.T) {
 
 	require.NoError(t, err)
 
-	// Verify request
 	server.AssertLastPath(t, "/graphql")
 	server.AssertLastMethod(t, "POST")
 

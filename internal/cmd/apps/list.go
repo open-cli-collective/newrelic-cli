@@ -53,7 +53,6 @@ func runList(opts *listOptions) error {
 		return err
 	}
 
-	// Apply limit
 	if opts.limit > 0 && len(apps) > opts.limit {
 		apps = apps[:opts.limit]
 	}

@@ -5,7 +5,6 @@ import (
 	"fmt"
 )
 
-// ListAlertPolicies returns all alert policies
 func (c *Client) ListAlertPolicies() ([]AlertPolicy, error) {
 	data, err := c.doRequest("GET", c.BaseURL+"/alerts_policies.json", nil)
 	if err != nil {
@@ -20,7 +19,6 @@ func (c *Client) ListAlertPolicies() ([]AlertPolicy, error) {
 	return resp.Policies, nil
 }
 
-// GetAlertPolicy returns a specific alert policy by ID
 func (c *Client) GetAlertPolicy(policyID string) (*AlertPolicy, error) {
 	if err := c.RequireAccountID(); err != nil {
 		return nil, err
@@ -52,7 +50,6 @@ func (c *Client) GetAlertPolicy(policyID string) (*AlertPolicy, error) {
 		return nil, err
 	}
 
-	// Navigate the nested response safely
 	actor, ok := safeMap(result["actor"])
 	if !ok {
 		return nil, &ResponseError{Message: "unexpected response format: missing actor"}

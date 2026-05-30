@@ -2,7 +2,6 @@ package api
 
 import "fmt"
 
-// ListDashboards returns all dashboards for the account
 func (c *Client) ListDashboards() ([]Dashboard, error) {
 	if err := c.RequireAccountID(); err != nil {
 		return nil, err
@@ -35,7 +34,6 @@ func (c *Client) ListDashboards() ([]Dashboard, error) {
 		return nil, err
 	}
 
-	// Navigate the nested response safely
 	actor, ok := safeMap(result["actor"])
 	if !ok {
 		return nil, &ResponseError{Message: "unexpected response format: missing actor"}
@@ -69,7 +67,6 @@ func (c *Client) ListDashboards() ([]Dashboard, error) {
 	return dashboards, nil
 }
 
-// GetDashboard returns detailed information for a specific dashboard
 func (c *Client) GetDashboard(guid EntityGUID) (*DashboardDetail, error) {
 	query := `
 	query($guid: EntityGuid!) {
@@ -121,7 +118,6 @@ func (c *Client) GetDashboard(guid EntityGUID) (*DashboardDetail, error) {
 		Permissions: safeString(entity["permissions"]),
 	}
 
-	// Parse pages
 	if pages, ok := safeSlice(entity["pages"]); ok {
 		for _, p := range pages {
 			page, ok := safeMap(p)
@@ -162,7 +158,6 @@ func (c *Client) GetDashboard(guid EntityGUID) (*DashboardDetail, error) {
 	return dashboard, nil
 }
 
-// DashboardInput represents the input for creating or updating a dashboard
 type DashboardInput struct {
 	Name        string               `json:"name"`
 	Description string               `json:"description,omitempty"`
@@ -170,13 +165,11 @@ type DashboardInput struct {
 	Pages       []DashboardPageInput `json:"pages"`
 }
 
-// DashboardPageInput represents a page in dashboard input
 type DashboardPageInput struct {
 	Name    string                 `json:"name"`
 	Widgets []DashboardWidgetInput `json:"widgets,omitempty"`
 }
 
-// DashboardWidgetInput represents a widget in dashboard page input
 type DashboardWidgetInput struct {
 	Title         string                 `json:"title"`
 	Visualization map[string]interface{} `json:"visualization"`
@@ -184,7 +177,6 @@ type DashboardWidgetInput struct {
 	Configuration map[string]interface{} `json:"rawConfiguration"`
 }
 
-// CreateDashboard creates a new dashboard from the provided input
 func (c *Client) CreateDashboard(input *DashboardInput) (*DashboardDetail, error) {
 	if err := c.RequireAccountID(); err != nil {
 		return nil, err
@@ -216,7 +208,6 @@ func (c *Client) CreateDashboard(input *DashboardInput) (*DashboardDetail, error
 		}
 	}`
 
-	// Convert input to the format expected by NerdGraph
 	dashboardMap := map[string]interface{}{
 		"name":        input.Name,
 		"permissions": input.Permissions,
@@ -265,7 +256,6 @@ func (c *Client) CreateDashboard(input *DashboardInput) (*DashboardDetail, error
 		return nil, &ResponseError{Message: "unexpected response format: missing dashboardCreate"}
 	}
 
-	// Check for errors
 	if errors, ok := safeSlice(dashboardCreate["errors"]); ok && len(errors) > 0 {
 		if errMap, ok := safeMap(errors[0]); ok {
 			return nil, fmt.Errorf("failed to create dashboard: %s", safeString(errMap["description"]))
@@ -280,7 +270,6 @@ func (c *Client) CreateDashboard(input *DashboardInput) (*DashboardDetail, error
 	return parseDashboardEntity(entityResult), nil
 }
 
-// UpdateDashboard updates an existing dashboard
 func (c *Client) UpdateDashboard(guid EntityGUID, input *DashboardInput) (*DashboardDetail, error) {
 	mutation := `
 	mutation($guid: EntityGuid!, $dashboard: DashboardInput!) {
@@ -308,7 +297,6 @@ func (c *Client) UpdateDashboard(guid EntityGUID, input *DashboardInput) (*Dashb
 		}
 	}`
 
-	// Convert input to the format expected by NerdGraph
 	dashboardMap := map[string]interface{}{
 		"name": input.Name,
 	}
@@ -356,7 +344,6 @@ func (c *Client) UpdateDashboard(guid EntityGUID, input *DashboardInput) (*Dashb
 		return nil, &ResponseError{Message: "unexpected response format: missing dashboardUpdate"}
 	}
 
-	// Check for errors
 	if errors, ok := safeSlice(dashboardUpdate["errors"]); ok && len(errors) > 0 {
 		if errMap, ok := safeMap(errors[0]); ok {
 			return nil, fmt.Errorf("failed to update dashboard: %s", safeString(errMap["description"]))
@@ -371,7 +358,6 @@ func (c *Client) UpdateDashboard(guid EntityGUID, input *DashboardInput) (*Dashb
 	return parseDashboardEntity(entityResult), nil
 }
 
-// parseDashboardEntity converts a NerdGraph entity result to DashboardDetail
 func parseDashboardEntity(entity map[string]interface{}) *DashboardDetail {
 	dashboard := &DashboardDetail{
 		GUID:        EntityGUID(safeString(entity["guid"])),
@@ -420,7 +406,6 @@ func parseDashboardEntity(entity map[string]interface{}) *DashboardDetail {
 	return dashboard
 }
 
-// DeleteDashboard deletes a dashboard by GUID
 func (c *Client) DeleteDashboard(guid EntityGUID) error {
 	mutation := `
 	mutation($guid: EntityGuid!) {
@@ -442,7 +427,6 @@ func (c *Client) DeleteDashboard(guid EntityGUID) error {
 		return err
 	}
 
-	// Check for deletion errors
 	dashboardDelete, ok := safeMap(result["dashboardDelete"])
 	if !ok {
 		return &ResponseError{Message: "unexpected response format: missing dashboardDelete"}
@@ -450,7 +434,6 @@ func (c *Client) DeleteDashboard(guid EntityGUID) error {
 
 	status := safeString(dashboardDelete["status"])
 	if status != "SUCCESS" {
-		// Check for specific errors
 		if errors, ok := safeSlice(dashboardDelete["errors"]); ok && len(errors) > 0 {
 			if errMap, ok := safeMap(errors[0]); ok {
 				return fmt.Errorf("failed to delete dashboard: %s", safeString(errMap["description"]))

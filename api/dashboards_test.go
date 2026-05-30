@@ -20,15 +20,12 @@ func TestListDashboards(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, dashboards, 2)
 
-	// Verify first dashboard
 	assert.Equal(t, EntityGUID("MXxWSVp8REFTSEJPQVJEfDEyMzQ1"), dashboards[0].GUID)
 	assert.Equal(t, "Production Overview", dashboards[0].Name)
 	assert.Equal(t, 12345, dashboards[0].AccountID)
 
-	// Verify second dashboard
 	assert.Equal(t, "API Performance", dashboards[1].Name)
 
-	// Verify GraphQL endpoint and query
 	server.AssertLastPath(t, "/graphql")
 	req := server.LastRequest()
 	require.NotNil(t, req)
@@ -103,12 +100,10 @@ func TestGetDashboard(t *testing.T) {
 	assert.Equal(t, "Main production metrics dashboard", dashboard.Description)
 	assert.Equal(t, "PUBLIC_READ_WRITE", dashboard.Permissions)
 
-	// Verify pages
 	require.Len(t, dashboard.Pages, 2)
 	assert.Equal(t, "Overview", dashboard.Pages[0].Name)
 	assert.Equal(t, "Details", dashboard.Pages[1].Name)
 
-	// Verify widgets on first page
 	require.Len(t, dashboard.Pages[0].Widgets, 2)
 	assert.Equal(t, "Error Rate", dashboard.Pages[0].Widgets[0].Title)
 	assert.Equal(t, "Throughput", dashboard.Pages[0].Widgets[1].Title)
@@ -125,7 +120,6 @@ func TestGetDashboard_WithWidgets(t *testing.T) {
 
 	require.NoError(t, err)
 
-	// Check widget visualization
 	widget := dashboard.Pages[0].Widgets[0]
 	assert.Equal(t, "widget-1", widget.ID)
 	require.NotNil(t, widget.Visualization)

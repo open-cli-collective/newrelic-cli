@@ -46,7 +46,6 @@ func TestSearchAPIKeys_FilterByType(t *testing.T) {
 
 	require.NoError(t, err)
 
-	// Verify the query contained USER type
 	req := server.LastRequest()
 	require.NotNil(t, req)
 	assert.Contains(t, string(req.Body), "USER")
@@ -109,7 +108,6 @@ func TestGetAPIAccessKey(t *testing.T) {
 	assert.Equal(t, "USER", key.Type)
 	assert.Equal(t, "For automation", key.Notes)
 
-	// Verify request contained key ID and type
 	req := server.LastRequest()
 	require.NotNil(t, req)
 	assert.Contains(t, string(req.Body), "NRAK-ABCDEF1234567890")
@@ -151,7 +149,6 @@ func TestFindAPIAccessKey_FoundAsUser(t *testing.T) {
 	require.NotNil(t, key)
 	assert.Equal(t, "USER", key.Type)
 
-	// Should have only made one request (found on first try)
 	server.AssertRequestCount(t, 1)
 }
 
@@ -164,10 +161,8 @@ func TestFindAPIAccessKey_FoundAsIngest(t *testing.T) {
 		requestCount++
 		w.Header().Set("Content-Type", "application/json")
 		if requestCount == 1 {
-			// First request (USER) returns null key
 			w.Write([]byte(`{"data": {"actor": {"apiAccess": {"key": null}}}}`))
 		} else {
-			// Second request (INGEST) returns the key
 			w.Write([]byte(`{
 				"data": {
 					"actor": {

@@ -20,7 +20,6 @@ func TestSearchEntities(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, entities, 2)
 
-	// Verify first entity (APM application)
 	assert.Equal(t, EntityGUID("MXxBUE18QVBQTElDQVRJT058MTIzNDU2Nzg="), entities[0].GUID)
 	assert.Equal(t, "My Application", entities[0].Name)
 	assert.Equal(t, "APPLICATION", entities[0].Type)
@@ -28,12 +27,10 @@ func TestSearchEntities(t *testing.T) {
 	assert.Equal(t, "APM", entities[0].Domain)
 	assert.Equal(t, 12345, entities[0].AccountID)
 
-	// Verify second entity (Infrastructure host)
 	assert.Equal(t, "web-server-01", entities[1].Name)
 	assert.Equal(t, "HOST", entities[1].Type)
 	assert.Equal(t, "INFRA", entities[1].Domain)
 
-	// Verify GraphQL endpoint and query variable
 	server.AssertLastPath(t, "/graphql")
 	req := server.LastRequest()
 	require.NotNil(t, req)
@@ -75,7 +72,6 @@ func TestSearchEntities_ByType(t *testing.T) {
 
 	require.NoError(t, err)
 
-	// Verify query was sent correctly
 	req := server.LastRequest()
 	require.NotNil(t, req)
 	assert.Contains(t, string(req.Body), "APPLICATION")

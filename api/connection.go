@@ -2,7 +2,6 @@ package api
 
 import "fmt"
 
-// ConnectionTestResult holds the result of a connection test
 type ConnectionTestResult struct {
 	APIKeyValid   bool
 	AccountAccess bool
@@ -16,14 +15,12 @@ type ConnectionTestResult struct {
 	ErrorMessage  string
 }
 
-// TestConnection verifies the API key and optionally account access
 func (c *Client) TestConnection() (*ConnectionTestResult, error) {
 	result := &ConnectionTestResult{
 		Region:       c.Region,
 		NerdGraphURL: c.NerdGraphURL,
 	}
 
-	// First, test API key with a simple actor query
 	query := `query { actor { user { id email } } }`
 
 	data, err := c.NerdGraphQuery(query, nil)
@@ -33,10 +30,8 @@ func (c *Client) TestConnection() (*ConnectionTestResult, error) {
 		return result, nil
 	}
 
-	// API key is valid if we got a response
 	result.APIKeyValid = true
 
-	// Extract user info
 	if actor, ok := safeMap(data["actor"]); ok {
 		if user, ok := safeMap(actor["user"]); ok {
 			result.UserID = safeString(user["id"])
@@ -44,7 +39,6 @@ func (c *Client) TestConnection() (*ConnectionTestResult, error) {
 		}
 	}
 
-	// If account ID is configured, test account access
 	if !c.AccountID.IsEmpty() {
 		accountQuery := `
 		query($accountId: Int!) {
@@ -65,7 +59,6 @@ func (c *Client) TestConnection() (*ConnectionTestResult, error) {
 			return result, nil
 		}
 
-		// Extract account info
 		if actor, ok := safeMap(accountData["actor"]); ok {
 			if account, ok := safeMap(actor["account"]); ok {
 				result.AccountAccess = true

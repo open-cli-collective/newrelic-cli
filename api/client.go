@@ -86,7 +86,6 @@ func NewWithConfig(cfg ClientConfig) *Client {
 		Stderr:  cfg.Stderr,
 	}
 
-	// Set URLs based on region
 	if cfg.Region == "EU" {
 		c.BaseURL = "https://api.eu.newrelic.com/v2"
 		c.NerdGraphURL = "https://api.eu.newrelic.com/graphql"

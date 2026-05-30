@@ -21,15 +21,12 @@ func TestQueryNRQL(t *testing.T) {
 	require.NotNil(t, result)
 	require.Len(t, result.Results, 3)
 
-	// Verify first result
 	assert.Equal(t, float64(1500), result.Results[0]["count"])
 	assert.Equal(t, "WebTransaction/Controller/api/v1/users", result.Results[0]["facet"])
 
-	// Verify GraphQL endpoint was used
 	server.AssertLastPath(t, "/graphql")
 	server.AssertLastMethod(t, "POST")
 
-	// Verify query was sent
 	req := server.LastRequest()
 	require.NotNil(t, req)
 	assert.Contains(t, string(req.Body), "nrql")
@@ -102,7 +99,6 @@ func TestQueryNRQL_InvalidResponse(t *testing.T) {
 	server := NewMockServer()
 	defer server.Close()
 
-	// Response missing expected structure
 	response := `{
 		"data": {
 			"actor": {}

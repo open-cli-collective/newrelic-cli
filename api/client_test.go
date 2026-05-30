@@ -174,7 +174,6 @@ func TestDoRequest_Success(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "success", result["message"])
 
-	// Verify request was recorded
 	server.AssertRequestCount(t, 1)
 	server.AssertLastPath(t, "/test")
 	server.AssertLastMethod(t, "GET")
@@ -194,7 +193,6 @@ func TestDoRequest_WithBody(t *testing.T) {
 	require.NoError(t, err)
 	server.AssertLastMethod(t, "POST")
 
-	// Verify body was sent
 	req := server.LastRequest()
 	require.NotNil(t, req)
 	assert.Contains(t, string(req.Body), `"name":"test"`)
@@ -273,7 +271,6 @@ func TestNerdGraphQuery_Success(t *testing.T) {
 	require.True(t, ok)
 	assert.Equal(t, "Test User", actor["name"])
 
-	// Verify GraphQL endpoint was used
 	server.AssertLastPath(t, "/graphql")
 	server.AssertLastMethod(t, "POST")
 }
@@ -290,7 +287,6 @@ func TestNerdGraphQuery_WithVariables(t *testing.T) {
 
 	require.NoError(t, err)
 
-	// Verify variables were sent
 	req := server.LastRequest()
 	require.NotNil(t, req)
 	assert.Contains(t, string(req.Body), `"variables"`)

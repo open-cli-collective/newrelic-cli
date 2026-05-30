@@ -20,7 +20,11 @@ on:
       - ".github/workflows/release-build-check.yml"
 
 jobs:
-  build:
+  # Distinct job id (NOT `build`) so this PR-time validator's check context does
+  # not collide with ci.yml's required `build` aggregate — duplicate check-context
+  # names make branch protection ambiguous (this workflow is also path-filtered, so
+  # it does not run on every PR).
+  release-build-check:
     # darwin builds with CGO (Keychain) and can't cross-compile from Linux, so
     # the check runs on macOS to exercise the real release matrix.
     runs-on: macos-15

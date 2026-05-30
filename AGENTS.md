@@ -1,16 +1,22 @@
-# Repository Instructions
+# AGENTS.md
 
-Follow the conventions in `CLAUDE.md` and `CONTRIBUTING.md`.
+Codex entrypoint for the newrelic-cli repository.
 
-For Codex sessions, prefix shell commands with `rtk`.
+## Start Here
 
-## Pull Requests And Releases
+Source of truth: https://github.com/open-cli-collective/newrelic-cli/blob/main/docs/development.md
+Local convenience copy, if present: `docs/development.md`
 
-Use conventional-commit PR titles. This repository squash-merges PRs, and the squash commit message comes from the PR title.
+## Shared Standards
 
-The `Auto Release` workflow only creates a new version tag when both release gates pass:
+Source of truth: https://github.com/open-cli-collective/cli-common/tree/main/docs
+Local convenience copy, if present: `../cli-common/docs`
 
-- The merge changes Go code, `go.mod`, or `go.sum`.
-- The squash commit starts with `feat:`, `feat(...)`, `fix:`, or `fix(...)`.
+## Shared Automation
 
-When a Go change should publish new binaries, title the PR with a release-triggering prefix such as `fix(scope): ...` or `feat(scope): ...`.
+Source of truth: https://github.com/open-cli-collective/.github
+Local convenience copy, if present: `../.github`
+
+This file is an index. Keep New Relic-specific guidance in
+`docs/development.md` and shared conventions in the canonical repositories
+above.

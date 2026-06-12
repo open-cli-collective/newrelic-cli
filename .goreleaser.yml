@@ -16,6 +16,9 @@ builds:
   - id: nrq-darwin
     main: ./cmd/nrq
     binary: nrq
+    # Standard keyring opt-out tags (cli-common working-with-secrets.md §1.10).
+    flags:
+      - -tags=keyring_no1password,keyring_nopassage
     env:
       - CGO_ENABLED=1
     goos:
@@ -51,6 +54,8 @@ builds:
   - id: nrq-unix-win
     main: ./cmd/nrq
     binary: nrq
+    flags:
+      - -tags=keyring_no1password,keyring_nopassage
     env:
       - CGO_ENABLED=0
     goos:

@@ -46,3 +46,6 @@ Thumbs.db
 
 # Dependency directories
 vendor/
+
+# build output (make build writes ./nrq at repo root)
+/nrq

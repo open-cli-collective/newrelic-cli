@@ -9,6 +9,10 @@ LDFLAGS=-ldflags "-X github.com/open-cli-collective/newrelic-cli/internal/versio
 	-X github.com/open-cli-collective/newrelic-cli/internal/version.Commit=$(COMMIT) \
 	-X github.com/open-cli-collective/newrelic-cli/internal/version.BuildDate=$(BUILD_DATE)"
 
+# Standard keyring opt-out tags (cli-common working-with-secrets.md §1.10):
+# exclude the 1Password and passage backends credstore never exposes.
+export GOFLAGS := -tags=keyring_no1password,keyring_nopassage
+
 build:
 	go build $(LDFLAGS) -o $(BINARY_NAME) ./cmd/nrq
 

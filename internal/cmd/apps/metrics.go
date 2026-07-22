@@ -1,8 +1,6 @@
 package apps
 
 import (
-	"fmt"
-
 	"github.com/spf13/cobra"
 
 	"github.com/open-cli-collective/newrelic-cli/internal/cmd/root"
@@ -58,7 +56,7 @@ func runMetrics(opts *root.Options, appID string) error {
 	default:
 		v.Print("Found %d metrics for application %s:\n\n", len(metrics), appID)
 		for _, m := range metrics {
-			fmt.Fprintf(opts.Stdout, "  %s\n", m.Name)
+			v.Print("  %s\n", m.Name)
 		}
 		return nil
 	}

@@ -27,7 +27,10 @@ deprecated by New Relic: it only supports the legacy runtimes, on which new
 monitors can no longer be created. See
 https://docs.newrelic.com/docs/synthetics/synthetic-monitoring/administration/synthetics-api/
 and
-https://docs.newrelic.com/docs/apis/nerdgraph/examples/synthetics-api/overview/.`,
+https://docs.newrelic.com/docs/apis/nerdgraph/examples/synthetics-api/overview/.
+
+Note: 'list' and 'get' read the entity index, which can lag create/update
+by a minute or so; create and update print the applied state directly.`,
 	}
 
 	syntheticsCmd.AddCommand(newListCmd(opts))
@@ -338,7 +341,14 @@ func runUpdate(opts *updateOptions, monitorID string) error {
 		return v.Plain(rows)
 	default:
 		v.Success("Synthetic monitor \"%s\" updated", monitor.Name)
-		v.Print("ID:   %s\n", monitor.ID)
+		v.Print("ID:        %s\n", monitor.ID)
+		v.Print("Status:    %s\n", monitor.Status)
+		if monitor.Frequency > 0 {
+			v.Print("Frequency: %d minutes\n", monitor.Frequency)
+		}
+		if monitor.URI != "" {
+			v.Print("URI:       %s\n", monitor.URI)
+		}
 		return nil
 	}
 }

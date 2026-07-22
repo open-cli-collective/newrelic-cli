@@ -21,8 +21,13 @@ func (g EntityGUID) String() string {
 
 // Parse decodes the GUID and returns its components.
 // Returns version, domain, entityType, entityID, and any error.
+// NerdGraph emits GUIDs as unpadded base64, so both padded and unpadded
+// encodings are accepted.
 func (g EntityGUID) Parse() (version, domain, entityType, entityID string, err error) {
 	decoded, err := base64.StdEncoding.DecodeString(string(g))
+	if err != nil {
+		decoded, err = base64.RawStdEncoding.DecodeString(string(g))
+	}
 	if err != nil {
 		return "", "", "", "", fmt.Errorf("invalid GUID format: %w", err)
 	}

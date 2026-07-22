@@ -500,3 +500,18 @@ func TestEscapeQueryString(t *testing.T) {
 		assert.Equal(t, tt.expected, escapeQueryString(tt.input))
 	}
 }
+
+func TestEntityGUID_Parse_Unpadded(t *testing.T) {
+	// NerdGraph emits unpadded base64; this raw value's length is not a
+	// multiple of 3, so padded StdEncoding alone cannot decode it.
+	raw := "2815346|SYNTH|MONITOR|1d4e2a19-f748-49d5-86cc-b318b72c500d"
+	unpadded := base64.RawStdEncoding.EncodeToString([]byte(raw))
+	guid := EntityGUID(unpadded)
+
+	_, domain, entityType, entityID, err := guid.Parse()
+
+	require.NoError(t, err)
+	assert.Equal(t, "SYNTH", domain)
+	assert.Equal(t, "MONITOR", entityType)
+	assert.Equal(t, "1d4e2a19-f748-49d5-86cc-b318b72c500d", entityID)
+}

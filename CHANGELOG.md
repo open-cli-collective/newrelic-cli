@@ -33,6 +33,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   documents the deprecation status of every New Relic API nrq touches.
 - Fixed `alerts get` showing policy ID 0: NerdGraph serializes policy IDs as
   strings, which the parser now accepts.
+- Fixed entity GUID parsing to accept NerdGraph's unpadded base64 encoding —
+  previously `synthetics get/update/delete <guid>`, `apps get <guid>`, and
+  `deployments --guid` failed on real GUIDs whose decoded length required
+  padding.
+- `synthetics update` now prints the applied state from the mutation
+  response, since `get`/`list` read the entity index, which can lag changes
+  by a minute or so.
 
 - Chocolatey package renamed from `newrelic-cli` to `nrq-cli` ([#69](https://github.com/open-cli-collective/newrelic-cli/pull/69))
 - **Binary renamed to `nrq`** - The CLI binary is now `nrq` (short for New Relic query). Install via `brew install newrelic-cli`, run with `nrq`. ([#63](https://github.com/open-cli-collective/newrelic-cli/pull/63))

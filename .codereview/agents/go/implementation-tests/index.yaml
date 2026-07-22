@@ -4,8 +4,10 @@ model_tier: medium
 effort: medium
 file_globs:
   - "**/*.go"
+  - "**/testdata/**"
   - "go.mod"
   - "go.sum"
+  - "CHANGELOG.md"
 applies_when:
   - A change touches Go implementation, command wiring, tests, module dependencies, or behavior that should be proven by Go tests.
 needs_full_file_content: false

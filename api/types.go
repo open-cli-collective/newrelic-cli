@@ -199,12 +199,13 @@ func (a AccountID) IsEmpty() bool {
 
 // Application represents a New Relic APM application
 type Application struct {
-	ID             int    `json:"id"`
-	Name           string `json:"name"`
-	Language       string `json:"language"`
-	HealthStatus   string `json:"health_status"`
-	Reporting      bool   `json:"reporting"`
-	LastReportedAt string `json:"last_reported_at"`
+	ID             int        `json:"id"`
+	GUID           EntityGUID `json:"guid,omitempty"`
+	Name           string     `json:"name"`
+	Language       string     `json:"language"`
+	HealthStatus   string     `json:"health_status"`
+	Reporting      bool       `json:"reporting"`
+	LastReportedAt string     `json:"last_reported_at"`
 }
 
 // ApplicationsResponse is the API response for listing applications
@@ -296,12 +297,13 @@ type Entity struct {
 
 // SyntheticMonitor represents a synthetic monitor
 type SyntheticMonitor struct {
-	ID        string `json:"id"`
-	Name      string `json:"name"`
-	Type      string `json:"type"`
-	Frequency int    `json:"frequency"`
-	Status    string `json:"status"`
-	URI       string `json:"uri,omitempty"`
+	ID        string     `json:"id"`
+	GUID      EntityGUID `json:"guid,omitempty"`
+	Name      string     `json:"name"`
+	Type      string     `json:"type"`
+	Frequency int        `json:"frequency"`
+	Status    string     `json:"status"`
+	URI       string     `json:"uri,omitempty"`
 }
 
 // SyntheticsResponse is the API response for listing synthetic monitors
@@ -316,6 +318,30 @@ type Deployment struct {
 	Description string `json:"description,omitempty"`
 	User        string `json:"user,omitempty"`
 	Timestamp   string `json:"timestamp"`
+}
+
+// ChangeTrackingDeployment represents a deployment recorded via the NerdGraph
+// change tracking API, the supported replacement for REST v2 deployment
+// markers.
+type ChangeTrackingDeployment struct {
+	DeploymentID string     `json:"deploymentId"`
+	EntityGUID   EntityGUID `json:"entityGuid"`
+	Version      string     `json:"version"`
+	Description  string     `json:"description,omitempty"`
+	User         string     `json:"user,omitempty"`
+	Changelog    string     `json:"changelog,omitempty"`
+	Commit       string     `json:"commit,omitempty"`
+	TimestampMs  int64      `json:"timestamp"`
+}
+
+// DeploymentInput holds the fields for creating a change tracking deployment.
+type DeploymentInput struct {
+	EntityGUID  EntityGUID
+	Version     string
+	Description string
+	User        string
+	Changelog   string
+	Commit      string
 }
 
 // DeploymentsResponse is the API response for listing deployments

@@ -1,0 +1,32 @@
+{
+  "data": {
+    "actor": {
+      "entity": {
+        "deploymentSearch": {
+          "results": [
+            {
+              "deploymentId": "dep-001",
+              "entityGuid": "MTIzNDU2N3xBUE18QVBQTElDQVRJT058OTg3NjU0MzIx",
+              "version": "v1.2.3",
+              "description": "Feature release: new dashboard",
+              "user": "deploy-bot",
+              "changelog": "",
+              "commit": "abc1234",
+              "timestamp": 1704067200000
+            },
+            {
+              "deploymentId": "dep-002",
+              "entityGuid": "MTIzNDU2N3xBUE18QVBQTElDQVRJT058OTg3NjU0MzIx",
+              "version": "v1.2.2",
+              "description": "",
+              "user": "alice",
+              "changelog": "",
+              "commit": "",
+              "timestamp": 1703980800000
+            }
+          ]
+        }
+      }
+    }
+  }
+}

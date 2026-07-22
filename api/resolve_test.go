@@ -2,9 +2,11 @@ package api
 
 import (
 	"encoding/base64"
+	"net/http"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestEntityGUID_Parse(t *testing.T) {
@@ -382,4 +384,83 @@ func TestAccountID_IsEmpty(t *testing.T) {
 func TestAccountID_String(t *testing.T) {
 	id := AccountID("12345678")
 	assert.Equal(t, "12345678", id.String())
+}
+
+func TestResolveAppGUID_FromGUID(t *testing.T) {
+	server := NewMockServer()
+	defer server.Close()
+
+	client := NewTestClient(server)
+	guid, err := client.ResolveAppGUID(testAppGUID)
+
+	require.NoError(t, err)
+	assert.Equal(t, EntityGUID(testAppGUID), guid)
+
+	// A valid APM GUID resolves without any API call.
+	server.AssertRequestCount(t, 0)
+}
+
+func TestResolveAppGUID_FromNumericID(t *testing.T) {
+	server := NewMockServer()
+	defer server.Close()
+
+	server.SetResponse(http.StatusOK, LoadTestFixture(t, "applications_entity_search.json"))
+
+	client := NewTestClient(server)
+	guid, err := client.ResolveAppGUID("12345678")
+
+	require.NoError(t, err)
+	assert.Equal(t, EntityGUID(testAppGUID), guid)
+}
+
+func TestResolveAppGUID_FromNumericID_NotFound(t *testing.T) {
+	server := NewMockServer()
+	defer server.Close()
+
+	server.SetResponse(http.StatusOK, LoadTestFixture(t, "applications_entity_search.json"))
+
+	client := NewTestClient(server)
+	_, err := client.ResolveAppGUID("99999999")
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "no APM application found with ID")
+}
+
+func TestResolveAppGUID_FromName(t *testing.T) {
+	server := NewMockServer()
+	defer server.Close()
+
+	server.SetResponse(http.StatusOK, `{
+		"data": {"actor": {"entitySearch": {"results": {"entities": [
+			{"guid": "`+testAppGUID+`", "name": "My Application", "type": "APPLICATION", "entityType": "APM_APPLICATION_ENTITY", "domain": "APM", "accountId": 1234567}
+		]}}}}
+	}`)
+
+	client := NewTestClient(server)
+	guid, err := client.ResolveAppGUID("My Application")
+
+	require.NoError(t, err)
+	assert.Equal(t, EntityGUID(testAppGUID), guid)
+
+	req := server.LastRequest()
+	require.NotNil(t, req)
+	assert.Contains(t, string(req.Body), "name = 'My Application'")
+}
+
+func TestResolveAppGUID_FromName_Ambiguous(t *testing.T) {
+	server := NewMockServer()
+	defer server.Close()
+
+	server.SetResponse(http.StatusOK, `{
+		"data": {"actor": {"entitySearch": {"results": {"entities": [
+			{"guid": "guid-1", "name": "dup", "type": "APPLICATION", "entityType": "APM_APPLICATION_ENTITY", "domain": "APM", "accountId": 1},
+			{"guid": "guid-2", "name": "dup", "type": "APPLICATION", "entityType": "APM_APPLICATION_ENTITY", "domain": "APM", "accountId": 1}
+		]}}}}
+	}`)
+
+	client := NewTestClient(server)
+	_, err := client.ResolveAppGUID("dup")
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "multiple applications found")
 }

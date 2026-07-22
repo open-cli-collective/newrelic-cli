@@ -19,6 +19,15 @@ func Register(rootCmd *cobra.Command, opts *root.Options) {
 		Use:     "synthetics",
 		Aliases: []string{"synthetic", "syn"},
 		Short:   "Manage New Relic synthetic monitors",
+		Long: `Manage New Relic synthetic monitors.
+
+These commands use the NerdGraph synthetics API, which supports the current
+synthetics runtimes. The Synthetics REST API previously used here is
+deprecated by New Relic: it only supports the legacy runtimes, on which new
+monitors can no longer be created. See
+https://docs.newrelic.com/docs/synthetics/synthetic-monitoring/administration/synthetics-api/
+and
+https://docs.newrelic.com/docs/apis/nerdgraph/examples/synthetics-api/overview/.`,
 	}
 
 	syntheticsCmd.AddCommand(newListCmd(opts))
@@ -44,12 +53,12 @@ func newListCmd(opts *root.Options) *cobra.Command {
 		Long: `List all synthetic monitors in your account.
 
 Monitor types:
-  SIMPLE:      Simple browser ping
-  BROWSER:     Scripted browser
-  SCRIPT_API:  API test
+  SIMPLE:      Ping check
+  BROWSER:     Simple browser check
+  SCRIPT_API:  Scripted API test
   SCRIPT_BROWSER: Scripted browser with custom scripts
 
-Status values: ENABLED, DISABLED, MUTED`,
+Status values: ENABLED, DISABLED`,
 		Example: `  nrq synthetics list
   nrq synthetics list --limit 10`,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -101,12 +110,15 @@ func runList(opts *listOptions) error {
 
 func newGetCmd(opts *root.Options) *cobra.Command {
 	return &cobra.Command{
-		Use:   "get <monitor-id>",
+		Use:   "get <monitor>",
 		Short: "Get details for a specific synthetic monitor",
 		Long: `Get detailed information about a synthetic monitor including
-its type, status, frequency, and target URI (for applicable types).`,
-		Example: `  nrq synthetics get abc-123-def-456`,
-		Args:    cobra.ExactArgs(1),
+its type, status, frequency, and target URI (for applicable types).
+
+The monitor can be identified by monitor ID (UUID), entity GUID, or name.`,
+		Example: `  nrq synthetics get abc-123-def-456
+  nrq synthetics get "Homepage Check"`,
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runGet(opts, args[0])
 		},
@@ -133,6 +145,9 @@ func runGet(opts *root.Options, monitorID string) error {
 		})
 	default:
 		v.Print("ID:        %s\n", monitor.ID)
+		if monitor.GUID != "" {
+			v.Print("GUID:      %s\n", monitor.GUID)
+		}
 		v.Print("Name:      %s\n", monitor.Name)
 		v.Print("Type:      %s\n", monitor.Type)
 		v.Print("Status:    %s\n", monitor.Status)
@@ -158,6 +173,9 @@ func newCreateCmd(opts *root.Options) *cobra.Command {
 		Short: "Create a new synthetic monitor from a JSON file",
 		Long: `Create a new synthetic monitor from a JSON file.
 
+Monitors are created via NerdGraph on the current synthetics runtimes.
+Requires a configured account ID (nrq config set --account-id).
+
 The JSON file should contain the monitor definition with the following structure:
 {
   "name": "Monitor Name",
@@ -168,13 +186,19 @@ The JSON file should contain the monitor definition with the following structure
   "locations": ["AWS_US_EAST_1", "AWS_US_WEST_1"]
 }
 
+Scripted monitors (SCRIPT_API, SCRIPT_BROWSER) take a "script" field instead
+of "uri", and may pin a runtime explicitly:
+  "script": "...",
+  "runtime": {"runtimeType": "NODE_API", "runtimeTypeVersion": "16.10"}
+
 Monitor types:
-  SIMPLE:          Simple browser ping
-  BROWSER:         Scripted browser
-  SCRIPT_API:      API test
+  SIMPLE:          Ping check
+  BROWSER:         Simple browser check
+  SCRIPT_API:      Scripted API test
   SCRIPT_BROWSER:  Scripted browser with custom scripts
 
-Status values: ENABLED, DISABLED, MUTED
+Status values: ENABLED, DISABLED
+Frequency values (minutes): 1, 5, 10, 15, 30, 60, 360, 720, 1440
 
 Common locations: AWS_US_EAST_1, AWS_US_EAST_2, AWS_US_WEST_1, AWS_US_WEST_2,
                   AWS_EU_WEST_1, AWS_EU_WEST_2, AWS_EU_CENTRAL_1, AWS_AP_SOUTHEAST_1`,
@@ -238,6 +262,7 @@ func runCreate(opts *createOptions) error {
 	default:
 		v.Success("Synthetic monitor \"%s\" created", monitor.Name)
 		v.Print("ID:   %s\n", monitor.ID)
+		v.Print("GUID: %s\n", monitor.GUID)
 		v.Print("Type: %s\n", monitor.Type)
 		return nil
 	}
@@ -253,12 +278,12 @@ func newUpdateCmd(opts *root.Options) *cobra.Command {
 	updateOpts := &updateOptions{Options: opts}
 
 	cmd := &cobra.Command{
-		Use:   "update <monitor-id>",
+		Use:   "update <monitor>",
 		Short: "Update an existing synthetic monitor from a JSON file",
 		Long: `Update an existing synthetic monitor from a JSON file.
 
 The JSON file format is similar to 'synthetics create', but the type cannot be changed.
-The monitor-id identifies which monitor to update.`,
+The monitor can be identified by monitor ID (UUID), entity GUID, or name.`,
 		Example: `  # Update a monitor from a JSON file
   nrq synthetics update abc-123-def-456 --from-file monitor.json`,
 		Args: cobra.ExactArgs(1),
@@ -328,9 +353,11 @@ func newDeleteCmd(opts *root.Options) *cobra.Command {
 	deleteOpts := &deleteOptions{Options: opts}
 
 	cmd := &cobra.Command{
-		Use:   "delete <monitor-id>",
+		Use:   "delete <monitor>",
 		Short: "Delete a synthetic monitor",
-		Long: `Delete a synthetic monitor by its ID.
+		Long: `Delete a synthetic monitor.
+
+The monitor can be identified by monitor ID (UUID), entity GUID, or name.
 
 By default, you will be prompted to confirm the deletion.
 Use --force to skip the confirmation prompt.
@@ -378,7 +405,7 @@ func runDelete(opts *deleteOptions, monitorID string) error {
 		}
 	}
 
-	if err := client.DeleteSyntheticMonitor(monitorID); err != nil {
+	if err := client.DeleteSyntheticMonitor(monitor.GUID.String()); err != nil {
 		return fmt.Errorf("failed to delete monitor: %w", err)
 	}
 

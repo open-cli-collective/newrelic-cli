@@ -7,15 +7,33 @@ A command-line interface for interacting with New Relic APIs.
 - **APM Applications**: List applications, view details, and retrieve available metrics
 - **Alert Policies**: List and inspect alert policy configurations
 - **Dashboards**: List and view dashboard details
-- **Deployments**: Track deployment markers for applications
+- **Deployments**: Record and list deployments via change tracking
 - **Entities**: Search across all New Relic entity types
 - **Log Parsing Rules**: Create, list, and delete log parsing rules
 - **NerdGraph**: Execute arbitrary GraphQL queries
 - **NRQL**: Run NRQL queries directly from the command line
-- **Synthetic Monitors**: List and inspect synthetic monitoring configurations
+- **Synthetic Monitors**: Full CRUD for synthetic monitors on the current runtimes
 - **Users**: List and view user details
 - **Agent-First Output**: Table and plain (scriptable) output on resource reads; JSON reserved for control-plane envelopes (`set-credential`, `config show`, `config test` with `--json`) and NerdGraph/NRQL passthrough (see cli-common docs/output-and-rendering.md §2)
 - **Secure Credential Storage**: API key stored in the OS keyring (macOS Keychain / Windows Credential Manager / Linux Secret Service), or an encrypted file with the explicit file-backend opt-in — never in plaintext and never in `config.yml`
+
+## New Relic API deprecation status
+
+All `nrq` commands run on **NerdGraph**, New Relic's supported GraphQL API.
+New Relic has deprecated or is phasing out several older APIs; here is where
+`nrq` stands on each:
+
+| New Relic API | Status | nrq |
+|---|---|---|
+| [REST v2](https://docs.newrelic.com/docs/apis/intro-apis/introduction-new-relic-apis/) (`api.newrelic.com/v2`) | Being replaced by NerdGraph; minimal maintenance | No longer used by any command. The Go `api` package retains `*REST` methods, marked `Deprecated` |
+| [Synthetics REST](https://docs.newrelic.com/docs/synthetics/synthetic-monitoring/administration/synthetics-api/) (`synthetics/api/v3`) | Deprecated; legacy runtimes only — new legacy-runtime monitors blocked since Aug 26, 2024 | No longer used. `nrq synthetics` uses the runtime-capable [NerdGraph mutations](https://docs.newrelic.com/docs/apis/nerdgraph/examples/synthetics-api/overview/) |
+| REST v2 deployment markers | Superseded by [change tracking](https://docs.newrelic.com/docs/change-tracking/change-tracking-introduction/) | `nrq deployments` records and lists deployments via change tracking |
+| [REST API keys](https://docs.newrelic.com/eol/2025/01/deprecation-notice-rest-api-keys/) | End of life March 1, 2025 | Not affected — `nrq` authenticates with a User API key (`NRAK-…`) |
+| [NRQL Drop Filter Rules API](https://docs.newrelic.com/eol/2025/05/drop-rule-filter/) | Shut off August 31, 2026 | Not used by `nrq` |
+
+The deprecated `*REST` methods in the public `api` package remain available
+for Go consumers during migration; each carries a `Deprecated:` doc comment
+linking to the relevant New Relic notice.
 
 ## Installation
 

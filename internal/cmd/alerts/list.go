@@ -22,6 +22,8 @@ func newListPoliciesCmd(opts *root.Options) *cobra.Command {
 		Short: "List all alert policies",
 		Long: `List all alert policies in your account.
 
+Requires a configured account ID (nrq config set --account-id).
+
 Incident preference values:
   PER_POLICY:             One incident per policy
   PER_CONDITION:          One incident per condition

@@ -22,8 +22,9 @@ func newListCmd(opts *root.Options) *cobra.Command {
 		Short: "List all APM applications",
 		Long: `List all APM applications in your account.
 
-Displays application ID, name, language, and health status.
-Health status values: green (healthy), orange (warning), red (critical), gray (not reporting).`,
+Displays application ID, name, language, and alert status.
+Alert status values (from NerdGraph): NOT_ALERTING, WARNING, CRITICAL,
+NOT_CONFIGURED — or "not reporting" when the agent has stopped reporting.`,
 		Example: `  # List all applications
   nrq apps list
 

@@ -17,6 +17,14 @@ func Register(rootCmd *cobra.Command, opts *root.Options) {
 		Use:     "deployments",
 		Aliases: []string{"deployment", "deploy"},
 		Short:   "Manage New Relic deployments",
+		Long: `Manage New Relic deployments.
+
+These commands use the NerdGraph change tracking API. The REST v2
+deployment-marker endpoints previously used here are deprecated by New Relic
+(NerdGraph is replacing REST v2, see
+https://docs.newrelic.com/docs/apis/intro-apis/introduction-new-relic-apis/)
+and REST markers do not feed the change tracking experience
+(https://docs.newrelic.com/docs/change-tracking/change-tracking-introduction/).`,
 	}
 
 	deploymentsCmd.AddCommand(newListCmd(opts))
@@ -97,31 +105,31 @@ func runList(opts *listOptions, args []string) error {
 		return err
 	}
 
-	// Resolve the identifier to a numeric app ID
-	appID, err := client.ResolveAppID(identifier)
+	guid, err := client.ResolveAppGUID(identifier)
 	if err != nil {
 		return fmt.Errorf("failed to resolve application: %w", err)
 	}
 
-	deployments, err := client.ListDeployments(appID)
-	if err != nil {
-		return err
-	}
-
-	var since, until time.Time
+	var startMs, endMs int64
 	if opts.since != "" {
-		since, err = api.ParseFlexibleTime(opts.since)
+		since, err := api.ParseFlexibleTime(opts.since)
 		if err != nil {
 			return fmt.Errorf("invalid --since value: %w", err)
 		}
+		startMs = since.UnixMilli()
 	}
 	if opts.until != "" {
-		until, err = api.ParseFlexibleTime(opts.until)
+		until, err := api.ParseFlexibleTime(opts.until)
 		if err != nil {
 			return fmt.Errorf("invalid --until value: %w", err)
 		}
+		endMs = until.UnixMilli()
 	}
-	deployments = api.FilterDeploymentsByTime(deployments, since, until)
+
+	deployments, err := client.ListDeployments(guid, startMs, endMs, opts.limit)
+	if err != nil {
+		return err
+	}
 
 	if opts.limit > 0 && len(deployments) > opts.limit {
 		deployments = deployments[:opts.limit]
@@ -134,19 +142,28 @@ func runList(opts *listOptions, args []string) error {
 		return nil
 	}
 
-	headers := []string{"ID", "REVISION", "DESCRIPTION", "USER", "TIMESTAMP"}
+	headers := []string{"DEPLOYMENT ID", "VERSION", "DESCRIPTION", "USER", "TIMESTAMP"}
 	rows := make([][]string, len(deployments))
 	for i, d := range deployments {
 		rows[i] = []string{
-			fmt.Sprintf("%d", d.ID),
-			view.Truncate(d.Revision, 20),
+			view.Truncate(d.DeploymentID, 36),
+			view.Truncate(d.Version, 20),
 			view.Truncate(d.Description, 30),
 			view.Truncate(d.User, 15),
-			d.Timestamp,
+			formatTimestampMs(d.TimestampMs),
 		}
 	}
 
 	return v.Render(headers, rows)
+}
+
+// formatTimestampMs renders an epoch-milliseconds timestamp as RFC 3339, or
+// "" when unset.
+func formatTimestampMs(ms int64) string {
+	if ms <= 0 {
+		return ""
+	}
+	return time.Unix(0, ms*int64(time.Millisecond)).UTC().Format(time.RFC3339)
 }
 
 type createOptions struct {
@@ -157,6 +174,7 @@ type createOptions struct {
 	description string
 	user        string
 	changelog   string
+	commit      string
 }
 
 func newCreateCmd(opts *root.Options) *cobra.Command {
@@ -164,17 +182,20 @@ func newCreateCmd(opts *root.Options) *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:   "create [app-id]",
-		Short: "Create a deployment marker",
-		Long: `Create a deployment marker for an application.
+		Short: "Record a deployment",
+		Long: `Record a deployment for an application via change tracking.
 
 The application can be specified by:
   - Numeric app ID (positional argument)
   - Application name (--name flag)
   - Entity GUID (--guid flag)
 
+The --revision value is recorded as the change tracking "version".
+
 Examples:
   nrq deployments create 12345678 --revision "v1.2.3"
-  nrq deployments create --name "my-app" --revision "v1.2.3" --description "Bug fixes"`,
+  nrq deployments create --name "my-app" --revision "v1.2.3" --description "Bug fixes"
+  nrq deployments create --name "my-app" --revision "v1.2.3" --commit "0c38bc4"`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runCreate(createOpts, args)
@@ -187,6 +208,7 @@ Examples:
 	cmd.Flags().StringVarP(&createOpts.description, "description", "d", "", "Deployment description")
 	cmd.Flags().StringVarP(&createOpts.user, "user", "u", "", "User who deployed")
 	cmd.Flags().StringVarP(&createOpts.changelog, "changelog", "c", "", "Changelog")
+	cmd.Flags().StringVar(&createOpts.commit, "commit", "", "Commit SHA associated with the deployment")
 	cmd.MarkFlagRequired("revision")
 
 	return cmd
@@ -211,29 +233,36 @@ func runCreate(opts *createOptions, args []string) error {
 		return err
 	}
 
-	// Resolve the identifier to a numeric app ID
-	appID, err := client.ResolveAppID(identifier)
+	guid, err := client.ResolveAppGUID(identifier)
 	if err != nil {
 		return fmt.Errorf("failed to resolve application: %w", err)
 	}
 
-	deployment, err := client.CreateDeployment(appID, opts.revision, opts.description, opts.user, opts.changelog)
+	deployment, err := client.CreateDeployment(api.DeploymentInput{
+		EntityGUID:  guid,
+		Version:     opts.revision,
+		Description: opts.description,
+		User:        opts.user,
+		Changelog:   opts.changelog,
+		Commit:      opts.commit,
+	})
 	if err != nil {
 		return err
 	}
 
 	v := opts.View()
 
+	timestamp := formatTimestampMs(deployment.TimestampMs)
 	switch v.Format {
 	case "plain":
 		return v.Plain([][]string{
-			{fmt.Sprintf("%d", deployment.ID), deployment.Revision, deployment.Timestamp},
+			{deployment.DeploymentID, deployment.Version, timestamp},
 		})
 	default:
-		v.Success("Deployment created successfully")
-		v.Print("ID:        %d\n", deployment.ID)
-		v.Print("Revision:  %s\n", deployment.Revision)
-		v.Print("Timestamp: %s\n", deployment.Timestamp)
+		v.Success("Deployment recorded successfully")
+		v.Print("Deployment ID: %s\n", deployment.DeploymentID)
+		v.Print("Version:       %s\n", deployment.Version)
+		v.Print("Timestamp:     %s\n", timestamp)
 		return nil
 	}
 }

@@ -464,3 +464,39 @@ func TestResolveAppGUID_FromName_Ambiguous(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "multiple applications found")
 }
+
+func TestResolveAppGUID_FromName_EscapesQuotes(t *testing.T) {
+	server := NewMockServer()
+	defer server.Close()
+
+	server.SetResponse(http.StatusOK, `{
+		"data": {"actor": {"entitySearch": {"results": {"entities": [
+			{"guid": "`+testAppGUID+`", "name": "O'Brien's API", "type": "APPLICATION", "entityType": "APM_APPLICATION_ENTITY", "domain": "APM", "accountId": 1234567}
+		]}}}}
+	}`)
+
+	client := NewTestClient(server)
+	guid, err := client.ResolveAppGUID("O'Brien's API")
+
+	require.NoError(t, err)
+	assert.Equal(t, EntityGUID(testAppGUID), guid)
+
+	req := server.LastRequest()
+	require.NotNil(t, req)
+	assert.Contains(t, string(req.Body), `name = 'O\\'Brien\\'s API'`)
+}
+
+func TestEscapeQueryString(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{"plain", "plain"},
+		{"O'Brien's API", `O\'Brien\'s API`},
+		{`back\slash`, `back\\slash`},
+		{`both\'`, `both\\\'`},
+	}
+	for _, tt := range tests {
+		assert.Equal(t, tt.expected, escapeQueryString(tt.input))
+	}
+}

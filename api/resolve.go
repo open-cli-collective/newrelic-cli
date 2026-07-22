@@ -2,7 +2,15 @@ package api
 
 import (
 	"fmt"
+	"strings"
 )
+
+// escapeQueryString escapes a value for embedding in a single-quoted string
+// literal inside an entity-search or NRQL query.
+func escapeQueryString(s string) string {
+	s = strings.ReplaceAll(s, `\`, `\\`)
+	return strings.ReplaceAll(s, `'`, `\'`)
+}
 
 func (c *Client) ResolveAppID(identifier string) (string, error) {
 	if isNumeric(identifier) {
@@ -21,7 +29,7 @@ func (c *Client) ResolveAppID(identifier string) (string, error) {
 }
 
 func (c *Client) resolveAppName(name string) (string, error) {
-	query := fmt.Sprintf("name = '%s' AND domain = 'APM' AND type = 'APPLICATION'", name)
+	query := fmt.Sprintf("name = '%s' AND domain = 'APM' AND type = 'APPLICATION'", escapeQueryString(name))
 	entities, err := c.SearchEntities(query)
 	if err != nil {
 		return "", fmt.Errorf("failed to search for application: %w", err)
@@ -68,7 +76,7 @@ func (c *Client) ResolveAppGUID(identifier string) (EntityGUID, error) {
 		return "", fmt.Errorf("no APM application found with ID: %s", identifier)
 	}
 
-	query := fmt.Sprintf("name = '%s' AND domain = 'APM' AND type = 'APPLICATION'", identifier)
+	query := fmt.Sprintf("name = '%s' AND domain = 'APM' AND type = 'APPLICATION'", escapeQueryString(identifier))
 	entities, err := c.SearchEntities(query)
 	if err != nil {
 		return "", fmt.Errorf("failed to search for application: %w", err)

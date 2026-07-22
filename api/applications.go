@@ -3,7 +3,6 @@ package api
 import (
 	"encoding/json"
 	"fmt"
-	"strings"
 	"time"
 )
 
@@ -112,10 +111,9 @@ func (c *Client) ListApplicationMetrics(identifier string) ([]Metric, error) {
 		return nil, err
 	}
 
-	appName := strings.ReplaceAll(app.Name, `'`, `\'`)
 	nrql := fmt.Sprintf(
 		"SELECT uniques(metricName, 10000) FROM Metric WHERE appName = '%s' SINCE 1 day ago",
-		appName,
+		escapeQueryString(app.Name),
 	)
 
 	result, err := c.QueryNRQL(nrql)

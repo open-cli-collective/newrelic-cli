@@ -112,3 +112,17 @@ func TestQueryNRQL_InvalidResponse(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "unexpected response format")
 }
+
+func TestQueryNRQL_InvalidAccountID(t *testing.T) {
+	server := NewMockServer()
+	defer server.Close()
+
+	client := NewTestClient(server)
+	client.AccountID = "not-a-number"
+
+	_, err := client.QueryNRQL("SELECT count(*) FROM Transaction")
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid account ID")
+	server.AssertRequestCount(t, 0)
+}

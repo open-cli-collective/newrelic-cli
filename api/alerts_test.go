@@ -201,3 +201,31 @@ func TestGetAlertPolicy_NoAccountID(t *testing.T) {
 	require.Error(t, err)
 	assert.ErrorIs(t, err, ErrAccountIDRequired)
 }
+
+func TestListAlertPolicies_InvalidAccountID(t *testing.T) {
+	server := NewMockServer()
+	defer server.Close()
+
+	client := NewTestClient(server)
+	client.AccountID = "not-a-number"
+
+	_, err := client.ListAlertPolicies()
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid account ID")
+	server.AssertRequestCount(t, 0)
+}
+
+func TestGetAlertPolicy_InvalidAccountID(t *testing.T) {
+	server := NewMockServer()
+	defer server.Close()
+
+	client := NewTestClient(server)
+	client.AccountID = "not-a-number"
+
+	_, err := client.GetAlertPolicy("111")
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid account ID")
+	server.AssertRequestCount(t, 0)
+}

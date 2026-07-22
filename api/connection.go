@@ -50,7 +50,12 @@ func (c *Client) TestConnection() (*ConnectionTestResult, error) {
 			}
 		}`
 
-		accountID, _ := c.GetAccountIDInt()
+		accountID, err := c.GetAccountIDInt()
+		if err != nil {
+			result.Error = err
+			result.ErrorMessage = fmt.Sprintf("Account access failed: %v", err)
+			return result, nil
+		}
 		vars := map[string]interface{}{"accountId": accountID}
 
 		accountData, err := c.NerdGraphQuery(accountQuery, vars)

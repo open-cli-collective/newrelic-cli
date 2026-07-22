@@ -27,7 +27,10 @@ func (c *Client) ListLogParsingRules() ([]LogParsingRule, error) {
 		}
 	}`
 
-	accountID, _ := c.GetAccountIDInt()
+	accountID, err := c.GetAccountIDInt()
+	if err != nil {
+		return nil, err
+	}
 	variables := map[string]interface{}{
 		"accountId": accountID,
 	}
@@ -98,7 +101,10 @@ func (c *Client) CreateLogParsingRule(description, grok, nrql string, enabled bo
 		}
 	}`
 
-	accountID, _ := c.GetAccountIDInt()
+	accountID, err := c.GetAccountIDInt()
+	if err != nil {
+		return nil, err
+	}
 	variables := map[string]interface{}{
 		"accountId": accountID,
 		"rule": map[string]interface{}{
@@ -212,7 +218,10 @@ func (c *Client) UpdateLogParsingRule(ruleID string, update LogParsingRuleUpdate
 		}
 	}`
 
-	accountID, _ := c.GetAccountIDInt()
+	accountID, err := c.GetAccountIDInt()
+	if err != nil {
+		return nil, err
+	}
 	variables := map[string]interface{}{
 		"accountId": accountID,
 		"rule": map[string]interface{}{

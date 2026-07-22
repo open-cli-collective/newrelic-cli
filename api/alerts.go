@@ -31,7 +31,10 @@ func (c *Client) ListAlertPolicies() ([]AlertPolicy, error) {
 		}
 	}`
 
-	accountID, _ := c.GetAccountIDInt()
+	accountID, err := c.GetAccountIDInt()
+	if err != nil {
+		return nil, err
+	}
 
 	var all []AlertPolicy
 	var cursor interface{}
@@ -110,7 +113,10 @@ func (c *Client) GetAlertPolicy(policyID string) (*AlertPolicy, error) {
 		}
 	}`
 
-	accountID, _ := c.GetAccountIDInt()
+	accountID, err := c.GetAccountIDInt()
+	if err != nil {
+		return nil, err
+	}
 	variables := map[string]interface{}{
 		"accountId": accountID,
 		"policyId":  policyID,

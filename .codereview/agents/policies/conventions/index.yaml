@@ -6,6 +6,7 @@ file_globs:
   - "AGENTS.md"
   - "CLAUDE.md"
   - "README*"
+  - "CHANGELOG.md"
   - "Makefile"
   - "go.mod"
   - "go.sum"

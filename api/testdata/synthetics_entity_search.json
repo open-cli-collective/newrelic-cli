@@ -1,0 +1,46 @@
+{
+  "data": {
+    "actor": {
+      "entitySearch": {
+        "results": {
+          "nextCursor": null,
+          "entities": [
+            {
+              "guid": "MTIzNDU2N3xTWU5USHxNT05JVE9SfGFiMTJjZDM0LTU2NzgtOTBlZi1hYmNkLTEyMzQ1Njc4OTBhYg==",
+              "name": "Homepage Check",
+              "monitorId": "syn-001",
+              "monitorType": "SIMPLE",
+              "period": 5,
+              "monitoredUrl": "https://example.com",
+              "monitorSummary": {
+                "status": "ENABLED"
+              }
+            },
+            {
+              "guid": "MTIzNDU2N3xTWU5USHxNT05JVE9SfGJiMjJjZDM0LTU2NzgtOTBlZi1hYmNkLTEyMzQ1Njc4OTBhYg==",
+              "name": "API Check",
+              "monitorId": "syn-002",
+              "monitorType": "SCRIPT_API",
+              "period": 10,
+              "monitoredUrl": null,
+              "monitorSummary": {
+                "status": "ENABLED"
+              }
+            },
+            {
+              "guid": "MTIzNDU2N3xTWU5USHxNT05JVE9SfGNjMzJjZDM0LTU2NzgtOTBlZi1hYmNkLTEyMzQ1Njc4OTBhYg==",
+              "name": "Browser Check",
+              "monitorId": "syn-003",
+              "monitorType": "BROWSER",
+              "period": 15,
+              "monitoredUrl": "https://example.org",
+              "monitorSummary": {
+                "status": "DISABLED"
+              }
+            }
+          ]
+        }
+      }
+    }
+  }
+}

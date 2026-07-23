@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"time"
 )
 
@@ -38,7 +39,14 @@ const (
 	RegionEU Region = "EU"
 )
 
-// Client is the New Relic API client
+// Client is the New Relic API client.
+//
+// NerdGraphURL is the supported API endpoint. BaseURL (REST v2) and
+// SyntheticsURL (Synthetics REST v3) back only the Deprecated *REST methods:
+// New Relic is replacing REST v2 with NerdGraph
+// (https://docs.newrelic.com/docs/apis/intro-apis/introduction-new-relic-apis/)
+// and has deprecated the Synthetics REST API
+// (https://docs.newrelic.com/docs/synthetics/synthetic-monitoring/administration/synthetics-api/).
 type Client struct {
 	APIKey        APIKey
 	AccountID     AccountID
@@ -207,6 +215,31 @@ func safeString(v interface{}) string {
 func safeInt(v interface{}) int {
 	if f, ok := v.(float64); ok {
 		return int(f)
+	}
+	return 0
+}
+
+// safeIDInt converts a GraphQL ID value to int. GraphQL serializes the ID
+// scalar as a JSON string, but some New Relic surfaces emit numbers, so both
+// are accepted.
+func safeIDInt(v interface{}) int {
+	switch val := v.(type) {
+	case float64:
+		return int(val)
+	case string:
+		n, err := strconv.Atoi(val)
+		if err != nil {
+			return 0
+		}
+		return n
+	}
+	return 0
+}
+
+// safeInt64 safely converts an interface{} to int64
+func safeInt64(v interface{}) int64 {
+	if f, ok := v.(float64); ok {
+		return int64(f)
 	}
 	return 0
 }

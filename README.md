@@ -7,15 +7,33 @@ A command-line interface for interacting with New Relic APIs.
 - **APM Applications**: List applications, view details, and retrieve available metrics
 - **Alert Policies**: List and inspect alert policy configurations
 - **Dashboards**: List and view dashboard details
-- **Deployments**: Track deployment markers for applications
+- **Deployments**: Record and list deployments via change tracking
 - **Entities**: Search across all New Relic entity types
 - **Log Parsing Rules**: Create, list, and delete log parsing rules
 - **NerdGraph**: Execute arbitrary GraphQL queries
 - **NRQL**: Run NRQL queries directly from the command line
-- **Synthetic Monitors**: List and inspect synthetic monitoring configurations
+- **Synthetic Monitors**: Full CRUD for synthetic monitors on the current runtimes
 - **Users**: List and view user details
 - **Agent-First Output**: Table and plain (scriptable) output on resource reads; JSON reserved for control-plane envelopes (`set-credential`, `config show`, `config test` with `--json`) and NerdGraph/NRQL passthrough (see cli-common docs/output-and-rendering.md §2)
 - **Secure Credential Storage**: API key stored in the OS keyring (macOS Keychain / Windows Credential Manager / Linux Secret Service), or an encrypted file with the explicit file-backend opt-in — never in plaintext and never in `config.yml`
+
+## New Relic API deprecation status
+
+All `nrq` commands run on **NerdGraph**, New Relic's supported GraphQL API.
+New Relic has deprecated or is phasing out several older APIs; here is where
+`nrq` stands on each:
+
+| New Relic API | Status | nrq |
+|---|---|---|
+| [REST v2](https://docs.newrelic.com/docs/apis/intro-apis/introduction-new-relic-apis/) (`api.newrelic.com/v2`) | Being replaced by NerdGraph; minimal maintenance | No longer used by any command. The Go `api` package retains `*REST` methods, marked `Deprecated` |
+| [Synthetics REST](https://docs.newrelic.com/docs/synthetics/synthetic-monitoring/administration/synthetics-api/) (`synthetics/api/v3`) | Deprecated; legacy runtimes only — new legacy-runtime monitors blocked since Aug 26, 2024 | No longer used. `nrq synthetics` uses the runtime-capable [NerdGraph mutations](https://docs.newrelic.com/docs/apis/nerdgraph/examples/synthetics-api/overview/) |
+| REST v2 deployment markers | Superseded by [change tracking](https://docs.newrelic.com/docs/change-tracking/change-tracking-introduction/) | `nrq deployments` records and lists deployments via change tracking |
+| [REST API keys](https://docs.newrelic.com/eol/2025/01/deprecation-notice-rest-api-keys/) | End of life March 1, 2025 | Not affected — `nrq` authenticates with a User API key (`NRAK-…`) |
+| [NRQL Drop Filter Rules API](https://docs.newrelic.com/eol/2025/05/drop-rule-filter/) | Shut off August 31, 2026 | Not used by `nrq` |
+
+The deprecated `*REST` methods in the public `api` package remain available
+for Go consumers during migration; each carries a `Deprecated:` doc comment
+linking to the relevant New Relic notice.
 
 ## Installation
 
@@ -274,36 +292,46 @@ nrq apps list -o plain
 **Table Output:**
 ```
 ID          NAME                        LANGUAGE    STATUS
-12345678    production-api              ruby        green
-23456789    staging-api                 ruby        gray
-34567890    frontend-service            nodejs      green
+12345678    production-api              ruby        NOT_ALERTING
+23456789    staging-api                 ruby        not reporting
+34567890    frontend-service            nodejs      WARNING
 ```
+
+Status values are NerdGraph alert severities (`NOT_ALERTING`, `WARNING`,
+`CRITICAL`, `NOT_CONFIGURED`), or `not reporting` when the agent has stopped
+reporting.
 
 #### apps get
 
-Get details for a specific application.
+Get details for a specific application, identified by numeric app ID, name,
+or entity GUID.
 
 ```bash
-nrq apps get <app-id>
+nrq apps get <app>
 nrq apps get 12345678
+nrq apps get "production-api"
 ```
 
 **Table Output:**
 ```
 ID:              12345678
+GUID:            MjcxMjY0MHxBUE18QVBQTElDQVRJT058MTIzNDU2Nzg
 Name:            production-api
 Language:        ruby
-Health Status:   green
+Alert Status:    NOT_ALERTING
 Reporting:       true
-Last Reported:   2024-01-15T10:30:00Z
+Status Changed:  2024-01-15T10:30:00Z
 ```
 
 #### apps metrics
 
-List available metrics for an application.
+List the metric names an application reported over the past day, identified
+by numeric app ID, name, or entity GUID. Requires a configured account ID
+(`nrq config set --account-id`) — names are read via NRQL
+(`SELECT uniques(metricName) FROM Metric`).
 
 ```bash
-nrq apps metrics <app-id>
+nrq apps metrics <app>
 nrq apps metrics 12345678
 ```
 
@@ -315,7 +343,8 @@ Manage alert policies.
 
 #### alerts policies list
 
-List all alert policies.
+List all alert policies. Requires a configured account ID
+(`nrq config set --account-id`).
 
 ```bash
 nrq alerts policies list
@@ -371,7 +400,7 @@ nrq dashboards get "ABC123..."
 
 ### deployments
 
-Manage deployment markers.
+Record and list deployments via the NerdGraph change tracking API.
 
 **Aliases:** `deployment`, `deploy`
 
@@ -408,14 +437,15 @@ nrq deployments list 12345678 --limit 10
 
 **Table Output:**
 ```
-ID          REVISION        DESCRIPTION             USER            TIMESTAMP
-9876        v1.2.3          Bug fixes               alice           2024-01-15T10:30:00Z
-9875        v1.2.2          Feature release         bob             2024-01-14T15:00:00Z
+DEPLOYMENT ID       VERSION         DESCRIPTION             USER            TIMESTAMP
+dep-8a7b6c5d        v1.2.3          Bug fixes               alice           2024-01-15T10:30:00Z
+dep-4e3f2a1b        v1.2.2          Feature release         bob             2024-01-14T15:00:00Z
 ```
 
 #### deployments create
 
-Create a deployment marker for an application.
+Record a deployment for an application. The `--revision` value is recorded
+as the change tracking `version`.
 
 ```bash
 # By app ID
@@ -432,7 +462,8 @@ nrq deployments create 12345678 \
   --revision v1.2.3 \
   --description "Bug fixes and performance improvements" \
   --user "alice" \
-  --changelog "Fixed memory leak, improved cache hit rate"
+  --changelog "Fixed memory leak, improved cache hit rate" \
+  --commit "0c38bc4"
 ```
 
 | Flag | Short | Required | Description |
@@ -443,6 +474,7 @@ nrq deployments create 12345678 \
 | `--description` | `-d` | No | Deployment description |
 | `--user` | `-u` | No | User who deployed |
 | `--changelog` | `-c` | No | Changelog information |
+| `--commit` | | No | Commit SHA associated with the deployment |
 
 *One of app ID (positional), `--name`, or `--guid` is required.
 
@@ -738,17 +770,33 @@ nrq synthetics list
 **Table Output:**
 ```
 ID                                      NAME                    TYPE            STATUS      FREQUENCY
-abc-123...                              Production Health       SIMPLE          ENABLED     5
-def-456...                              API Endpoint Check      API             ENABLED     1
+abc-123...                              Production Health       SIMPLE          ENABLED     5 min
+def-456...                              API Endpoint Check      SCRIPT_API      ENABLED     1 min
 ```
 
 #### synthetics get
 
-Get details for a specific synthetic monitor.
+Get details for a specific synthetic monitor, identified by monitor ID
+(UUID), entity GUID, or name.
 
 ```bash
-nrq synthetics get <monitor-id>
+nrq synthetics get <monitor>
 nrq synthetics get abc-123-def-456
+nrq synthetics get "Production Health"
+```
+
+#### synthetics create / update / delete
+
+Create, update, and delete monitors from a JSON definition. Monitors are
+created via NerdGraph on the current synthetics runtimes; scripted monitors
+(`SCRIPT_API`, `SCRIPT_BROWSER`) take `script` and optional `runtime` fields.
+See `nrq synthetics create --help` for the JSON schema, valid frequencies,
+and locations.
+
+```bash
+nrq synthetics create --from-file monitor.json
+nrq synthetics update abc-123-def-456 --from-file monitor.json
+nrq synthetics delete abc-123-def-456
 ```
 
 ---

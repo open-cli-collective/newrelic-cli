@@ -17,7 +17,10 @@ func (c *Client) QueryNRQL(nrql string) (*NRQLResult, error) {
 		}
 	}`
 
-	accountID, _ := c.GetAccountIDInt()
+	accountID, err := c.GetAccountIDInt()
+	if err != nil {
+		return nil, err
+	}
 	variables := map[string]interface{}{
 		"accountId": accountID,
 		"nrql":      nrql,

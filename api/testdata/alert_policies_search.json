@@ -1,0 +1,30 @@
+{
+  "data": {
+    "actor": {
+      "account": {
+        "alerts": {
+          "policiesSearch": {
+            "nextCursor": null,
+            "policies": [
+              {
+                "id": "111",
+                "name": "Production Alerts",
+                "incidentPreference": "PER_POLICY"
+              },
+              {
+                "id": "222",
+                "name": "Staging Alerts",
+                "incidentPreference": "PER_CONDITION"
+              },
+              {
+                "id": "333",
+                "name": "Dev Alerts",
+                "incidentPreference": "PER_CONDITION_AND_TARGET"
+              }
+            ]
+          }
+        }
+      }
+    }
+  }
+}

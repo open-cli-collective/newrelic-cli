@@ -66,3 +66,68 @@ func (c *Client) SearchEntities(queryStr string) ([]Entity, error) {
 
 	return entities, nil
 }
+
+// searchEntitiesRaw runs an entity search with an optional inline fragment for
+// type-specific fields, following nextCursor until all pages are consumed.
+// Each returned map is one entity with at least guid and name.
+func (c *Client) searchEntitiesRaw(queryStr, fragment string) ([]map[string]interface{}, error) {
+	query := `
+	query($query: String!, $cursor: String) {
+		actor {
+			entitySearch(query: $query) {
+				results(cursor: $cursor) {
+					nextCursor
+					entities {
+						guid
+						name
+						` + fragment + `
+					}
+				}
+			}
+		}
+	}`
+
+	var all []map[string]interface{}
+	var cursor interface{}
+
+	for {
+		variables := map[string]interface{}{
+			"query":  queryStr,
+			"cursor": cursor,
+		}
+
+		result, err := c.NerdGraphQuery(query, variables)
+		if err != nil {
+			return nil, err
+		}
+
+		actor, ok := safeMap(result["actor"])
+		if !ok {
+			return nil, &ResponseError{Message: "unexpected response format: missing actor"}
+		}
+		entitySearch, ok := safeMap(actor["entitySearch"])
+		if !ok {
+			return nil, &ResponseError{Message: "unexpected response format: missing entitySearch"}
+		}
+		results, ok := safeMap(entitySearch["results"])
+		if !ok {
+			return nil, &ResponseError{Message: "unexpected response format: missing results"}
+		}
+		entitiesData, ok := safeSlice(results["entities"])
+		if !ok {
+			return nil, &ResponseError{Message: "unexpected response format: missing entities"}
+		}
+
+		for _, e := range entitiesData {
+			if entity, ok := safeMap(e); ok {
+				all = append(all, entity)
+			}
+		}
+
+		next := safeString(results["nextCursor"])
+		if next == "" {
+			return all, nil
+		}
+		cursor = next
+	}
+}

@@ -1,0 +1,40 @@
+{
+  "data": {
+    "actor": {
+      "entitySearch": {
+        "results": {
+          "nextCursor": null,
+          "entities": [
+            {
+              "guid": "MTIzNDU2N3xBUE18QVBQTElDQVRJT058OTg3NjU0MzIx",
+              "name": "My Application",
+              "applicationId": 12345678,
+              "language": "java",
+              "reporting": true,
+              "alertSeverity": "NOT_ALERTING",
+              "lastReportingChangeAt": 1704067200000
+            },
+            {
+              "guid": "MTIzNDU2N3xBUE18QVBQTElDQVRJT058OTg3NjU0MzIy",
+              "name": "Another App",
+              "applicationId": 22334455,
+              "language": "python",
+              "reporting": true,
+              "alertSeverity": "WARNING",
+              "lastReportingChangeAt": 1704067200000
+            },
+            {
+              "guid": "MTIzNDU2N3xBUE18QVBQTElDQVRJT058OTg3NjU0MzIz",
+              "name": "Inactive App",
+              "applicationId": 33445566,
+              "language": "ruby",
+              "reporting": false,
+              "alertSeverity": "NOT_CONFIGURED",
+              "lastReportingChangeAt": 1704067200000
+            }
+          ]
+        }
+      }
+    }
+  }
+}

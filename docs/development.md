@@ -100,6 +100,10 @@ Local convenience copy, if present: `../cli-common/docs/scriptability.md`
 - `NEWRELIC_REGION` - non-secret runtime override.
 - `NEWRELIC_CLI_KEYRING_BACKEND` - backend selector.
 - `NEWRELIC_CLI_KEYRING_PASSPHRASE` - file-backend passphrase for headless use.
+- `CODESIGN_IDENTITY` - optional, macOS only. A code-signing certificate in
+  the login keychain (name or SHA-1); when set, `make build` re-signs `nrq` with
+  a stable designated requirement so Keychain grants survive rebuilds. Unset
+  (default, and on CI/Linux) the build is unchanged.
 
 ## Shared Repo Standards
 

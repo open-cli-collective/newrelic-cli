@@ -13,8 +13,17 @@ LDFLAGS=-ldflags "-X github.com/open-cli-collective/newrelic-cli/internal/versio
 # exclude the 1Password and passage backends credstore never exposes.
 export GOFLAGS := -tags=keyring_no1password,keyring_nopassage
 
+# macOS code-signing for local builds: a stable designated requirement so the
+# Keychain "Always Allow" grant survives a rebuild (cli-common distribution.md
+# §2A). Identifier scheme and flags mirror open-cli-collective/.github
+# macos-codesign-setup/codesign-darwin.sh, which signs releases. CODESIGN_IDENTITY
+# unset (the CI/Linux default) is a no-op.
 build:
 	go build $(LDFLAGS) -o $(BINARY_NAME) ./cmd/nrq
+	@if [ -n "$(CODESIGN_IDENTITY)" ] && [ "$$(uname -s)" = Darwin ] && [ "$$(go env GOOS)" = darwin ]; then \
+		codesign --force --timestamp=none --sign "$(CODESIGN_IDENTITY)" --identifier "org.open-cli-collective.$(BINARY_NAME)" $(BINARY_NAME) && \
+		codesign --verify --strict -R '=identifier "org.open-cli-collective.$(BINARY_NAME)"' $(BINARY_NAME); \
+	fi
 	@if [ -n "$(CODESIGN_IDENTITY)" ] && [ "$$(uname -s)" = Darwin ]; then \
 		codesign --force --timestamp=none --sign "$(CODESIGN_IDENTITY)" --identifier "org.open-cli-collective.$(BINARY_NAME)" $(BINARY_NAME); \
 		codesign --verify --strict $(BINARY_NAME); \

@@ -15,6 +15,10 @@ export GOFLAGS := -tags=keyring_no1password,keyring_nopassage
 
 build:
 	go build $(LDFLAGS) -o $(BINARY_NAME) ./cmd/nrq
+	@if [ -n "$(CODESIGN_IDENTITY)" ] && [ "$$(uname -s)" = Darwin ]; then \
+		codesign --force --timestamp=none --sign "$(CODESIGN_IDENTITY)" --identifier "org.open-cli-collective.$(BINARY_NAME)" $(BINARY_NAME); \
+		codesign --verify --strict $(BINARY_NAME); \
+	fi
 
 clean:
 	rm -f $(BINARY_NAME)

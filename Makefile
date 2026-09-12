@@ -24,10 +24,6 @@ build:
 		codesign --force --timestamp=none --sign "$(CODESIGN_IDENTITY)" --identifier "org.open-cli-collective.$(BINARY_NAME)" $(BINARY_NAME) && \
 		codesign --verify --strict -R '=identifier "org.open-cli-collective.$(BINARY_NAME)"' $(BINARY_NAME); \
 	fi
-	@if [ -n "$(CODESIGN_IDENTITY)" ] && [ "$$(uname -s)" = Darwin ]; then \
-		codesign --force --timestamp=none --sign "$(CODESIGN_IDENTITY)" --identifier "org.open-cli-collective.$(BINARY_NAME)" $(BINARY_NAME); \
-		codesign --verify --strict $(BINARY_NAME); \
-	fi
 
 clean:
 	rm -f $(BINARY_NAME)

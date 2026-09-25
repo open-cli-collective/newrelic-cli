@@ -54,6 +54,7 @@ Set-Location packaging/chocolatey
 
 # Render the template with the release version and SHA256 values from checksums.txt.
 $version = '0.1.0'
+gh release download "v$version" --pattern checksums.txt --dir .
 $amd64Hash = (Get-Content checksums.txt | Select-String 'windows_amd64.zip').Line.Split()[0]
 $arm64Hash = (Get-Content checksums.txt | Select-String 'windows_arm64.zip').Line.Split()[0]
 pwsh ./render.ps1 -Version $version -Amd64Checksum $amd64Hash -Arm64Checksum $arm64Hash
@@ -61,10 +62,10 @@ pwsh ./render.ps1 -Version $version -Amd64Checksum $amd64Hash -Arm64Checksum $ar
 choco pack
 
 # Install locally for testing
-choco install newrelic-cli -s . --pre
+choco install nrq-cli -s . --pre
 
 # Uninstall
-choco uninstall newrelic-cli
+choco uninstall nrq-cli
 ```
 
 ## Publishing
@@ -72,7 +73,7 @@ choco uninstall newrelic-cli
 Publishing is handled automatically by the GitHub Actions release workflow. Manual publishing can be done with:
 
 ```powershell
-choco push newrelic-cli.<version>.nupkg --source https://push.chocolatey.org/ --key <API_KEY>
+choco push nrq-cli.<version>.nupkg --source https://push.chocolatey.org/ --key <API_KEY>
 ```
 
 ## References

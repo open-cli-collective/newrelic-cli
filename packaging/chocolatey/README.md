@@ -50,7 +50,14 @@ This package is designed to pass Chocolatey's automated moderation:
 To test the package locally (requires Windows):
 
 ```powershell
-# Pack the package (version will be 0.0.0)
+Set-Location packaging/chocolatey
+
+# Render the template with the release version and SHA256 values from checksums.txt.
+$version = '0.1.0'
+$amd64Hash = (Get-Content checksums.txt | Select-String 'windows_amd64.zip').Line.Split()[0]
+$arm64Hash = (Get-Content checksums.txt | Select-String 'windows_arm64.zip').Line.Split()[0]
+pwsh ./render.ps1 -Version $version -Amd64Checksum $amd64Hash -Arm64Checksum $arm64Hash
+
 choco pack
 
 # Install locally for testing

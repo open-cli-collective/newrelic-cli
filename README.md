@@ -124,6 +124,10 @@ sudo rpm -i nrq-VERSION.x86_64.rpm
 go install github.com/open-cli-collective/newrelic-cli/cmd/nrq@latest
 ```
 
+### Arch Linux / Omarchy
+
+Add the signed [Open CLI Collective pacman repository](https://github.com/open-cli-collective/linux-packages#arch-linux-pacman) once. Native Arch packages are published with new releases and updated by `sudo pacman -Syu`. Install with `sudo pacman -Syu nrq`; executable names remain unchanged.
+
 ## Quick Start
 
 ```bash

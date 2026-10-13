@@ -100,7 +100,7 @@ func newGetCmd(opts *root.Options) *cobra.Command {
 
 The GUID is a base64-encoded entity identifier from 'dashboards list' or
 the New Relic UI (visible in the dashboard URL).`,
-		Example: `  nrq dashboards get "MjcxMjY0MHxWSVp8REFTSEJPQVJEXDI5Mjg="`,
+		Example: `  nrq dashboards get "MTIzNDU2N3xWSVp8REFTSEJPQVJEXDI5Mjg="`,
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runGet(opts, api.EntityGUID(args[0]))
@@ -252,7 +252,7 @@ func newUpdateCmd(opts *root.Options) *cobra.Command {
 The JSON file format is the same as for 'dashboards create'.
 The GUID identifies which dashboard to update.`,
 		Example: `  # Update a dashboard from a JSON file
-  nrq dashboards update "MjcxMjY0MHxWSVp8REFTSEJPQVJEXDI5Mjg=" --from-file dashboard.json`,
+  nrq dashboards update "MTIzNDU2N3xWSVp8REFTSEJPQVJEXDI5Mjg=" --from-file dashboard.json`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runUpdate(updateOpts, api.EntityGUID(args[0]))
@@ -329,10 +329,10 @@ Use --force to skip the confirmation prompt.
 
 WARNING: This action cannot be undone.`,
 		Example: `  # Delete with confirmation
-  nrq dashboards delete "MjcxMjY0MHxWSVp8REFTSEJPQVJEXDI5Mjg="
+  nrq dashboards delete "MTIzNDU2N3xWSVp8REFTSEJPQVJEXDI5Mjg="
 
   # Delete without confirmation (use with caution)
-  nrq dashboards delete "MjcxMjY0MHxWSVp8REFTSEJPQVJEXDI5Mjg=" --force`,
+  nrq dashboards delete "MTIzNDU2N3xWSVp8REFTSEJPQVJEXDI5Mjg=" --force`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runDelete(deleteOpts, api.EntityGUID(args[0]))

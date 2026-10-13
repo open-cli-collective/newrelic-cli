@@ -60,7 +60,7 @@ Filter syntax uses Lucene query format:
 Time range flags (--since, --until) set the visible window in the log viewer.
 Without them, NR defaults to the last 30 minutes which may miss older data.`,
 		Example: `  # Link to error logs for a service (last hour)
-  nrq logs link 'entity.name:"prd-use1-monitapp-user-api-service" level:"ERROR"' --since "1 hour ago"
+  nrq logs link 'entity.name:"checkout-service" level:"ERROR"' --since "1 hour ago"
 
   # Link to logs in a specific time range
   nrq logs link 'message:"*timeout*"' --since "2026-03-10" --until "2026-03-11"

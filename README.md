@@ -319,7 +319,7 @@ nrq apps get "production-api"
 **Table Output:**
 ```
 ID:              12345678
-GUID:            MjcxMjY0MHxBUE18QVBQTElDQVRJT058MTIzNDU2Nzg
+GUID:            MTIzNDU2N3xBUE18QVBQTElDQVRJT058MTIzNDU2Nzg
 Name:            production-api
 Language:        ruby
 Alert Status:    NOT_ALERTING
@@ -420,7 +420,7 @@ nrq deployments list 12345678
 nrq deployments list --name "My Application"
 
 # By entity GUID
-nrq deployments list --guid "MjcxMjY0MHxBUE18..."
+nrq deployments list --guid "MTIzNDU2N3xBUE18..."
 
 # With time filtering
 nrq deployments list 12345678 --since "7 days ago" --until "yesterday"
@@ -459,7 +459,7 @@ nrq deployments create 12345678 --revision v1.2.3
 nrq deployments create --name "My Application" --revision v1.2.3
 
 # By entity GUID
-nrq deployments create --guid "MjcxMjY0MHxBUE18..." --revision v1.2.3
+nrq deployments create --guid "MTIzNDU2N3xBUE18..." --revision v1.2.3
 
 # Full example
 nrq deployments create 12345678 \

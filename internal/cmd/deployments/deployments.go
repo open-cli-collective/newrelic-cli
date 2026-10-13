@@ -64,7 +64,7 @@ Examples:
   nrq deployments list --name "my-production-app"
 
   # By entity GUID
-  nrq deployments list --guid "MjcxMjY0MHxBUE18QVBQTElDQVRJT058MTM3NzA4OTc5OQ"
+  nrq deployments list --guid "MTIzNDU2N3xBUE18QVBQTElDQVRJT058MTIzNDU2Nzg5OQ"
 
   # With time filtering
   nrq deployments list 12345678 --since "7 days ago"

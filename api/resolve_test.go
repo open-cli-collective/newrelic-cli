@@ -12,17 +12,17 @@ import (
 func TestEntityGUID_Parse(t *testing.T) {
 	t.Run("valid APM application GUID", func(t *testing.T) {
 		// Create a valid GUID: version|domain|type|entityId
-		rawGUID := "2712640|APM|APPLICATION|137708979"
+		rawGUID := "1234567|APM|APPLICATION|123456789"
 		encoded := base64.StdEncoding.EncodeToString([]byte(rawGUID))
 		guid := EntityGUID(encoded)
 
 		version, domain, entityType, entityID, err := guid.Parse()
 
 		assert.NoError(t, err)
-		assert.Equal(t, "2712640", version)
+		assert.Equal(t, "1234567", version)
 		assert.Equal(t, "APM", domain)
 		assert.Equal(t, "APPLICATION", entityType)
-		assert.Equal(t, "137708979", entityID)
+		assert.Equal(t, "123456789", entityID)
 	})
 
 	t.Run("invalid base64", func(t *testing.T) {
@@ -36,7 +36,7 @@ func TestEntityGUID_Parse(t *testing.T) {
 
 	t.Run("invalid format - wrong number of parts", func(t *testing.T) {
 		// Only 3 parts instead of 4
-		rawGUID := "2712640|APM|APPLICATION"
+		rawGUID := "1234567|APM|APPLICATION"
 		encoded := base64.StdEncoding.EncodeToString([]byte(rawGUID))
 		guid := EntityGUID(encoded)
 
@@ -49,18 +49,18 @@ func TestEntityGUID_Parse(t *testing.T) {
 
 func TestEntityGUID_AppID(t *testing.T) {
 	t.Run("valid APM application GUID", func(t *testing.T) {
-		rawGUID := "2712640|APM|APPLICATION|137708979"
+		rawGUID := "1234567|APM|APPLICATION|123456789"
 		encoded := base64.StdEncoding.EncodeToString([]byte(rawGUID))
 		guid := EntityGUID(encoded)
 
 		appID, err := guid.AppID()
 
 		assert.NoError(t, err)
-		assert.Equal(t, "137708979", appID)
+		assert.Equal(t, "123456789", appID)
 	})
 
 	t.Run("non-APM entity", func(t *testing.T) {
-		rawGUID := "2712640|BROWSER|APPLICATION|137708979"
+		rawGUID := "1234567|BROWSER|APPLICATION|123456789"
 		encoded := base64.StdEncoding.EncodeToString([]byte(rawGUID))
 		guid := EntityGUID(encoded)
 
@@ -71,7 +71,7 @@ func TestEntityGUID_AppID(t *testing.T) {
 	})
 
 	t.Run("non-APPLICATION type", func(t *testing.T) {
-		rawGUID := "2712640|APM|HOST|137708979"
+		rawGUID := "1234567|APM|HOST|123456789"
 		encoded := base64.StdEncoding.EncodeToString([]byte(rawGUID))
 		guid := EntityGUID(encoded)
 
@@ -84,7 +84,7 @@ func TestEntityGUID_AppID(t *testing.T) {
 
 func TestEntityGUID_Validate(t *testing.T) {
 	t.Run("valid GUID", func(t *testing.T) {
-		rawGUID := "2712640|APM|APPLICATION|137708979"
+		rawGUID := "1234567|APM|APPLICATION|123456789"
 		encoded := base64.StdEncoding.EncodeToString([]byte(rawGUID))
 		guid := EntityGUID(encoded)
 
@@ -103,7 +103,7 @@ func TestEntityGUID_Validate(t *testing.T) {
 }
 
 func TestEntityGUID_Domain(t *testing.T) {
-	rawGUID := "2712640|APM|APPLICATION|137708979"
+	rawGUID := "1234567|APM|APPLICATION|123456789"
 	encoded := base64.StdEncoding.EncodeToString([]byte(rawGUID))
 	guid := EntityGUID(encoded)
 
@@ -114,7 +114,7 @@ func TestEntityGUID_Domain(t *testing.T) {
 }
 
 func TestEntityGUID_EntityType(t *testing.T) {
-	rawGUID := "2712640|APM|APPLICATION|137708979"
+	rawGUID := "1234567|APM|APPLICATION|123456789"
 	encoded := base64.StdEncoding.EncodeToString([]byte(rawGUID))
 	guid := EntityGUID(encoded)
 
@@ -125,14 +125,14 @@ func TestEntityGUID_EntityType(t *testing.T) {
 }
 
 func TestEntityGUID_EntityID(t *testing.T) {
-	rawGUID := "2712640|APM|APPLICATION|137708979"
+	rawGUID := "1234567|APM|APPLICATION|123456789"
 	encoded := base64.StdEncoding.EncodeToString([]byte(rawGUID))
 	guid := EntityGUID(encoded)
 
 	entityID, err := guid.EntityID()
 
 	assert.NoError(t, err)
-	assert.Equal(t, "137708979", entityID)
+	assert.Equal(t, "123456789", entityID)
 }
 
 func TestEntityGUID_String(t *testing.T) {
@@ -169,7 +169,7 @@ func TestIsNumeric(t *testing.T) {
 
 func TestIsValidEntityGUID(t *testing.T) {
 	t.Run("valid base64 GUID", func(t *testing.T) {
-		rawGUID := "2712640|APM|APPLICATION|137708979"
+		rawGUID := "1234567|APM|APPLICATION|123456789"
 		encoded := base64.StdEncoding.EncodeToString([]byte(rawGUID))
 
 		assert.True(t, IsValidEntityGUID(encoded))

@@ -20,7 +20,7 @@ func TestBuildNRQLDeepLink(t *testing.T) {
 	}{
 		{
 			name:      "simple query",
-			accountID: 2712640,
+			accountID: 1234567,
 			nrql:      "SELECT count(*) FROM Transaction SINCE 1 hour ago",
 		},
 		{
@@ -79,12 +79,12 @@ func TestBuildLogDeepLink(t *testing.T) {
 	}{
 		{
 			name:        "single entity error filter",
-			accountID:   2712640,
-			filterQuery: `entity.name:"prd-use1-monitapp-user-api-service" level:"ERROR"`,
+			accountID:   1234567,
+			filterQuery: `entity.name:"checkout-service" level:"ERROR"`,
 		},
 		{
 			name:        "multiple entities",
-			accountID:   2712640,
+			accountID:   1234567,
 			filterQuery: `(entity.name:"svc-a" OR entity.name:"svc-b") level:"ERROR"`,
 		},
 		{
@@ -94,7 +94,7 @@ func TestBuildLogDeepLink(t *testing.T) {
 		},
 		{
 			name:        "with time range",
-			accountID:   2712640,
+			accountID:   1234567,
 			filterQuery: `level:"ERROR"`,
 			beginMs:     1773323224894,
 			endMs:       1773323344894,

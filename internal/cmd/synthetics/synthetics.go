@@ -8,6 +8,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/open-cli-collective/newrelic-cli/api"
+	"github.com/open-cli-collective/newrelic-cli/internal/ascode"
 	"github.com/open-cli-collective/newrelic-cli/internal/cmd/root"
 	"github.com/open-cli-collective/newrelic-cli/internal/confirm"
 	"github.com/open-cli-collective/newrelic-cli/internal/view"
@@ -30,7 +31,12 @@ and
 https://docs.newrelic.com/docs/apis/nerdgraph/examples/synthetics-api/overview/.
 
 Note: 'list' and 'get' read the entity index, which can lag create/update
-by a minute or so; create and update print the applied state directly.`,
+by a minute or so; create and update print the applied state directly.
+
+create, update and delete print a note to stderr before the write, because
+monitors are often managed as code and a direct change can be overwritten by
+the next deploy from that source. Stdout and exit codes are unaffected. Set
+NEWRELIC_CLI_NO_AS_CODE_NOTICE=1 to hide the note.`,
 	}
 
 	syntheticsCmd.AddCommand(newListCmd(opts))
@@ -251,6 +257,7 @@ func runCreate(opts *createOptions) error {
 		return err
 	}
 
+	ascode.Notify(opts.Stderr, ascode.SyntheticMonitor)
 	monitor, err := client.CreateSyntheticMonitor(&input)
 	if err != nil {
 		return fmt.Errorf("failed to create monitor: %w", err)
@@ -328,6 +335,7 @@ func runUpdate(opts *updateOptions, monitorID string) error {
 		return err
 	}
 
+	ascode.Notify(opts.Stderr, ascode.SyntheticMonitor)
 	monitor, err := client.UpdateSyntheticMonitor(monitorID, &input)
 	if err != nil {
 		return fmt.Errorf("failed to update monitor: %w", err)
@@ -403,6 +411,7 @@ func runDelete(opts *deleteOptions, monitorID string) error {
 		return fmt.Errorf("failed to get monitor: %w", err)
 	}
 
+	ascode.Notify(opts.Stderr, ascode.SyntheticMonitor)
 	if !opts.force {
 		p := &confirm.Prompter{
 			In:  opts.Stdin,

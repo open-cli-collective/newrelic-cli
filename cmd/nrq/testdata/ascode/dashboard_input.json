@@ -1,0 +1,9 @@
+{
+  "name": "Checkout Overview",
+  "pages": [
+    {
+      "name": "Overview",
+      "widgets": []
+    }
+  ]
+}

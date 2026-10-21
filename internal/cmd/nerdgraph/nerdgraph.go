@@ -6,6 +6,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/open-cli-collective/newrelic-cli/internal/ascode"
 	"github.com/open-cli-collective/newrelic-cli/internal/cmd/root"
 )
 
@@ -44,7 +45,13 @@ data and functionality. Use the NerdGraph API explorer to discover
 available queries and mutations:
   https://api.newrelic.com/graphiql
 
-Output is always JSON format.`,
+Output is always JSON format.
+
+A mutation that creates, updates or deletes dashboards, alert policies, NRQL
+alert conditions or synthetic monitors prints one note to stderr before it is
+sent, because those resources are often managed as code. Stdout (the JSON
+response) and exit codes are unaffected. Set NEWRELIC_CLI_NO_AS_CODE_NOTICE=1
+to hide the note.`,
 		Example: `  # Get current user info
   nrq nerdgraph query '{ actor { user { email name } } }'
 
@@ -99,6 +106,7 @@ func runQuery(opts *root.Options, query string) error {
 		return err
 	}
 
+	ascode.Notify(opts.Stderr, ascode.MutationKinds(query)...)
 	result, err := client.NerdGraphQuery(query, nil)
 	if err != nil {
 		return err

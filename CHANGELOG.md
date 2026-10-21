@@ -47,6 +47,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Writes to resources that teams commonly manage as code print a one-time note
+  to stderr before the write: `dashboards create/update/delete`,
+  `synthetics create/update/delete`, and `nerdgraph query` mutations that
+  create, update or delete dashboards, alert policies, NRQL alert conditions
+  or synthetic monitors. Stdout and exit codes are unchanged. Set
+  `NEWRELIC_CLI_NO_AS_CODE_NOTICE=1` to hide it.
 - Linux distribution support via Snap, APT, and RPM packages ([#67](https://github.com/open-cli-collective/newrelic-cli/pull/67))
 - `nrq init` command for guided API key setup ([#60](https://github.com/open-cli-collective/newrelic-cli/pull/60))
 - `nrq config test` and `config clear` subcommands ([#60](https://github.com/open-cli-collective/newrelic-cli/pull/60))

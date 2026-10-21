@@ -1,0 +1,15 @@
+{
+  "data": {
+    "result": {
+      "errors": [],
+      "monitor": {
+        "guid": "MTIzNDU2N3xTWU5USHxNT05JVE9SfDEyMzQ1Njc4OQ==",
+        "id": "00000000-0000-4000-8000-000000000001",
+        "name": "checkout-service health",
+        "period": "EVERY_10_MINUTES",
+        "status": "ENABLED",
+        "uri": "https://example.com/health"
+      }
+    }
+  }
+}

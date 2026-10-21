@@ -1,0 +1,20 @@
+{
+  "data": {
+    "dashboardCreate": {
+      "entityResult": {
+        "guid": "MTIzNDU2N3xWSVp8REFTSEJPQVJEfDEyMzQ1Njc4OQ==",
+        "name": "Checkout Overview",
+        "description": "",
+        "permissions": "PUBLIC_READ_WRITE",
+        "pages": [
+          {
+            "guid": "MTIzNDU2N3xWSVp8REFTSEJPQVJEfDEyMzQ1Njc5MA==",
+            "name": "Overview",
+            "widgets": []
+          }
+        ]
+      },
+      "errors": []
+    }
+  }
+}

@@ -8,6 +8,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/open-cli-collective/newrelic-cli/api"
+	"github.com/open-cli-collective/newrelic-cli/internal/ascode"
 	"github.com/open-cli-collective/newrelic-cli/internal/cmd/root"
 	"github.com/open-cli-collective/newrelic-cli/internal/confirm"
 	"github.com/open-cli-collective/newrelic-cli/internal/view"
@@ -19,6 +20,12 @@ func Register(rootCmd *cobra.Command, opts *root.Options) {
 		Use:     "dashboards",
 		Aliases: []string{"dashboard", "dash"},
 		Short:   "Manage New Relic dashboards",
+		Long: `Manage New Relic dashboards.
+
+create, update and delete print a note to stderr before the write, because
+dashboards are often managed as code and a direct change can be overwritten by
+the next deploy from that source. Stdout and exit codes are unaffected. Set
+NEWRELIC_CLI_NO_AS_CODE_NOTICE=1 to hide the note.`,
 	}
 
 	dashboardsCmd.AddCommand(newListCmd(opts))
@@ -217,6 +224,7 @@ func runCreate(opts *createOptions) error {
 		return err
 	}
 
+	ascode.Notify(opts.Stderr, ascode.Dashboard)
 	dashboard, err := client.CreateDashboard(&input)
 	if err != nil {
 		return fmt.Errorf("failed to create dashboard: %w", err)
@@ -292,6 +300,7 @@ func runUpdate(opts *updateOptions, guid api.EntityGUID) error {
 		return err
 	}
 
+	ascode.Notify(opts.Stderr, ascode.Dashboard)
 	dashboard, err := client.UpdateDashboard(guid, &input)
 	if err != nil {
 		return fmt.Errorf("failed to update dashboard: %w", err)
@@ -358,6 +367,7 @@ func runDelete(opts *deleteOptions, guid api.EntityGUID) error {
 		return fmt.Errorf("failed to get dashboard: %w", err)
 	}
 
+	ascode.Notify(opts.Stderr, ascode.Dashboard)
 	if !opts.force {
 		p := &confirm.Prompter{
 			In:  opts.Stdin,

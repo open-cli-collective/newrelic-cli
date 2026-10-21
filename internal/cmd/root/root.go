@@ -103,6 +103,9 @@ Set the non-secret account ID / region (written to config.yml):
 Non-secret runtime overrides (precedence: env > config.yml):
   NEWRELIC_ACCOUNT_ID, NEWRELIC_REGION
 
+Writes to dashboards, alerts and synthetic monitors print a stderr note that
+these are often managed as code; NEWRELIC_CLI_NO_AS_CODE_NOTICE=1 hides it.
+
 NEWRELIC_API_KEY is accepted ONLY as setup ingress (init/set-credential
 --from-env); it is no longer read at runtime (§1.11).`
 

@@ -32,6 +32,7 @@ newrelic-cli/
 ├── cmd/nrq/main.go
 ├── api/          # public New Relic API client package
 ├── internal/
+│   ├── ascode/   # stderr note before writes to resources managed as code
 │   ├── cmd/      # Cobra commands by resource
 │   ├── config/   # non-secret config
 │   ├── keychain/ # cli-common credstore adapter and legacy migration
@@ -100,6 +101,27 @@ Local convenience copy, if present: `../cli-common/docs/scriptability.md`
 - `NEWRELIC_REGION` - non-secret runtime override.
 - `NEWRELIC_CLI_KEYRING_BACKEND` - backend selector.
 - `NEWRELIC_CLI_KEYRING_PASSPHRASE` - file-backend passphrase for headless use.
+- `NEWRELIC_CLI_NO_AS_CODE_NOTICE` - `1`/`true` hides the stderr note printed
+  before writes to resources commonly managed as code (`internal/ascode`).
+
+## Managed-As-Code Note
+
+Commands that write dashboards, alert policies or conditions, or synthetic
+monitors call `ascode.Notify` once, immediately before the write (before a
+delete's confirmation prompt), so the note is visible even when the write
+fails. `nerdgraph query` derives the kinds from the document with
+`ascode.MutationKinds`, which matches top-level mutation fields only, including
+those reached through fragments. A new write command for one of these
+resources calls `ascode.Notify`; a new resource kind is a constant in
+`ascode.Kind`, an entry in `allKinds`, its plural, and a case in
+`classifyMutationField`.
+
+The detected field names come from the `Mutation` type of the NerdGraph schema
+(browse it in the [NerdGraph API explorer](https://api.newrelic.com/graphiql)).
+When changing `internal/ascode`, check that type for new `dashboard*`,
+`alerts*` and `synthetics*` fields that create, update or delete these
+resources, and add each to `classifyMutationField` with a test case. The note goes to stderr only and never changes stdout
+or the exit code.
 
 ## Shared Repo Standards
 

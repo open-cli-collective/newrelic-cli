@@ -150,6 +150,7 @@ nrq apps list
 | `NEWRELIC_API_KEY` | New Relic User API key (`NRAK-`) | **Setup ingress only** — accepted by `nrq init --api-key-from-env` / `nrq set-credential --from-env`; **not** read at runtime |
 | `NEWRELIC_ACCOUNT_ID` | New Relic account ID (non-secret) | Runtime override; precedence **env > config.yml** |
 | `NEWRELIC_REGION` | API region: `US` (default) or `EU` (non-secret) | Runtime override; precedence **env > config.yml** |
+| `NEWRELIC_CLI_NO_AS_CODE_NOTICE` | Set to `1` or `true` to hide the [managed-as-code note](#resources-managed-as-code) | Runtime; stderr only |
 
 ### CLI Configuration Commands
 
@@ -225,6 +226,37 @@ fail loudly rather than silently picking a winner.
 
 - **API key:** OS keyring only at runtime (env is setup-ingress only).
 - **account_id / region:** environment variable > `config.yml` > built-in default.
+
+### Resources managed as code
+
+Dashboards, alert policies, NRQL alert conditions and synthetic monitors are
+often managed as code (Terraform, a repository or similar). A direct change
+can be overwritten by the next deploy from that source, so before nrq writes
+one of these it prints a note to stderr:
+
+```
+Note: dashboards are often managed as code (Terraform, a repository or similar), and the next deploy from that source can overwrite a direct change.
+Check for a source of truth before making this change. Set NEWRELIC_CLI_NO_AS_CODE_NOTICE=1 to hide this note.
+```
+
+The note is printed once per invocation, before the write is sent, by:
+
+- `dashboards create`, `update` and `delete`
+- `synthetics create`, `update` and `delete`
+- `nerdgraph query` when the document is a mutation whose top-level fields
+  create, update or delete dashboards (`dashboardCreate`, `dashboardUpdate`,
+  `dashboardUpdatePage`, `dashboardUpdateWidgetsInPage`,
+  `dashboardAddWidgetsToPage`, `dashboardDelete`, `dashboardUndelete`), alert
+  policies (`alertsPolicyCreate`, `alertsPolicyUpdate`, `alertsPolicyDelete`),
+  alert conditions (`alertsNrqlCondition*`, `alertsConditionDelete`) or
+  synthetic monitors (`syntheticsCreate*Monitor`, `syntheticsUpdate*Monitor`,
+  `syntheticsDeleteMonitor`, `syntheticsUpdateScript`). One note names every
+  kind the mutation touches. Read-only queries and other mutations print
+  nothing.
+
+The note never prompts or blocks, and never changes stdout or the exit code,
+so JSON output stays machine-parseable. Set `NEWRELIC_CLI_NO_AS_CODE_NOTICE=1`
+to hide it.
 
 ### Shell Completion
 
@@ -398,6 +430,18 @@ Get details for a specific dashboard.
 ```bash
 nrq dashboards get <guid>
 nrq dashboards get "ABC123..."
+```
+
+#### dashboards create / update / delete
+
+Create and update dashboards from a JSON definition, or delete one by GUID.
+See `nrq dashboards create --help` for the JSON schema. Each prints the
+[managed-as-code note](#resources-managed-as-code) to stderr before the write.
+
+```bash
+nrq dashboards create --from-file dashboard.json
+nrq dashboards update <guid> --from-file dashboard.json
+nrq dashboards delete <guid>
 ```
 
 ---
@@ -719,6 +763,11 @@ nrq nerdgraph query '{
 }'
 ```
 
+A mutation that writes dashboards, alert policies, alert conditions or
+synthetic monitors prints the
+[managed-as-code note](#resources-managed-as-code) to stderr before it is
+sent; the JSON on stdout is unchanged.
+
 ---
 
 ### nrql
@@ -795,7 +844,8 @@ Create, update, and delete monitors from a JSON definition. Monitors are
 created via NerdGraph on the current synthetics runtimes; scripted monitors
 (`SCRIPT_API`, `SCRIPT_BROWSER`) take `script` and optional `runtime` fields.
 See `nrq synthetics create --help` for the JSON schema, valid frequencies,
-and locations.
+and locations. Each prints the
+[managed-as-code note](#resources-managed-as-code) to stderr before the write.
 
 ```bash
 nrq synthetics create --from-file monitor.json

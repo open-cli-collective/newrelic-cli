@@ -1,0 +1,7 @@
+{
+  "name": "checkout-service health",
+  "type": "SIMPLE",
+  "frequency": 10,
+  "uri": "https://example.com/health",
+  "locations": ["AWS_US_EAST_1"]
+}

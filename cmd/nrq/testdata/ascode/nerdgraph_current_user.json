@@ -1,0 +1,10 @@
+{
+  "data": {
+    "actor": {
+      "user": {
+        "email": "user@example.com",
+        "name": "Example User"
+      }
+    }
+  }
+}

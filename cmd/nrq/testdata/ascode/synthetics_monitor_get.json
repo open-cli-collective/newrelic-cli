@@ -1,0 +1,17 @@
+{
+  "data": {
+    "actor": {
+      "entity": {
+        "guid": "MTIzNDU2N3xTWU5USHxNT05JVE9SfDEyMzQ1Njc4OQ==",
+        "name": "checkout-service health",
+        "monitorId": "00000000-0000-4000-8000-000000000001",
+        "monitorType": "SIMPLE",
+        "period": 10,
+        "monitoredUrl": "https://example.com/health",
+        "monitorSummary": {
+          "status": "ENABLED"
+        }
+      }
+    }
+  }
+}

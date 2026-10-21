@@ -112,8 +112,15 @@ delete's confirmation prompt), so the note is visible even when the write
 fails. `nerdgraph query` derives the kinds from the document with
 `ascode.MutationKinds`, which matches top-level mutation fields only, including
 those reached through fragments. A new write command for one of these
-resources calls `ascode.Notify`; a new resource kind goes in `ascode.Kind` and
-`classifyMutationField`. The note goes to stderr only and never changes stdout
+resources calls `ascode.Notify`; a new resource kind is a constant in
+`ascode.Kind`, an entry in `allKinds`, its plural, and a case in
+`classifyMutationField`.
+
+The detected field names come from the `Mutation` type of the NerdGraph schema
+(browse it in the [NerdGraph API explorer](https://api.newrelic.com/graphiql)).
+When changing `internal/ascode`, check that type for new `dashboard*`,
+`alerts*` and `synthetics*` fields that create, update or delete these
+resources, and add each to `classifyMutationField` with a test case. The note goes to stderr only and never changes stdout
 or the exit code.
 
 ## Shared Repo Standards

@@ -46,6 +46,8 @@ type noticeHarness struct {
 	routes []nerdGraphRoute
 	stderr *bytes.Buffer
 	sent   []sentRequest
+	// stdin is what the command reads, e.g. a delete confirmation answer.
+	stdin string
 }
 
 func newNoticeHarness(t *testing.T, routes ...nerdGraphRoute) *noticeHarness {
@@ -106,7 +108,7 @@ func (h *noticeHarness) run(args ...string) (string, string, error) {
 	h.stderr = &stderr
 	opts.Stdout = &stdout
 	opts.Stderr = &stderr
-	opts.Stdin = strings.NewReader("")
+	opts.Stdin = strings.NewReader(h.stdin)
 	rootCmd.SetErr(&stderr)
 	rootCmd.SetArgs(append([]string{"--no-color"}, args...))
 	err := rootCmd.Execute()
@@ -195,48 +197,141 @@ func TestNerdGraphMutation_NoteShownWhenWriteFails(t *testing.T) {
 	assert.True(t, strings.HasPrefix(stderr, ascode.Message(ascode.Dashboard)), stderr)
 }
 
-func TestDashboardsCreate_Note(t *testing.T) {
-	input := filepath.Join("testdata", "ascode", "dashboard_input.json")
-	route := nerdGraphRoute{"dashboardCreate", "dashboard_created.json"}
+const (
+	monitorID    = "00000000-0000-4000-8000-000000000001"
+	monitorInput = "testdata/ascode/synthetics_monitor_input.json"
+	dashInput    = "testdata/ascode/dashboard_input.json"
+)
 
-	h := newNoticeHarness(t, route)
-	stdout, stderr, err := h.run("dash", "create", "-f", input, "-o", "plain")
+var (
+	dashboardGetRoute = nerdGraphRoute{"entity(guid", "dashboard_get.json"}
+	monitorFindRoute  = nerdGraphRoute{"entitySearch", "synthetics_monitor_search.json"}
+)
+
+func TestWriteCommands_NoteOnceBeforeWrite(t *testing.T) {
+	tests := []struct {
+		name     string
+		args     []string
+		routes   []nerdGraphRoute
+		mutation string
+		kind     ascode.Kind
+	}{
+		{
+			name:     "dashboards create",
+			args:     []string{"dash", "create", "-f", dashInput},
+			routes:   []nerdGraphRoute{{"dashboardCreate", "dashboard_created.json"}},
+			mutation: "dashboardCreate",
+			kind:     ascode.Dashboard,
+		},
+		{
+			name:     "dashboards update",
+			args:     []string{"dashboard", "update", dashboardGUID, "-f", dashInput},
+			routes:   []nerdGraphRoute{{"dashboardUpdate", "dashboard_updated.json"}},
+			mutation: "dashboardUpdate",
+			kind:     ascode.Dashboard,
+		},
+		{
+			name:     "dashboards delete --force",
+			args:     []string{"dashboards", "delete", dashboardGUID, "--force"},
+			routes:   []nerdGraphRoute{{"dashboardDelete", "nerdgraph_dashboard_deleted.json"}, dashboardGetRoute},
+			mutation: "dashboardDelete",
+			kind:     ascode.Dashboard,
+		},
+		{
+			name:     "synthetics create",
+			args:     []string{"syn", "create", "-f", monitorInput},
+			routes:   []nerdGraphRoute{{"syntheticsCreateSimpleMonitor", "synthetics_monitor_created.json"}},
+			mutation: "syntheticsCreateSimpleMonitor",
+			kind:     ascode.SyntheticMonitor,
+		},
+		{
+			name:     "synthetics update",
+			args:     []string{"synthetic", "update", monitorID, "-f", monitorInput},
+			routes:   []nerdGraphRoute{{"syntheticsUpdateSimpleMonitor", "synthetics_monitor_updated.json"}, monitorFindRoute},
+			mutation: "syntheticsUpdateSimpleMonitor",
+			kind:     ascode.SyntheticMonitor,
+		},
+		{
+			name: "synthetics delete --force",
+			args: []string{"synthetics", "delete", monitorID, "--force"},
+			// delete resolves the monitor by ID, then again by its GUID.
+			routes: []nerdGraphRoute{
+				{"syntheticsDeleteMonitor", "synthetics_monitor_deleted.json"},
+				monitorFindRoute,
+				{"entity(guid", "synthetics_monitor_get.json"},
+			},
+			mutation: "syntheticsDeleteMonitor",
+			kind:     ascode.SyntheticMonitor,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			h := newNoticeHarness(t, tt.routes...)
+			_, stderr, err := h.run(tt.args...)
+			require.NoError(t, err)
+
+			note := ascode.Message(tt.kind)
+			assert.True(t, strings.HasPrefix(stderr, note), stderr)
+			assert.Equal(t, 1, strings.Count(stderr, "Note:"), "note printed once")
+			sent := h.sentWith(tt.mutation)
+			require.Len(t, sent, 1)
+			assert.Equal(t, note, sent[0].stderrAtSend, "note precedes the write")
+		})
+	}
+}
+
+func TestDeleteDeclined_NoteBeforePromptAndNoWrite(t *testing.T) {
+	tests := []struct {
+		name     string
+		args     []string
+		routes   []nerdGraphRoute
+		mutation string
+		kind     ascode.Kind
+		prompt   string
+	}{
+		{
+			name:     "dashboards delete",
+			args:     []string{"dashboards", "delete", dashboardGUID},
+			routes:   []nerdGraphRoute{dashboardGetRoute},
+			mutation: "dashboardDelete",
+			kind:     ascode.Dashboard,
+			prompt:   `Delete dashboard "Checkout Overview"`,
+		},
+		{
+			name:     "synthetics delete",
+			args:     []string{"synthetics", "delete", monitorID},
+			routes:   []nerdGraphRoute{monitorFindRoute},
+			mutation: "syntheticsDeleteMonitor",
+			kind:     ascode.SyntheticMonitor,
+			prompt:   `Delete synthetic monitor "checkout-service health"`,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			h := newNoticeHarness(t, tt.routes...)
+			h.stdin = "n\n"
+			stdout, stderr, err := h.run(tt.args...)
+			require.NoError(t, err)
+			assert.Empty(t, stdout)
+
+			note := ascode.Message(tt.kind)
+			require.True(t, strings.HasPrefix(stderr, note), stderr)
+			assert.True(t, strings.HasPrefix(strings.TrimPrefix(stderr, note), tt.prompt),
+				"prompt follows the note: %q", stderr)
+			assert.Empty(t, h.sentWith(tt.mutation), "a declined delete sends no mutation")
+		})
+	}
+}
+
+func TestDashboardsCreate_SilencedStdoutUnchanged(t *testing.T) {
+	h := newNoticeHarness(t, nerdGraphRoute{"dashboardCreate", "dashboard_created.json"})
+	stdout, stderr, err := h.run("dash", "create", "-f", dashInput, "-o", "plain")
 	require.NoError(t, err)
 	assert.Equal(t, ascode.Message(ascode.Dashboard), stderr)
-	sent := h.sentWith("dashboardCreate")
-	require.Len(t, sent, 1)
-	assert.Equal(t, ascode.Message(ascode.Dashboard), sent[0].stderrAtSend, "note precedes the write")
 
 	t.Setenv(ascode.DisableEnv, "true")
-	silencedStdout, silencedStderr, err := h.run("dash", "create", "-f", input, "-o", "plain")
+	silencedStdout, silencedStderr, err := h.run("dash", "create", "-f", dashInput, "-o", "plain")
 	require.NoError(t, err)
 	assert.Empty(t, silencedStderr)
 	assert.Equal(t, silencedStdout, stdout, "the note never changes stdout")
-}
-
-func TestDashboardsDelete_NoteOnce(t *testing.T) {
-	h := newNoticeHarness(t,
-		nerdGraphRoute{"dashboardDelete", "nerdgraph_dashboard_deleted.json"},
-		nerdGraphRoute{"entity(guid", "dashboard_get.json"},
-	)
-	stdout, stderr, err := h.run("dashboards", "delete", dashboardGUID, "--force")
-	require.NoError(t, err)
-	assert.Empty(t, stdout)
-	assert.Equal(t, 1, strings.Count(stderr, "Note:"))
-	assert.True(t, strings.HasPrefix(stderr, ascode.Message(ascode.Dashboard)), stderr)
-	sent := h.sentWith("dashboardDelete")
-	require.Len(t, sent, 1)
-	assert.Equal(t, ascode.Message(ascode.Dashboard), sent[0].stderrAtSend, "note precedes the write")
-}
-
-func TestSyntheticsCreate_Note(t *testing.T) {
-	h := newNoticeHarness(t, nerdGraphRoute{"syntheticsCreateSimpleMonitor", "synthetics_monitor_created.json"})
-	input := filepath.Join("testdata", "ascode", "synthetics_monitor_input.json")
-	stdout, stderr, err := h.run("syn", "create", "-f", input, "-o", "plain")
-	require.NoError(t, err)
-	assert.Equal(t, ascode.Message(ascode.SyntheticMonitor), stderr)
-	assert.Contains(t, stdout, "checkout-service health")
-	sent := h.sentWith("syntheticsCreateSimpleMonitor")
-	require.Len(t, sent, 1)
-	assert.Equal(t, ascode.Message(ascode.SyntheticMonitor), sent[0].stderrAtSend, "note precedes the write")
 }

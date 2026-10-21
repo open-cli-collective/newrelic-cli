@@ -217,3 +217,13 @@ func TestNotify(t *testing.T) {
 		})
 	}
 }
+
+func TestAllKindsHavePlurals(t *testing.T) {
+	seen := map[string]bool{}
+	for _, k := range allKinds {
+		p := k.plural()
+		assert.NotEqual(t, Kind(0).plural(), p, "kind %d needs a case in plural", k)
+		assert.False(t, seen[p], "duplicate plural %q", p)
+		seen[p] = true
+	}
+}

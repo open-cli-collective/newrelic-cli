@@ -23,13 +23,17 @@ const DisableEnv = "NEWRELIC_CLI_NO_AS_CODE_NOTICE"
 // Kind is a resource kind that teams commonly manage as code.
 type Kind int
 
-// Kinds in the order the note names them.
+// Kinds. A new kind is a constant here, an entry in allKinds and a case in
+// plural.
 const (
 	Dashboard Kind = iota + 1
 	AlertPolicy
 	AlertCondition
 	SyntheticMonitor
 )
+
+// allKinds is the canonical order in which notes and MutationKinds list kinds.
+var allKinds = []Kind{Dashboard, AlertPolicy, AlertCondition, SyntheticMonitor}
 
 func (k Kind) plural() string {
 	switch k {
@@ -69,7 +73,7 @@ func Message(kinds ...Kind) string {
 		seen[k] = true
 	}
 	var names []string
-	for _, k := range []Kind{Dashboard, AlertPolicy, AlertCondition, SyntheticMonitor} {
+	for _, k := range allKinds {
 		if seen[k] {
 			names = append(names, k.plural())
 		}

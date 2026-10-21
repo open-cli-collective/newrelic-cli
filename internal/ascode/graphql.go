@@ -37,7 +37,7 @@ func MutationKinds(document string) []Kind {
 	}
 
 	var kinds []Kind
-	for _, k := range []Kind{Dashboard, AlertPolicy, AlertCondition, SyntheticMonitor} {
+	for _, k := range allKinds {
 		if seen[k] {
 			kinds = append(kinds, k)
 		}
@@ -62,9 +62,13 @@ var alertPolicyMutations = map[string]bool{
 }
 
 // classifyMutationField maps a NerdGraph mutation field name to the kind it
-// writes. Dashboard and policy fields are an explicit list because sibling
-// mutations (dashboardCreateSnapshotUrl, alertsPolicyAddNotificationChannels)
-// do not change the resource definition.
+// writes. The field names come from the Mutation type of the NerdGraph schema
+// (https://api.newrelic.com/graphiql). When changing this package, check that
+// type for new dashboard*, alerts* and synthetics* fields that create, update
+// or delete these resources and add them here with a test case. Dashboard and
+// policy fields are an explicit list because sibling mutations
+// (dashboardCreateSnapshotUrl, alertsPolicyAddNotificationChannels) do not
+// change the resource definition.
 func classifyMutationField(name string) (Kind, bool) {
 	switch {
 	case dashboardMutations[name]:

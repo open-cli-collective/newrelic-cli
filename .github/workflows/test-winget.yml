@@ -17,6 +17,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Install current WinGet validator
+        shell: pwsh
+        run: |
+          $bundle = Join-Path $env:RUNNER_TEMP "Microsoft.DesktopAppInstaller.msixbundle"
+          Invoke-WebRequest "https://github.com/microsoft/winget-cli/releases/download/v1.29.380/Microsoft.DesktopAppInstaller_8wekyb3d8bbwe.msixbundle" -OutFile $bundle
+          $expected = "65dea9c01ce08ee7b763366b27c0e651f97db857c11ca9b9c301826c10092f2e"
+          if ((Get-FileHash $bundle -Algorithm SHA256).Hash -ne $expected) { throw "WinGet bundle checksum mismatch" }
+          Add-AppxPackage -Path $bundle
+          winget --version
+
       - name: Validate manifest schema
         shell: pwsh
         run: |
